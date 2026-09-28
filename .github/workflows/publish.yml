@@ -3,7 +3,7 @@ name: Publish
 # 公開するバージョン
 # - v0.1.0 のようなタグの push: タグのバージョン（0.1.0）
 # - 手動実行: 入力したバージョン
-# - main への push: gradle.properties の version（-SNAPSHOT）。SNAPSHOT は上書きできる
+# - main への push: gradle.properties の version（latest-SNAPSHOT）。main の最新で上書きする
 # - PR: 0.0.0-pr<番号>-<head のコミット 7 桁>。使う側の PR から、マージ前の変更を試すためのもの
 # GitHub Packages は SNAPSHOT 以外の同じバージョンを上書きできないので、PR 用はコミットごとに別のバージョンにする
 on:
