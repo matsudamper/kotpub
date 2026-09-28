@@ -39,6 +39,6 @@ dependencies {
 `v0.1.0` のようなタグを push すると、GitHub Actions がタグのバージョンで公開する。
 Actions の Publish を手動実行して、バージョンを指定して公開することもできる。
 
-main への push では `gradle.properties` の `version`（`-SNAPSHOT`）で公開する。
+main への push では `latest-SNAPSHOT` として、main の最新で上書きしながら公開する。
 
 PR ごとにも `0.0.0-pr<番号>-<head のコミット 7 桁>` で公開する。使う側でマージ前の変更を試すときに使う。
