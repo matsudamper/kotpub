@@ -16,8 +16,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     // アクター文書の取得を span で囲み、その中の GET をぶら下げる。
+    // HttpRemoteActors の公開コンストラクタが OpenTelemetry を受け取るので api にする
+    api(libs.opentelemetry.api)
     // suspend の間も span を current に保つのに要る
-    implementation(libs.opentelemetry.api)
     implementation(libs.opentelemetry.extension.kotlin)
 
     implementation(libs.slf4j.api)
