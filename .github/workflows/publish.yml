@@ -1,10 +1,13 @@
 name: Publish
 
-# v0.1.0 のようなタグを push すると、そのバージョンで GitHub Packages に公開する。
-# GitHub Packages は同じバージョンを上書きできないので、公開し直すときはタグを進める
+# 公開するバージョン
+# - v0.1.0 のようなタグの push: タグのバージョン（0.1.0）
+# - PR: 0.0.0-pr<番号>-<head のコミット 7 桁>。使う側の PR から、マージ前の変更を試すためのもの
+# GitHub Packages は同じバージョンを上書きできないので、PR 用はコミットごとに別のバージョンにする
 on:
   push:
     tags: ["v*"]
+  pull_request:
 
 permissions:
   contents: read
@@ -13,6 +16,8 @@ permissions:
 jobs:
   publish:
     name: GitHub Packages へ公開
+    # フォークからの PR には packages: write のトークンが渡らない
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -27,11 +32,22 @@ jobs:
       - name: setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      - name: build
-        run: ./gradlew build -Pversion="${GITHUB_REF_NAME#v}"
+      - name: バージョンを決める
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            version="0.0.0-pr${PR_NUMBER}-${PR_HEAD_SHA:0:7}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "::notice::公開するバージョン: $version"
 
       - name: publish
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew publish -Pversion="${GITHUB_REF_NAME#v}"
+        run: ./gradlew publish -Pversion="$VERSION"
