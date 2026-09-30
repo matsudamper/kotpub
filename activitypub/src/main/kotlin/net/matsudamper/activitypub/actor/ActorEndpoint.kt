@@ -16,7 +16,7 @@ import net.matsudamper.activitypub.url.WebPageUrls
 class ActorEndpoint(
     private val directory: ActorDirectory,
     private val actorKey: ActorKey,
-    private val feedLinks: StoredFeedLinks,
+    private val appearances: StoredActorAppearances,
     private val profiles: StoredActorProfiles,
     private val webPages: WebPageUrls?,
 ) {
@@ -41,7 +41,7 @@ class ActorEndpoint(
             value = actorDocument(
                 urls = urls,
                 actorKey = actorKey,
-                feedLinks = feedLinks.find(urls.username),
+                appearance = appearances.find(urls.username),
                 profile = profiles.find(urls.username),
                 webPages = webPages,
             ),
@@ -53,17 +53,16 @@ class ActorEndpoint(
 /**
  * Actor JSON を組み立てる。
  *
- * 表示名と説明文は管理画面から設定できる。設定していなければ名前から決まる。
+ * 表示名が無ければ名前を出す。説明文が無ければ `summary` を出さない。
  */
 internal fun actorDocument(
     urls: ActorUrls,
     actorKey: ActorKey,
-    feedLinks: FeedLinks,
+    appearance: ActorAppearance,
     profile: ActorProfile,
     webPages: WebPageUrls?,
 ): Actor {
-    val storedSummary = profile.summary
-    val summary = if (storedSummary == null) SUMMARY else summaryHtml(storedSummary)
+    val summary = profile.summary?.let { summaryHtml(it) }
 
     return Actor(
         id = urls.actorId,
@@ -77,9 +76,9 @@ internal fun actorDocument(
         followers = urls.followers,
         following = urls.following,
         url = webPages?.profile(urls.username),
-        attachment = feedAttachments(feedLinks),
-        icon = feedLinks.iconUrl?.let { Actor.Image(url = urls.icon(it)) },
-        image = feedLinks.headerVersion?.let { Actor.Image(url = urls.header(it)) },
+        attachment = linkAttachments(appearance.links),
+        icon = appearance.iconVersion?.let { Actor.Image(url = urls.icon(it)) },
+        image = appearance.headerVersion?.let { Actor.Image(url = urls.header(it)) },
         showFeatured = false,
         publicKey =
         ActorPublicKey(
@@ -91,19 +90,14 @@ internal fun actorDocument(
 }
 
 /**
- * フィードの URL をプロフィールのリンク集にする。
- *
- * フィードを持たないアカウントは空になる。空の項目を出すと、Mastodon の
- * プロフィールに見出しだけの行が並ぶ。
+ * `http` と `https` 以外は落とす。リンク先は使う側が外から受け取った文字列のことがあり、
+ * `javascript:` のようなものをそのまま相手のプロフィールに載せない
  */
-private fun feedAttachments(feedLinks: FeedLinks): List<ActorAttachment> =
-    buildList {
-        val siteUrl = feedLinks.siteUrl
-        if (siteUrl != null) add(linkAttachment(name = SITE_ATTACHMENT_NAME, url = siteUrl))
-
-        val feedUrl = feedLinks.feedUrl
-        if (feedUrl != null) add(linkAttachment(name = FEED_ATTACHMENT_NAME, url = feedUrl))
-    }
+private fun linkAttachments(links: List<ActorLink>): List<ActorAttachment> =
+    links
+        // scheme は大文字小文字を区別しない（RFC 3986）
+        .filter { it.url.startsWith("https://", ignoreCase = true) || it.url.startsWith("http://", ignoreCase = true) }
+        .map { linkAttachment(name = it.name, url = it.url) }
 
 private fun linkAttachment(
     name: String,
@@ -139,7 +133,3 @@ private fun escapeHtml(raw: String): String =
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
-
-private const val SUMMARY = "RSS/Atom フィードを ActivityPub で配信するアカウント"
-private const val SITE_ATTACHMENT_NAME = "サイト"
-private const val FEED_ATTACHMENT_NAME = "フィード"

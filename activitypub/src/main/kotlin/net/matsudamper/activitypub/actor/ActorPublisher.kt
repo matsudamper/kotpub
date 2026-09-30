@@ -16,7 +16,7 @@ import net.matsudamper.activitypub.url.WebPageUrls
  */
 class ActorPublisher(
     private val actorKey: ActorKey,
-    private val feedLinks: StoredFeedLinks,
+    private val appearances: StoredActorAppearances,
     private val profiles: StoredActorProfiles,
     private val webPages: WebPageUrls?,
 ) {
@@ -39,7 +39,7 @@ class ActorPublisher(
             updatedActor = actorDocument(
                 urls = sender,
                 actorKey = actorKey,
-                feedLinks = feedLinks.find(sender.username),
+                appearance = appearances.find(sender.username),
                 profile = profiles.find(sender.username),
                 webPages = webPages,
             ),

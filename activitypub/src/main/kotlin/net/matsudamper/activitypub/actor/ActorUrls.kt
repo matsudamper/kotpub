@@ -1,5 +1,7 @@
 package net.matsudamper.activitypub.actor
 
+import net.matsudamper.activitypub.http.QueryParameter
+
 /**
  * アクターの識別子と URL。
  *
@@ -35,20 +37,20 @@ data class ActorUrls(
     val following: String = "$actorId/following"
 
     /**
-     * プロフィール画像。フィードのアイコンをこちらで中継して返す。
+     * プロフィール画像。画像はこちらのパスから返す（[ActorIconEndpoint]）。
      *
-     * 配信元の URL をそのまま渡さないのは、フィードを差し替えてもアイコンの URL が
+     * 画像の置き場の URL をそのまま渡さないのは、置き場を変えてもアイコンの URL が
      * 変わらないようにするため。相手はアイコンを URL で覚える
      */
     val icon: String = "$actorId$ICON_PATH"
 
     /**
-     * 取得元から決まる値を付けたプロフィール画像の URL。
+     * 版を付けたプロフィール画像の URL。
      *
      * 相手はアイコンを URL で覚えるので、パスだけだと差し替えても前の画像が出続ける。
      * 値が変われば別の URL になり、取り直してもらえる
      */
-    fun icon(sourceUrl: String): String = "$icon?v=${iconVersion(sourceUrl)}"
+    fun icon(version: String): String = "$icon?v=${QueryParameter.encode(version)}"
 
     /**
      * プロフィールヘッダー。アイコンと同じくこちらで画像を中継して返す。
@@ -56,9 +58,9 @@ data class ActorUrls(
     val header: String = "$actorId$HEADER_PATH"
 
     /**
-     * 画像内容から決まる版を付けたプロフィールヘッダーの URL。
+     * 版を付けたプロフィールヘッダーの URL。
      */
-    fun header(version: String): String = "$header?v=$version"
+    fun header(version: String): String = "$header?v=${QueryParameter.encode(version)}"
 
     /** Actor JSON の `publicKey.id`。署名の `keyId` としても飛んでくる */
     val publicKeyId: String = "$actorId#main-key"
@@ -75,15 +77,5 @@ data class ActorUrls(
          * アクターの id から見たプロフィールヘッダーのパス。
          */
         const val HEADER_PATH: String = "/header"
-
-        /**
-         * 取得元の URL から決まる短い値。
-         *
-         * 中身ではなく取得元で見るので、同じ URL のまま画像だけ差し替えられた場合は
-         * 変わらない。GraphQL も同じ値を使う
-         */
-        fun iconVersion(sourceUrl: String): String = sourceUrl.hashCode().toUInt().toString(HEX_RADIX)
-
-        private const val HEX_RADIX = 16
     }
 }
