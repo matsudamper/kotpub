@@ -46,6 +46,32 @@ class ActorDocumentTest {
     }
 
     @Test
+    fun `版に URL で意味を持つ文字があっても値として渡る`() {
+        val urls = ActorUrls(domain = TestLocalActor.DOMAIN, username = TestLocalActor.USERNAME)
+
+        assertEquals("https://example.com/users/admin/icon?v=build%231", urls.icon("build#1"))
+        assertEquals("https://example.com/users/admin/header?v=a%26b", urls.header("a&b"))
+    }
+
+    @Test
+    fun `大文字の scheme のリンクも出す`() {
+        val urls = assertNotNull(TestLocalActor.directory.resolve(TestLocalActor.USERNAME))
+        val actor = actorDocument(
+            urls = urls,
+            actorKey = TestActorKey.value,
+            appearance = ActorAppearance(
+                links = listOf(ActorLink(name = "サイト", url = "HTTPS://example.org/")),
+                iconVersion = null,
+                headerVersion = null,
+            ),
+            profile = TestLocalActor.profiles.find(TestLocalActor.USERNAME),
+            webPages = null,
+        )
+
+        assertEquals(listOf("サイト"), actor.attachment.map { it.name })
+    }
+
+    @Test
     fun `説明文が無ければsummaryを出さない`() {
         val actor = actorDocumentOf(TestLocalActor.USERNAME)
 

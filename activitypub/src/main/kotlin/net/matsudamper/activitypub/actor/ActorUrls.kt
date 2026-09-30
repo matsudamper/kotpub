@@ -1,5 +1,7 @@
 package net.matsudamper.activitypub.actor
 
+import net.matsudamper.activitypub.http.QueryParameter
+
 /**
  * アクターの識別子と URL。
  *
@@ -48,7 +50,7 @@ data class ActorUrls(
      * 相手はアイコンを URL で覚えるので、パスだけだと差し替えても前の画像が出続ける。
      * 値が変われば別の URL になり、取り直してもらえる
      */
-    fun icon(version: String): String = "$icon?v=$version"
+    fun icon(version: String): String = "$icon?v=${QueryParameter.encode(version)}"
 
     /**
      * プロフィールヘッダー。アイコンと同じくこちらで画像を中継して返す。
@@ -58,7 +60,7 @@ data class ActorUrls(
     /**
      * 版を付けたプロフィールヘッダーの URL。
      */
-    fun header(version: String): String = "$header?v=$version"
+    fun header(version: String): String = "$header?v=${QueryParameter.encode(version)}"
 
     /** Actor JSON の `publicKey.id`。署名の `keyId` としても飛んでくる */
     val publicKeyId: String = "$actorId#main-key"

@@ -95,7 +95,8 @@ internal fun actorDocument(
  */
 private fun linkAttachments(links: List<ActorLink>): List<ActorAttachment> =
     links
-        .filter { it.url.startsWith("https://") || it.url.startsWith("http://") }
+        // scheme は大文字小文字を区別しない（RFC 3986）
+        .filter { it.url.startsWith("https://", ignoreCase = true) || it.url.startsWith("http://", ignoreCase = true) }
         .map { linkAttachment(name = it.name, url = it.url) }
 
 private fun linkAttachment(
