@@ -7,8 +7,8 @@ import net.matsudamper.activitypub.http.HttpStatusCodes
 /**
  * アクターのプロフィール画像。Actor JSON の `icon` が指す先。
  *
- * 中身はフィードが名乗っているアイコンで、こちらが取り直して返す。相手にこの URL を
- * 渡しておくと、フィードを差し替えてもアイコンの URL は変わらない。
+ * 中身は使う側が [ActorIcons] で渡す。相手にこの URL を渡しておくと、
+ * 画像の置き場を変えてもアイコンの URL は変わらない。
  * 公開画面から見ても同じオリジンなので、配信元の CORS の設定に左右されない。
  */
 class ActorIconEndpoint(

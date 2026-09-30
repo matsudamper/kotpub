@@ -1,9 +1,10 @@
 package net.matsudamper.activitypub
 
+import net.matsudamper.activitypub.actor.ActorAppearance
 import net.matsudamper.activitypub.actor.ActorDirectory
+import net.matsudamper.activitypub.actor.ActorLink
 import net.matsudamper.activitypub.actor.ActorProfile
 import net.matsudamper.activitypub.actor.ActorUrls
-import net.matsudamper.activitypub.actor.FeedLinks
 
 /**
  * テストで配信側に立つ、こちらのアクター。
@@ -27,16 +28,21 @@ object TestLocalActor {
         stored = FakeStoredActorNames(storedUserNames = listOf(USERNAME, STORED_USERNAME)),
     )
 
-    const val FEED_ICON_URL: String = "https://feed1.example.org/icon.png"
-    const val FEED_HEADER_VERSION: String = "0123456789abcdef"
+    const val ICON_VERSION: String = "fedcba9876543210"
+    const val HEADER_VERSION: String = "0123456789abcdef"
 
-    val feedLinks: FakeStoredFeedLinks = FakeStoredFeedLinks(
-        links = mapOf(
-            STORED_USERNAME to FeedLinks(
-                siteUrl = "https://feed1.example.org/",
-                feedUrl = "https://feed1.example.org/rss.xml",
-                iconUrl = FEED_ICON_URL,
-                headerVersion = FEED_HEADER_VERSION,
+    /**
+     * [STORED_USERNAME] だけがリンクと画像を持つ。持たないアカウントとの差を見るため
+     */
+    val appearances: FakeStoredActorAppearances = FakeStoredActorAppearances(
+        appearances = mapOf(
+            STORED_USERNAME to ActorAppearance(
+                links = listOf(
+                    ActorLink(name = "サイト", url = "https://feed1.example.org/"),
+                    ActorLink(name = "危ないリンク", url = "javascript:alert(1)"),
+                ),
+                iconVersion = ICON_VERSION,
+                headerVersion = HEADER_VERSION,
             ),
         ),
     )

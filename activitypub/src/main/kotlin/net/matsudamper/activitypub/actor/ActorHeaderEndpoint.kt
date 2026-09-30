@@ -7,8 +7,8 @@ import net.matsudamper.activitypub.http.HttpStatusCodes
 /**
  * アクターのプロフィールヘッダー。Actor JSON の `image` が指す先。
  *
- * 中身はフィードや配信元ページが名乗っている画像で、こちらが取り直して返す。相手にこの URL を
- * 渡しておくと、名乗っている画像が差し替わってもヘッダーの URL は変わらない。
+ * 中身は使う側が [ActorHeaders] で渡す。相手にこの URL を渡しておくと、
+ * 画像の置き場を変えてもヘッダーの URL は変わらない。
  */
 class ActorHeaderEndpoint(
     private val directory: ActorDirectory,
