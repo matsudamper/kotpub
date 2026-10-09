@@ -4,6 +4,7 @@
 Kotlin/JVM 向けの ActivityPub 実装。HTTP サーバー / クライアントには依存せず、WebFinger・Actor・inbox・NodeInfo、HTTP Signature、アクティビティ配送を扱う。
 
 ## ビルド
+- JDK: Java 25（Kotlin `jvmToolchain`、Gradle daemon は `gradle/gradle-daemon-jvm.properties`）
 - ビルド: `./gradlew build`
 - lint: `./gradlew ktlintCheck`
 

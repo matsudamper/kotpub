@@ -30,6 +30,8 @@ dependencies {
 
 ## ビルド
 
+Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.md）。
+
 ```shell
 ./gradlew build
 ```
