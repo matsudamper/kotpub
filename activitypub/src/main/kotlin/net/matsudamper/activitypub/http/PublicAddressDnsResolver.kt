@@ -3,6 +3,7 @@ package net.matsudamper.activitypub.http
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 
 /**
@@ -35,7 +36,10 @@ object PublicAddressDnsResolver {
      * @param hostname IP アドレスの表記でもよい。その場合は名前解決せず、そのアドレスを検査する
      */
     suspend fun resolve(hostname: String): List<String> {
-        val addresses = withContext(Dispatchers.IO) { InetAddress.getAllByName(hostname).toList() }
+        val addresses =
+            withContext(Dispatchers.IO) {
+                runInterruptible { InetAddress.getAllByName(hostname).toList() }
+            }
         if (addresses.isEmpty()) throw UnknownHostException(hostname)
 
         val nonPublicAddresses = addresses.filterNot { PublicAddresses.isPublic(it) }
