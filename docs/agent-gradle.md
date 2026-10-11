@@ -7,7 +7,3 @@
 ## 実行
 - Gradle の実行に `--offline` を使用しない
 - ネットワークや依存関係の取得に失敗しても、`--offline` を付けて回避しない
-
-## Cloud Agent
-- 依存の jar は `gradle/resolve-dependencies.init.gradle.kts` の `resolveDependencies` で取る。コンパイルはしない
-- `.cursor/environment.json` の `install` は `bash .cursor/install.sh` を参照する。コマンド本体はそこに書く
