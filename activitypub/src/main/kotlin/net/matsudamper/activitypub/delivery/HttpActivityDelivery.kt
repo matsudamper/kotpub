@@ -8,6 +8,7 @@ import net.matsudamper.activitypub.actor.ActorUrls
 import net.matsudamper.activitypub.http.ActivityPubHttpClient
 import net.matsudamper.activitypub.http.HttpStatusCodes
 import net.matsudamper.activitypub.http.HttpUrl
+import net.matsudamper.activitypub.http.OutboundAddressRejectedException
 import net.matsudamper.activitypub.httpsignature.HttpSignatureSigner
 
 /**
@@ -43,8 +44,8 @@ class HttpActivityDelivery(
                 method = "POST",
                 // 相手はリクエストラインの綴りで署名文字列を組み直す。
                 // パスを組み立て直すとクエリや末尾の差で合わなくなる
-                requestTarget = requestTarget(url),
-                host = hostHeader(url),
+                requestTarget = url.requestTarget(),
+                host = url.hostHeader(),
                 body = body,
             )
 
@@ -59,6 +60,13 @@ class HttpActivityDelivery(
                 // runCatching は Throwable を拾うので、呼び出し元が消えた合図まで
                 // 配信の失敗に化ける。化けると送れていない記事が投稿済みとして残る
                 if (error is CancellationException) throw error
+                // 公開アドレスではない宛先は、送り直しても届くようにならない
+                if (error is OutboundAddressRejectedException) {
+                    return DeliveryResult.Failed(
+                        reason = "公開アドレスではない宛先には送らない: $inbox ${error.message}",
+                        retryable = false,
+                    )
+                }
                 // 届いていないので、相手が戻れば送れる
                 return DeliveryResult.Failed(reason = "POST に失敗した: $inbox ${error.message}", retryable = true)
             }
@@ -100,28 +108,5 @@ class HttpActivityDelivery(
             HttpStatusCodes.REQUEST_TIMEOUT,
             HttpStatusCodes.TOO_MANY_REQUESTS,
         )
-
-        /**
-         * 署名した `(request-target)` と実際に送るリクエストラインを揃える。
-         * パスが空なら、リクエストラインに載るのは `/`
-         */
-        fun requestTarget(url: HttpUrl): String {
-            val path = url.rawPath.ifEmpty { "/" }
-            val query = url.rawQuery
-            return if (query.isNullOrEmpty()) path else "$path?$query"
-        }
-
-        /**
-         * `Host` に載せる値。既定ポート（https の 443）ならポート番号は付けない。
-         * 付いていると相手が組み立てる署名文字列と食い違う。
-         */
-        fun hostHeader(url: HttpUrl): String =
-            if (url.port == -1 || url.port == DEFAULT_PORTS[url.scheme]) {
-                url.host
-            } else {
-                "${url.host}:${url.port}"
-            }
-
-        val DEFAULT_PORTS = mapOf("https" to 443, "http" to 80)
     }
 }

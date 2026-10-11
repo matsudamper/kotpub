@@ -12,6 +12,11 @@ package net.matsudamper.activitypub.http
  * - 渡したヘッダを書き換えない。`Host` と `Date` は署名に入っていて、
  *   後から付け直されると相手側で署名が一致しなくなる
  * - 相手が応答しないまま待ち続けない。inbox の処理や配信が詰まる
+ *
+ * 宛先の URL は相手が決める。署名の `keyId` や相手のアクター文書の inbox に、
+ * ループバックやプライベートアドレスを書かれうる。接続する前に、解決したアドレスが
+ * 公開アドレスであることを確かめて、そのアドレスへ繋がないと内部へのリクエストになる。
+ * これを満たす実装として [PublicAddressHttpClient] を用意している。
  */
 interface ActivityPubHttpClient : AutoCloseable {
     /**

@@ -4,7 +4,18 @@ Kotlin/JVM 向けの ActivityPub 実装。WebFinger・Actor・inbox・NodeInfo �
 HTTP Signature の署名と検証、相手のアクター文書の取得、アクティビティの配送を持つ。
 
 HTTP のサーバーとクライアントには依存しない。エンドポイントは `EndpointResponse` を返し、
-外向きの通信は `ActivityPubHttpClient` を受け取る。どちらの実装も使う側が用意する。
+外向きの通信は `ActivityPubHttpClient` を受け取る。
+
+外向きの通信には `PublicAddressHttpClient.create()` を渡す。宛先の URL は相手が決められるので、
+接続の前に解決したアドレスが公開アドレスかを確かめ、そのアドレスへ繋ぐ。
+汎用の HTTP クライアントで実装すると、名前解決やリダイレクトの先で内部アドレスへ繋がる（SSRF）。
+
+```kotlin
+val remoteActors = HttpRemoteActors(client = PublicAddressHttpClient.create(), openTelemetry = null)
+val delivery = HttpActivityDelivery(actorKey = actorKey, client = PublicAddressHttpClient.create())
+```
+
+手元のサーバーと連合を試すときだけ `PublicAddressHttpClient.createAllowingPrivateAddresses()` を使う。
 
 ## 使い方
 
