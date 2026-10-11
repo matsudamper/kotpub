@@ -18,50 +18,10 @@ internal class HttpUrl private constructor(
 ) {
     val isHttps: Boolean get() = scheme == HTTPS
 
-    val isHttpOrHttps: Boolean get() = scheme == HTTP || scheme == HTTPS
-
     fun isSameHost(other: HttpUrl): Boolean = host.equals(other.host, ignoreCase = true)
 
-    /**
-     * リクエストラインに載せるパスとクエリ。空のパスは `/`。
-     * 署名した `(request-target)` とここが違うと、相手側の検証が通らない
-     */
-    fun requestTarget(): String {
-        val path = rawPath.ifEmpty { "/" }
-        val query = rawQuery
-        return if (query.isNullOrEmpty()) path else "$path?$query"
-    }
-
-    /**
-     * `Host` に載る値。既定ポートなら番号は付けない。
-     * 付いていると相手が組み立てる署名文字列と食い違う。
-     * IPv6 のホストは `URI` が括弧付きで返すので、ここでは足さない
-     */
-    fun hostHeader(): String {
-        val defaultPort = when (scheme) {
-            HTTPS -> HTTPS_PORT
-            HTTP -> HTTP_PORT
-            else -> -1
-        }
-        return if (port == -1 || port == defaultPort) host else "$host:$port"
-    }
-
-    /**
-     * 書かれていなければスキームの既定ポート
-     */
-    fun effectivePort(): Int = if (port != -1) {
-        port
-    } else if (isHttps) {
-        HTTPS_PORT
-    } else {
-        HTTP_PORT
-    }
-
     companion object {
-        private const val HTTP = "http"
         private const val HTTPS = "https"
-        private const val HTTP_PORT = 80
-        private const val HTTPS_PORT = 443
 
         fun parse(raw: String): HttpUrl? {
             val iri = runCatching { URI(raw) }.getOrNull() ?: return null

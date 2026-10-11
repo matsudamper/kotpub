@@ -24,7 +24,6 @@ import net.matsudamper.activitypub.json.AppJson
  * つまり任意の URL に GET させられる口でもあるため、次を守る。
  *
  * - https のみ。平文で取った鍵は途中で差し替えられる
- * - 宛先が公開アドレスであることは [net.matsudamper.activitypub.http.ActivityPubHttpClient] が接続の前に確かめる
  * - リダイレクトで別ホストに移ったら捨てる。移った先のサーバーが
  *   他人のアクターの鍵を名乗れてしまう
  * - 文書に書かれた `owner` と `inbox` は、取得先と同じホストであること。
