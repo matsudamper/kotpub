@@ -1,12 +1,10 @@
 # kotpub
 
-Kotlin/JVM 向けの ActivityPub 実装。WebFinger・Actor・inbox・NodeInfo の応答、
-HTTP Signature の署名と検証、相手のアクター文書の取得、アクティビティの配送を持つ。
+Kotlin/JVM 向けの ActivityPub 実装。WebFinger、Actor、inbox、NodeInfo の応答、
+HTTP Signature の署名と検証、相手のアクター文書の取得、アクティビティの配送を扱う。
 
-HTTP のサーバーには依存しない。エンドポイントは `EndpointResponse` を返す。
-外向きの通信は `ActivityPubHttpClient` が行う。接続のたびに宛先を名前解決し、
-公開アドレスでなければ接続しない。解決したアドレスにそのまま接続する。
-手元のサーバーと連合を試すときだけ `createAllowingPrivateAddresses()` を使う。
+HTTP サーバーには依存しない。エンドポイントは `EndpointResponse` を返し、
+外向きの通信は `ActivityPubHttpClient` を使う。
 
 ## 使い方
 
@@ -30,11 +28,9 @@ dependencies {
 }
 ```
 
-外向きの通信は `ActivityPubHttpClient.create()` を使う。自分で実装して渡す口は無い。
-
 ## ビルド
 
-Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.md）。
+Java 25。
 
 ```shell
 ./gradlew build
@@ -42,10 +38,9 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 
 ## 公開
 
-`v0.2.0` のようなタグを push すると、GitHub Actions がタグのバージョンで公開する。
-`ActivityPubHttpClient` は使う側の実装からこのライブラリのクラスに替わっている。次のタグは 0.2.0。
-Actions の Publish を手動実行して、バージョンを指定して公開することもできる。
+GitHub Actions が GitHub Packages へ公開する。
 
-main への push では `latest-SNAPSHOT` として、main の最新で上書きしながら公開する。
-
-PR ごとにも `0.0.0-pr<番号>-<head のコミット 7 桁>` で公開する。使う側でマージ前の変更を試すときに使う。
+- タグ `v0.1.0` の push: `0.1.0`
+- Actions の Publish を手動実行: 指定したバージョン
+- main への push: `latest-SNAPSHOT`（main の最新で上書き）
+- PR: `0.0.0-pr<番号>-<head のコミット 7 桁>`（マージ前の変更を使う側で試すとき）
