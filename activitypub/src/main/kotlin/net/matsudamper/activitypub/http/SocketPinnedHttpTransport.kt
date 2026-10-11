@@ -5,6 +5,7 @@ import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -45,22 +46,34 @@ internal class SocketPinnedHttpTransport internal constructor(
         maxBodyBytes: Int,
         deadline: RequestDeadline,
     ): PinnedHttpResponse {
-        open(request, deadline).use { socket ->
-            writeRequest(socket.getOutputStream(), request)
-            val input = socket.getInputStream()
-            val (status, headers) = readStatusAndHeaders(input)
-            val body =
-                if (readsBody(status, headers)) {
-                    try {
-                        Result.success(readBody(input, headers, maxBodyBytes))
-                    } catch (error: IOException) {
-                        Result.failure(error.ifExpired(deadline.deadlineNanos))
-                    }
-                } else {
-                    null
+        var failure: IOException? = null
+        for (address in request.addresses) {
+            val socket =
+                try {
+                    open(request, address, deadline)
+                } catch (error: IOException) {
+                    failure = error
+                    if (System.nanoTime() >= deadline.deadlineNanos) break
+                    continue
                 }
-            return PinnedHttpResponse(status = status, headers = headers, body = body)
+            return socket.use { connected ->
+                writeRequest(connected.getOutputStream(), request)
+                val input = connected.getInputStream()
+                val (status, headers) = readStatusAndHeaders(input)
+                val body =
+                    if (readsBody(status, headers)) {
+                        try {
+                            Result.success(readBody(input, headers, maxBodyBytes))
+                        } catch (error: IOException) {
+                            Result.failure(error.ifExpired(deadline.deadlineNanos))
+                        }
+                    } else {
+                        null
+                    }
+                PinnedHttpResponse(status = status, headers = headers, body = body)
+            }
         }
+        throw failure ?: IOException("接続先がない")
     }
 
     override fun close() = Unit
@@ -71,13 +84,14 @@ internal class SocketPinnedHttpTransport internal constructor(
      */
     private fun open(
         request: PinnedHttpRequest,
+        address: InetAddress,
         deadline: RequestDeadline,
     ): Socket {
         val socket = Socket()
         deadline.bind(socket)
         try {
             socket.connect(
-                InetSocketAddress(request.address, request.url.effectivePort()),
+                InetSocketAddress(address, request.url.effectivePort()),
                 minOf(CONNECT_TIMEOUT_MILLIS, deadline.remainingMillis()),
             )
             if (!request.url.isHttps) return socket

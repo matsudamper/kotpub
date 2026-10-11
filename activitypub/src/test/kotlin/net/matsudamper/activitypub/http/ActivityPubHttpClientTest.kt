@@ -123,7 +123,7 @@ class ActivityPubHttpClientTest {
 
         assertEquals(200, response.status)
         assertEquals("ok", response.body?.getOrThrow()?.decodeToString())
-        assertSame(pinned, transport.calls.single().address)
+        assertEquals(listOf(pinned, other), transport.calls.single().addresses)
         assertEquals(listOf("public.example"), lookup.lookedUp)
     }
 
@@ -145,7 +145,7 @@ class ActivityPubHttpClientTest {
 
         assertIs<OutboundAddressRejectedException>(failure)
         assertEquals(1, transport.calls.size)
-        assertSame(pinned, transport.calls.single().address)
+        assertSame(pinned, transport.calls.single().addresses.single())
         assertEquals(listOf("example.com", "127.0.0.1"), lookup.lookedUp)
     }
 
@@ -167,7 +167,7 @@ class ActivityPubHttpClientTest {
 
         assertIs<OutboundAddressRejectedException>(failure)
         assertEquals(1, transport.calls.size)
-        assertSame(pinned, transport.calls.single().address)
+        assertSame(pinned, transport.calls.single().addresses.single())
     }
 
     @Test
@@ -232,8 +232,8 @@ class ActivityPubHttpClientTest {
         assertEquals(200, response.status)
         assertEquals("https://other.example/users/a", response.finalUrl)
         assertEquals("doc", response.body?.getOrThrow()?.decodeToString())
-        assertSame(first, transport.calls[0].address)
-        assertSame(second, transport.calls[1].address)
+        assertSame(first, transport.calls[0].addresses.single())
+        assertSame(second, transport.calls[1].addresses.single())
         assertEquals("example.com", transport.calls[0].headers["Host"])
         assertEquals("application/activity+json", transport.calls[1].headers["Accept"])
         assertEquals(null, transport.calls[1].headers["Host"])
@@ -283,7 +283,7 @@ class ActivityPubHttpClientTest {
 
         assertEquals(302, response.status)
         assertEquals(1, transport.calls.size)
-        assertSame(pinned, transport.calls.single().address)
+        assertSame(pinned, transport.calls.single().addresses.single())
         assertEquals(true, transport.calls.single().body.contentEquals(byteArrayOf(1, 2)))
         assertEquals("example.com", transport.calls.single().headers["Host"])
     }
@@ -318,7 +318,7 @@ class ActivityPubHttpClientTest {
         val response = get(allowedClient, "http://127.0.0.1/inbox")
 
         assertEquals(200, response.status)
-        assertEquals(InetAddress.getByName("127.0.0.1"), allowed.calls.single().address)
+        assertEquals(InetAddress.getByName("127.0.0.1"), allowed.calls.single().addresses.single())
     }
 
     @Test

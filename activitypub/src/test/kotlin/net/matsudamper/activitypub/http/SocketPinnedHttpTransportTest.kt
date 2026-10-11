@@ -31,7 +31,7 @@ class SocketPinnedHttpTransportTest {
                         PinnedHttpRequest(
                             method = "GET",
                             url = url,
-                            address = InetAddress.getByName("127.0.0.1"),
+                            addresses = listOf(InetAddress.getByName("127.0.0.1")),
                             headers = mapOf("Accept" to "application/activity+json", "Host" to "remote.example"),
                             body = ByteArray(0),
                         ),
@@ -57,7 +57,7 @@ class SocketPinnedHttpTransportTest {
                     PinnedHttpRequest(
                         method = "GET",
                         url = url,
-                        address = InetAddress.getByName("127.0.0.1"),
+                        addresses = listOf(InetAddress.getByName("127.0.0.1")),
                         headers = mapOf("Accept" to "application/activity+json"),
                         body = ByteArray(0),
                     ),
@@ -81,7 +81,7 @@ class SocketPinnedHttpTransportTest {
                     PinnedHttpRequest(
                         method = "POST",
                         url = url,
-                        address = InetAddress.getByName("127.0.0.1"),
+                        addresses = listOf(InetAddress.getByName("127.0.0.1")),
                         headers = mapOf("Host" to "remote.example", "Digest" to "SHA-256=abc"),
                         body = payload,
                     ),
@@ -108,7 +108,7 @@ class SocketPinnedHttpTransportTest {
                     PinnedHttpRequest(
                         method = "GET",
                         url = url,
-                        address = InetAddress.getByName("127.0.0.1"),
+                        addresses = listOf(InetAddress.getByName("127.0.0.1")),
                         headers = mapOf(),
                         body = ByteArray(0),
                     ),
@@ -137,7 +137,7 @@ class SocketPinnedHttpTransportTest {
                         PinnedHttpRequest(
                             method = "GET",
                             url = url,
-                            address = InetAddress.getByName("127.0.0.1"),
+                            addresses = listOf(InetAddress.getByName("127.0.0.1")),
                             headers = mapOf(),
                             body = ByteArray(0),
                         ),
@@ -179,7 +179,7 @@ class SocketPinnedHttpTransportTest {
                             PinnedHttpRequest(
                                 method = "GET",
                                 url = url,
-                                address = InetAddress.getByName("127.0.0.1"),
+                                addresses = listOf(InetAddress.getByName("127.0.0.1")),
                                 headers = mapOf(),
                                 body = ByteArray(0),
                             ),
@@ -203,6 +203,83 @@ class SocketPinnedHttpTransportTest {
     }
 
     @Test
+    fun `届かないアドレスの次へ繋ぐ`() {
+        val reachable = InetAddress.getByName("127.0.0.2")
+        val server = ServerSocket(0, 1, reachable)
+        val port = server.localPort
+        val worker =
+            thread(name = "pinned-http-next-address") {
+                server.accept().use { socket ->
+                    val output = socket.getOutputStream()
+                    output.write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok".toByteArray())
+                    output.flush()
+                }
+            }
+        try {
+            val url = checkNotNull(HttpUrl.parse("http://example.com:$port/a"))
+            val response =
+                SocketPinnedHttpTransport().exchange(
+                    request =
+                    PinnedHttpRequest(
+                        method = "GET",
+                        url = url,
+                        addresses = listOf(InetAddress.getByName("127.0.0.1"), reachable),
+                        headers = mapOf(),
+                        body = ByteArray(0),
+                    ),
+                    readsBody = { _, _ -> true },
+                    maxBodyBytes = 10,
+                )
+            assertEquals(200, response.status)
+            assertEquals("ok", response.body?.getOrThrow()?.decodeToString())
+        } finally {
+            server.close()
+            worker.join(5_000)
+        }
+    }
+
+    @Test
+    fun `応答が返ったら次のアドレスには繋がない`() {
+        val first = InetAddress.getByName("127.0.0.1")
+        val second = InetAddress.getByName("127.0.0.2")
+        val primary = ServerSocket(0, 1, first)
+        val port = primary.localPort
+        val fallback = ServerSocket(port, 1, second)
+        fallback.soTimeout = 300
+        val primaryWorker =
+            thread(name = "pinned-http-primary") {
+                primary.accept().use { socket ->
+                    val output = socket.getOutputStream()
+                    output.write("HTTP/1.1 500 Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                    output.flush()
+                }
+            }
+        try {
+            val url = checkNotNull(HttpUrl.parse("http://example.com:$port/a"))
+            val response =
+                SocketPinnedHttpTransport().exchange(
+                    request =
+                    PinnedHttpRequest(
+                        method = "GET",
+                        url = url,
+                        addresses = listOf(first, second),
+                        headers = mapOf(),
+                        body = ByteArray(0),
+                    ),
+                    readsBody = { _, _ -> false },
+                    maxBodyBytes = 0,
+                )
+            assertEquals(500, response.status)
+            val fallbackAccepted = runCatching { fallback.accept().close() }.isSuccess
+            assertEquals(false, fallbackAccepted)
+        } finally {
+            primary.close()
+            fallback.close()
+            primaryWorker.join(5_000)
+        }
+    }
+
+    @Test
     fun `チャンクされた本文を読む`() {
         requestAgainstLocalServer(
             rawResponse = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n",
@@ -214,7 +291,7 @@ class SocketPinnedHttpTransportTest {
                     PinnedHttpRequest(
                         method = "GET",
                         url = url,
-                        address = InetAddress.getByName("127.0.0.1"),
+                        addresses = listOf(InetAddress.getByName("127.0.0.1")),
                         headers = mapOf(),
                         body = ByteArray(0),
                     ),

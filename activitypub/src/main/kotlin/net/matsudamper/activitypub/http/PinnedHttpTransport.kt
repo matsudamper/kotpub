@@ -3,7 +3,8 @@ package net.matsudamper.activitypub.http
 import java.net.InetAddress
 
 /**
- * 検査済みの [InetAddress] へ 1 回だけ HTTP する。
+ * 検査済みの [InetAddress] へ HTTP する。
+ * 複数あるときは届かなかったときだけ次を試す。応答が返ったあとは次へ進まない。
  * リダイレクトは追わない。追うかどうかは呼び出し側がホップごとに決める
  */
 internal interface PinnedHttpTransport : AutoCloseable {
@@ -17,7 +18,7 @@ internal interface PinnedHttpTransport : AutoCloseable {
 internal class PinnedHttpRequest(
     val method: String,
     val url: HttpUrl,
-    val address: InetAddress,
+    val addresses: List<InetAddress>,
     val headers: Map<String, String>,
     val body: ByteArray,
 )

@@ -27,6 +27,9 @@ import kotlinx.coroutines.withContext
  * - 相手が応答しないまま待ち続けない。接続開始から応答が終わるまで 10 秒。
  *   接続だけは 5 秒で切る。1 バイトずつ送られても、そのたびに待ち直さない。
  *   inbox の処理や配信が詰まる
+ * - 名前解決が複数の公開アドレスを返したら、その順に繋ぐ。届かなかったときだけ次を試す。
+ *   応答が返ったあとは次へ進まない。POST を送り直すと相手に二重に届く。
+ *   試行はすべて、接続開始からの 10 秒に収める
  * - GET のリダイレクトは自動では追わない。1 ホップごとに同じ検査をしてから次へ進む。
  *   https で始まった取得が http に落ちるリダイレクトは追わない。平文だと経路上で文書を差し替えられる。
  *   追うのは [MAX_GET_REDIRECTS] 回まで。最後に取りに行った URL を [ActivityPubClientResponse.finalUrl] に入れる
@@ -136,7 +139,7 @@ class ActivityPubHttpClient internal constructor(
             PinnedHttpRequest(
                 method = method,
                 url = destination,
-                address = addresses.first(),
+                addresses = addresses,
                 headers = headers,
                 body = body,
             ),
@@ -146,7 +149,7 @@ class ActivityPubHttpClient internal constructor(
     }
 
     /**
-     * 解決した全部を見てから、そのリストの先頭へ繋ぐ。
+     * 解決した全部を見てから、そのリストの順に繋ぐ。
      * リストの外のアドレスへは繋がない
      */
     private fun checkedAddresses(destination: HttpUrl): List<InetAddress> {
