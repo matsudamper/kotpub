@@ -17,6 +17,7 @@ import net.matsudamper.activitypub.http.ActivityPubClientResponse
 import net.matsudamper.activitypub.http.ActivityPubHttpClient
 import net.matsudamper.activitypub.http.ActivityPubPostResponse
 import net.matsudamper.activitypub.http.HttpStatusCodes
+import net.matsudamper.activitypub.http.NonPublicAddressException
 import net.matsudamper.activitypub.http.RequestHeaders
 import net.matsudamper.activitypub.httpsignature.HttpSignatureResult
 import net.matsudamper.activitypub.httpsignature.HttpSignatureVerifier
@@ -154,6 +155,26 @@ class HttpActivityDeliveryTest {
             }
 
         assertEquals(true, assertIs<DeliveryResult.Failed>(result).retryable)
+    }
+
+    @Test
+    fun `公開アドレスではない宛先は、包まれて投げられても送り直さない`() {
+        val client = object : FakeClient() {
+            override suspend fun post(
+                url: String,
+                headers: Map<String, String>,
+                body: ByteArray,
+            ): ActivityPubPostResponse = throw java.io.IOException("接続できない", NonPublicAddressException("127.0.0.1"))
+        }
+
+        val result =
+            runBlocking {
+                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                    delivery.deliver(inbox = "https://internal.example/inbox", sender = sender, body = ByteArray(0))
+                }
+            }
+
+        assertEquals(false, assertIs<DeliveryResult.Failed>(result).retryable)
     }
 
     @Test

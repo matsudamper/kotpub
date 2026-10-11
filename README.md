@@ -6,6 +6,18 @@ HTTP Signature の署名と検証、相手のアクター文書の取得、ア�
 HTTP のサーバーとクライアントには依存しない。エンドポイントは `EndpointResponse` を返し、
 外向きの通信は `ActivityPubHttpClient` を受け取る。どちらの実装も使う側が用意する。
 
+`ActivityPubHttpClient` は公開アドレスにだけ接続すること。宛先の URL は相手が決めるので、
+検査しないと内部のサービスへリクエストを送らされる（SSRF）。
+Ktor CIO（3.6.0 以降）なら、名前解決に `PublicAddressDnsResolver` を渡す。
+
+```kotlin
+HttpClient(CIO) {
+    engine {
+        dnsResolver = PublicAddressDnsResolver::resolve
+    }
+}
+```
+
 ## 使い方
 
 GitHub Packages に公開している。取得には `read:packages` を付けたトークンが要る。

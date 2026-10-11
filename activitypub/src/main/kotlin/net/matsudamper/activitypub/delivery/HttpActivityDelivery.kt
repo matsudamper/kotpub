@@ -8,6 +8,7 @@ import net.matsudamper.activitypub.actor.ActorUrls
 import net.matsudamper.activitypub.http.ActivityPubHttpClient
 import net.matsudamper.activitypub.http.HttpStatusCodes
 import net.matsudamper.activitypub.http.HttpUrl
+import net.matsudamper.activitypub.http.NonPublicAddressException
 import net.matsudamper.activitypub.httpsignature.HttpSignatureSigner
 
 /**
@@ -59,6 +60,14 @@ class HttpActivityDelivery(
                 // runCatching は Throwable を拾うので、呼び出し元が消えた合図まで
                 // 配信の失敗に化ける。化けると送れていない記事が投稿済みとして残る
                 if (error is CancellationException) throw error
+                // 公開アドレスではない宛先は、送り直しても届くようにならない。
+                // HTTP クライアントが包んで投げ直すことがあるので、原因までたどる
+                if (generateSequence(error) { it.cause }.any { it is NonPublicAddressException }) {
+                    return DeliveryResult.Failed(
+                        reason = "公開アドレスではない宛先には送らない: $inbox ${error.message}",
+                        retryable = false,
+                    )
+                }
                 // 届いていないので、相手が戻れば送れる
                 return DeliveryResult.Failed(reason = "POST に失敗した: $inbox ${error.message}", retryable = true)
             }
