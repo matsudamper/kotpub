@@ -14,11 +14,13 @@ import net.matsudamper.activitypub.TestActorKey
 import net.matsudamper.activitypub.TestRemoteActors
 import net.matsudamper.activitypub.actor.ActorUrls
 import net.matsudamper.activitypub.http.ActivityPubClientResponse
-import net.matsudamper.activitypub.http.ActivityPubHttpClient
+import net.matsudamper.activitypub.http.ActivityPubHttpCalls
 import net.matsudamper.activitypub.http.ActivityPubPostResponse
 import net.matsudamper.activitypub.http.HttpStatusCodes
+import net.matsudamper.activitypub.http.OutboundAddressRejectedException
 import net.matsudamper.activitypub.http.RequestHeaders
 import net.matsudamper.activitypub.httpsignature.HttpSignatureResult
+import net.matsudamper.activitypub.httpsignature.HttpSignatureSigner
 import net.matsudamper.activitypub.httpsignature.HttpSignatureVerifier
 import net.matsudamper.activitypub.httpsignature.SignedRequest
 
@@ -42,7 +44,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                openDelivery(client).use { delivery ->
                     delivery.deliver(inbox = "https://remote.example/users/alice/inbox?a=1", sender = sender, body = body)
                 }
             }
@@ -71,7 +73,7 @@ class HttpActivityDeliveryTest {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            openDelivery(client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example:8443/inbox", sender = sender, body = ByteArray(0))
             }
         }
@@ -85,7 +87,7 @@ class HttpActivityDeliveryTest {
         val body = """{"type":"Accept"}""".toByteArray()
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            openDelivery(client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example/users/あ/inbox", sender = sender, body = body)
             }
         }
@@ -120,7 +122,7 @@ class HttpActivityDeliveryTest {
         var result: DeliveryResult? = null
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            openDelivery(client).use { delivery ->
                 val job = launch {
                     result = delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
@@ -148,7 +150,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                openDelivery(client).use { delivery ->
                     delivery.deliver(inbox = "https://example.com/users/alice/inbox", sender = sender, body = ByteArray(0))
                 }
             }
@@ -157,11 +159,32 @@ class HttpActivityDeliveryTest {
     }
 
     @Test
+    fun `公開アドレスではない宛先は送り直さない`() {
+        val client =
+            object : FakeClient() {
+                override suspend fun post(
+                    url: String,
+                    headers: Map<String, String>,
+                    body: ByteArray,
+                ): ActivityPubPostResponse = throw OutboundAddressRejectedException("公開アドレスではない")
+            }
+
+        val result =
+            runBlocking {
+                openDelivery(client).use { delivery ->
+                    delivery.deliver(inbox = "http://127.0.0.1/inbox", sender = sender, body = ByteArray(0))
+                }
+            }
+
+        assertEquals(false, assertIs<DeliveryResult.Failed>(result).retryable)
+    }
+
+    @Test
     fun `URL として読めない宛先は送らずに失敗として返る`() {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                openDelivery(client).use { delivery ->
                     delivery.deliver(inbox = "not a url", sender = sender, body = ByteArray(0))
                 }
             }
@@ -192,7 +215,7 @@ class HttpActivityDeliveryTest {
     private fun deliverTo(status: Int): DeliveryResult.Failed {
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = RecordingClient(status)).use { delivery ->
+                openDelivery(RecordingClient(status)).use { delivery ->
                     delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
                         sender = sender,
@@ -204,7 +227,10 @@ class HttpActivityDeliveryTest {
         return assertIs<DeliveryResult.Failed>(result)
     }
 
-    private abstract class FakeClient : ActivityPubHttpClient {
+    private fun openDelivery(client: ActivityPubHttpCalls): HttpActivityDelivery =
+        HttpActivityDelivery(TestActorKey.value, client, HttpSignatureSigner())
+
+    private abstract class FakeClient : ActivityPubHttpCalls {
         override suspend fun get(
             url: String,
             headers: Map<String, String>,

@@ -10,8 +10,8 @@ plugins {
 }
 
 dependencies {
-    // HTTP のサーバーとクライアントには依存しない。エンドポイントは EndpointResponse を返し、
-    // 外向きの通信は ActivityPubHttpClient を受け取る。どちらの実装も使う側が用意する
+    // HTTP のサーバーには依存しない。エンドポイントは EndpointResponse を返す。
+    // 外向きの通信は ActivityPubHttpClient が行う。宛先が公開アドレスかを接続の前に確かめる
     api(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
