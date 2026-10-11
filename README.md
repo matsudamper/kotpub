@@ -18,6 +18,8 @@ HttpClient(CIO) {
 }
 ```
 
+NAT64 が独自のプレフィックス（Network-Specific Prefix）を使うネットワークには対応していない。
+
 ## 使い方
 
 GitHub Packages に公開している。取得には `read:packages` を付けたトークンが要る。

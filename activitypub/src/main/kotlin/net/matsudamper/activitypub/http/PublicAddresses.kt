@@ -46,7 +46,12 @@ internal object PublicAddresses {
 
     /**
      * IPv6 だけの環境では、IPv4 のサーバーへ DNS64 が返すこの範囲で繋ぐ。
-     * 中に埋め込まれた IPv4 の宛先へ変換されるので、その IPv4 で判定する
+     * 中に埋め込まれた IPv4 の宛先へ変換されるので、その IPv4 で判定する。
+     *
+     * NAT64 がネットワークごとの独自プレフィックス（RFC 6052 の Network-Specific Prefix）を使う環境は未対応。
+     * そのプレフィックスは 2000::/3 の中にあり、内部の IPv4 を埋め込んだアドレスでも公開 IPv6 と見分けられずに通る。
+     * 見分けるにはプレフィックスを RFC 7050（ipv4only.arpa の AAAA）で調べる必要があるが、
+     * 想定する環境は IPv4 で直接外へ出て NAT64 を持たないので、調べていない
      */
     private val nat64WellKnownPrefix = AddressBlock.of("64:ff9b::", 96)
 
