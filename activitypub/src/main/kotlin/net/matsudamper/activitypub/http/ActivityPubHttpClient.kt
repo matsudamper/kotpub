@@ -24,9 +24,11 @@ import kotlinx.coroutines.withContext
  * - 届かなかった（接続できない・タイムアウト）ときは例外を投げる
  * - 渡したヘッダを書き換えない。`Host` と `Date` は署名に入っていて、
  *   後から付け直されると相手側で署名が一致しなくなる
- * - 相手が応答しないまま待ち続けない。接続は 5 秒、読み取りは 10 秒で切る。
+ * - 相手が応答しないまま待ち続けない。接続開始から応答が終わるまで 10 秒。
+ *   接続だけは 5 秒で切る。1 バイトずつ送られても、そのたびに待ち直さない。
  *   inbox の処理や配信が詰まる
  * - GET のリダイレクトは自動では追わない。1 ホップごとに同じ検査をしてから次へ進む。
+ *   https で始まった取得が http に落ちるリダイレクトは追わない。平文だと経路上で文書を差し替えられる。
  *   追うのは [MAX_GET_REDIRECTS] 回まで。最後に取りに行った URL を [ActivityPubClientResponse.finalUrl] に入れる
  * - POST はリダイレクトを追わない。追うと署名した `Host` やパスと違う宛先にボディごと送り直すことになる
  */
@@ -178,7 +180,13 @@ class ActivityPubHttpClient internal constructor(
             runCatching { URI(current).resolve(location) }.getOrNull()
                 ?: throw OutboundAddressRejectedException("リダイレクト先の URL を読めない")
         if (!resolved.isAbsolute) throw OutboundAddressRejectedException("リダイレクト先の URL を読めない")
-        return resolved.toASCIIString()
+        val next = resolved.toASCIIString()
+        val currentUrl = HttpUrl.parse(current)
+        val nextUrl = HttpUrl.parse(next) ?: throw OutboundAddressRejectedException("リダイレクト先の URL を読めない")
+        if (currentUrl != null && currentUrl.isHttps && !nextUrl.isHttps) {
+            throw OutboundAddressRejectedException("https からのリダイレクト先は https に限る")
+        }
+        return next
     }
 
     private fun headersForNextHop(headers: Map<String, String>): Map<String, String> =

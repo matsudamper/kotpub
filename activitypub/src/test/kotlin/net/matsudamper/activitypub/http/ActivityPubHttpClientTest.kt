@@ -49,6 +49,20 @@ class ActivityPubHttpClientTest {
                 "http://[64:ff9b::7f00:1]/",
                 "http://[2002:a00:1::]/",
                 "http://[2002:a9fe:a9fe::]/",
+                "http://192.0.0.1/",
+                "http://192.0.2.1/",
+                "http://192.88.99.1/",
+                "http://198.18.0.1/",
+                "http://198.19.255.1/",
+                "http://198.51.100.1/",
+                "http://203.0.113.1/",
+                "http://240.0.0.1/",
+                "http://[2001:db8::1]/",
+                "http://[2001::1]/",
+                "http://[2001:2::1]/",
+                "http://[2001:20::1]/",
+                "http://[3fff::1]/",
+                "http://[100::1]/",
             )
 
         for (url in urls) {
@@ -123,6 +137,27 @@ class ActivityPubHttpClientTest {
         assertEquals(1, transport.calls.size)
         assertSame(pinned, transport.calls.single().address)
         assertEquals(listOf("example.com", "127.0.0.1"), lookup.lookedUp)
+    }
+
+    @Test
+    fun `httpsからのリダイレクト先がhttpならそのホップで止まる`() {
+        val pinned = InetAddress.getByName("8.8.8.8")
+        val lookup = ScriptedLookup(mapOf("example.com" to listOf(pinned)))
+        val transport =
+            FakeTransport {
+                PinnedHttpResponse(
+                    status = 301,
+                    headers = ResponseHeaders(listOf("Location" to "http://example.com/next")),
+                    body = null,
+                )
+            }
+        val client = client(lookup, transport, allowsPrivateAddresses = false)
+
+        val failure = runCatching { get(client, "https://example.com/actor") }.exceptionOrNull()
+
+        assertIs<OutboundAddressRejectedException>(failure)
+        assertEquals(1, transport.calls.size)
+        assertSame(pinned, transport.calls.single().address)
     }
 
     @Test

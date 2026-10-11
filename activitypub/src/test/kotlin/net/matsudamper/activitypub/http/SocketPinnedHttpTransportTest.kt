@@ -5,12 +5,15 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * 渡したアドレスへ TCP で繋ぐことと、HTTP/1.1 の読み書き。名前解決はしない
@@ -149,6 +152,54 @@ class SocketPinnedHttpTransportTest {
 
         assertNotNull(failure)
         assertEquals(true, accepted.get())
+    }
+
+    @Test
+    fun `少しずつ送られても応答全体の期限で切る`() {
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        val sender =
+            thread(name = "pinned-http-drip") {
+                server.accept().use { socket ->
+                    val output = socket.getOutputStream()
+                    while (true) {
+                        output.write('H'.code)
+                        output.flush()
+                        Thread.sleep(20)
+                    }
+                }
+            }
+        val caller = AtomicReference<Throwable?>()
+        val reader =
+            thread(name = "pinned-http-drip-client") {
+                val url = checkNotNull(HttpUrl.parse("http://example.com:${server.localPort}/a"))
+                caller.set(
+                    runCatching {
+                        SocketPinnedHttpTransport(requestTimeoutMillis = 400).exchange(
+                            request =
+                            PinnedHttpRequest(
+                                method = "GET",
+                                url = url,
+                                address = InetAddress.getByName("127.0.0.1"),
+                                headers = mapOf(),
+                                body = ByteArray(0),
+                            ),
+                            readsBody = { _, _ -> true },
+                            maxBodyBytes = 100,
+                        )
+                    }.exceptionOrNull(),
+                )
+            }
+        try {
+            reader.join(3_000)
+        } finally {
+            server.close()
+            reader.join(1_000)
+            sender.join(1_000)
+        }
+
+        assertFalse(reader.isAlive)
+        assertIs<SocketTimeoutException>(caller.get())
+        assertTrue(sender.isAlive.not())
     }
 
     @Test

@@ -7,6 +7,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -18,13 +21,31 @@ import javax.net.ssl.SSLSocket
  * DNS リバインディングで、検査したアドレスと別の相手に届く。
  * TLS の検査名（SNI と証明書）は URL のホストのままにする。繋ぐ相手と、証明書が名乗る名前は別
  */
-internal class SocketPinnedHttpTransport : PinnedHttpTransport {
+internal class SocketPinnedHttpTransport internal constructor(
+    private val requestTimeoutMillis: Int,
+) : PinnedHttpTransport {
+    internal constructor() : this(REQUEST_TIMEOUT_MILLIS)
+
     override fun exchange(
         request: PinnedHttpRequest,
         readsBody: (status: Int, headers: ResponseHeaders) -> Boolean,
         maxBodyBytes: Int,
     ): PinnedHttpResponse {
-        open(request).use { socket ->
+        val deadline = RequestDeadline(requestTimeoutMillis)
+        try {
+            return deadline.use { exchangeWithin(request, readsBody, maxBodyBytes, deadline) }
+        } catch (error: IOException) {
+            throw error.ifExpired(deadline.deadlineNanos)
+        }
+    }
+
+    private fun exchangeWithin(
+        request: PinnedHttpRequest,
+        readsBody: (status: Int, headers: ResponseHeaders) -> Boolean,
+        maxBodyBytes: Int,
+        deadline: RequestDeadline,
+    ): PinnedHttpResponse {
+        open(request, deadline).use { socket ->
             writeRequest(socket.getOutputStream(), request)
             val input = socket.getInputStream()
             val (status, headers) = readStatusAndHeaders(input)
@@ -33,7 +54,7 @@ internal class SocketPinnedHttpTransport : PinnedHttpTransport {
                     try {
                         Result.success(readBody(input, headers, maxBodyBytes))
                     } catch (error: IOException) {
-                        Result.failure(error)
+                        Result.failure(error.ifExpired(deadline.deadlineNanos))
                     }
                 } else {
                     null
@@ -48,16 +69,19 @@ internal class SocketPinnedHttpTransport : PinnedHttpTransport {
      * 先に IP へ TCP 接続してから TLS を被せる。
      * 被せるときのホスト名で繋ぎ直す実装があり、その順だと検査と別のアドレスに届く
      */
-    private fun open(request: PinnedHttpRequest): Socket {
+    private fun open(
+        request: PinnedHttpRequest,
+        deadline: RequestDeadline,
+    ): Socket {
         val socket = Socket()
+        deadline.bind(socket)
         try {
-            socket.soTimeout = READ_TIMEOUT_MILLIS
             socket.connect(
                 InetSocketAddress(request.address, request.url.effectivePort()),
-                CONNECT_TIMEOUT_MILLIS,
+                minOf(CONNECT_TIMEOUT_MILLIS, deadline.remainingMillis()),
             )
             if (!request.url.isHttps) return socket
-            return startTls(socket, request.url.host, request.url.effectivePort())
+            return startTls(socket, request.url.host, request.url.effectivePort(), deadline)
         } catch (error: IOException) {
             socket.close()
             throw error
@@ -71,10 +95,13 @@ internal class SocketPinnedHttpTransport : PinnedHttpTransport {
         socket: Socket,
         host: String,
         port: Int,
+        deadline: RequestDeadline,
     ): Socket {
         val bareHost = host.removePrefix("[").removeSuffix("]")
         val ssl = SSLContext.getDefault().socketFactory.createSocket(socket, bareHost, port, true) as SSLSocket
+        deadline.bind(ssl)
         try {
+            ssl.soTimeout = deadline.remainingMillis()
             val parameters = ssl.sslParameters
             parameters.endpointIdentificationAlgorithm = "HTTPS"
             val serverName = sniHostName(bareHost)
@@ -265,7 +292,7 @@ internal class SocketPinnedHttpTransport : PinnedHttpTransport {
 
     private companion object {
         const val CONNECT_TIMEOUT_MILLIS = 5_000
-        const val READ_TIMEOUT_MILLIS = 10_000
+        const val REQUEST_TIMEOUT_MILLIS = 10_000
         const val MAX_HEADER_LINE_LENGTH = 8 * 1024
         const val MAX_HEADER_COUNT = 128
         const val MAX_INFORMATIONAL = 3
@@ -273,4 +300,64 @@ internal class SocketPinnedHttpTransport : PinnedHttpTransport {
         const val IPV4_LABEL_COUNT = 4
         const val READ_BUFFER_BYTES = 8 * 1024
     }
+}
+
+/**
+ * 接続開始から応答完了までの期限。
+ * `SO_TIMEOUT` は 1 回の read が無通信で待つ時間なので、1 バイトずつ返されると待ち直してしまう。
+ * 期限が来たらソケットを閉じ、読み取りも書き込みも握手もそこまでにする
+ */
+private class RequestDeadline(
+    timeoutMillis: Int,
+) : AutoCloseable {
+    val deadlineNanos: Long = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
+
+    private val current = AtomicReference<Socket?>(null)
+
+    @Volatile
+    private var closed = false
+
+    private val watcher =
+        Thread(::watch, "activitypub-http-deadline").also { thread ->
+            thread.isDaemon = true
+            thread.start()
+        }
+
+    fun bind(socket: Socket) {
+        current.set(socket)
+        if (closed || System.nanoTime() >= deadlineNanos) socket.close()
+    }
+
+    fun remainingMillis(): Int {
+        val remainingNanos = deadlineNanos - System.nanoTime()
+        if (remainingNanos <= 0) throw SocketTimeoutException("応答の期限を超えた")
+        val millis = TimeUnit.NANOSECONDS.toMillis(remainingNanos)
+        return millis.coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    override fun close() {
+        closed = true
+        watcher.interrupt()
+    }
+
+    private fun watch() {
+        try {
+            while (!closed) {
+                val remainingNanos = deadlineNanos - System.nanoTime()
+                if (remainingNanos <= 0) {
+                    current.get()?.close()
+                    return
+                }
+                Thread.sleep(TimeUnit.NANOSECONDS.toMillis(remainingNanos).coerceAtLeast(1))
+            }
+        } catch (_: InterruptedException) {
+            // 応答が終わった
+        }
+    }
+}
+
+private fun IOException.ifExpired(deadlineNanos: Long): IOException {
+    if (System.nanoTime() < deadlineNanos) return this
+    if (this is SocketTimeoutException) return this
+    return SocketTimeoutException("応答の期限を超えた").also { it.initCause(this) }
 }
