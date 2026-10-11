@@ -1,0 +1,4 @@
+{
+  "name": "kotpub",
+  "install": "bash .cursor/install.sh"
+}
