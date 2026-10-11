@@ -10,4 +10,4 @@
 
 ## Cloud Agent
 - 依存の jar は `gradle/resolve-dependencies.init.gradle.kts` の `resolveDependencies` で取る。コンパイルはしない
-- 呼び出しは `.cursor/environment.json` の `install`
+- `.cursor/environment.json` の `install` は `bash .cursor/install.sh` を参照する。コマンド本体はそこに書く
