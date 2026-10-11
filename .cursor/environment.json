@@ -1,0 +1,4 @@
+{
+  "name": "kotpub",
+  "install": "./gradlew --no-daemon --init-script gradle/resolve-dependencies.init.gradle.kts resolveDependencies"
+}
