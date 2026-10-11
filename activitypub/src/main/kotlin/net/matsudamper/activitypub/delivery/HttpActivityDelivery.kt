@@ -5,9 +5,13 @@ import kotlin.coroutines.cancellation.CancellationException
 import net.matsudamper.activitypub.activitypub.ActivityPubContentTypes
 import net.matsudamper.activitypub.actor.ActorKey
 import net.matsudamper.activitypub.actor.ActorUrls
+import net.matsudamper.activitypub.http.ActivityPubClientResponse
+import net.matsudamper.activitypub.http.ActivityPubHttpCalls
 import net.matsudamper.activitypub.http.ActivityPubHttpClient
+import net.matsudamper.activitypub.http.ActivityPubPostResponse
 import net.matsudamper.activitypub.http.HttpStatusCodes
 import net.matsudamper.activitypub.http.HttpUrl
+import net.matsudamper.activitypub.http.OutboundAddressRejectedException
 import net.matsudamper.activitypub.httpsignature.HttpSignatureSigner
 
 /**
@@ -21,12 +25,22 @@ import net.matsudamper.activitypub.httpsignature.HttpSignatureSigner
  *   使い捨てアクターも同じ鍵を共有する。アクターごとの鍵になるのは Phase 6
  * @param client 閉じるのはこのクラスの [close] が受け持つ
  */
-class HttpActivityDelivery(
+class HttpActivityDelivery internal constructor(
     private val actorKey: ActorKey,
-    private val client: ActivityPubHttpClient,
-    private val signer: HttpSignatureSigner = HttpSignatureSigner(),
+    private val client: ActivityPubHttpCalls,
+    private val signer: HttpSignatureSigner,
 ) : ActivityDelivery,
     Closeable {
+    constructor(
+        actorKey: ActorKey,
+        client: ActivityPubHttpClient,
+    ) : this(actorKey, ClientCalls(client), HttpSignatureSigner())
+
+    constructor(
+        actorKey: ActorKey,
+        client: ActivityPubHttpClient,
+        signer: HttpSignatureSigner,
+    ) : this(actorKey, ClientCalls(client), signer)
     override suspend fun deliver(
         inbox: String,
         sender: ActorUrls,
@@ -43,8 +57,8 @@ class HttpActivityDelivery(
                 method = "POST",
                 // 相手はリクエストラインの綴りで署名文字列を組み直す。
                 // パスを組み立て直すとクエリや末尾の差で合わなくなる
-                requestTarget = requestTarget(url),
-                host = hostHeader(url),
+                requestTarget = url.requestTarget(),
+                host = url.hostHeader(),
                 body = body,
             )
 
@@ -59,6 +73,13 @@ class HttpActivityDelivery(
                 // runCatching は Throwable を拾うので、呼び出し元が消えた合図まで
                 // 配信の失敗に化ける。化けると送れていない記事が投稿済みとして残る
                 if (error is CancellationException) throw error
+                // 公開アドレスではない宛先は、送り直しても届くようにならない
+                if (error is OutboundAddressRejectedException) {
+                    return DeliveryResult.Failed(
+                        reason = "公開アドレスではない宛先には送らない: $inbox ${error.message}",
+                        retryable = false,
+                    )
+                }
                 // 届いていないので、相手が戻れば送れる
                 return DeliveryResult.Failed(reason = "POST に失敗した: $inbox ${error.message}", retryable = true)
             }
@@ -100,28 +121,30 @@ class HttpActivityDelivery(
             HttpStatusCodes.REQUEST_TIMEOUT,
             HttpStatusCodes.TOO_MANY_REQUESTS,
         )
+    }
+}
 
-        /**
-         * 署名した `(request-target)` と実際に送るリクエストラインを揃える。
-         * パスが空なら、リクエストラインに載るのは `/`
-         */
-        fun requestTarget(url: HttpUrl): String {
-            val path = url.rawPath.ifEmpty { "/" }
-            val query = url.rawQuery
-            return if (query.isNullOrEmpty()) path else "$path?$query"
-        }
+/**
+ * 公開コンストラクタは [ActivityPubHttpClient] だけを受ける。
+ * 検査の入っていないクライアントを渡す口をここに残さない
+ */
+private class ClientCalls(
+    private val client: ActivityPubHttpClient,
+) : ActivityPubHttpCalls {
+    override suspend fun get(
+        url: String,
+        headers: Map<String, String>,
+        maxBodyBytes: Int,
+        readsBody: (status: Int, finalUrl: String) -> Boolean,
+    ): ActivityPubClientResponse = client.get(url, headers, maxBodyBytes, readsBody)
 
-        /**
-         * `Host` に載せる値。既定ポート（https の 443）ならポート番号は付けない。
-         * 付いていると相手が組み立てる署名文字列と食い違う。
-         */
-        fun hostHeader(url: HttpUrl): String =
-            if (url.port == -1 || url.port == DEFAULT_PORTS[url.scheme]) {
-                url.host
-            } else {
-                "${url.host}:${url.port}"
-            }
+    override suspend fun post(
+        url: String,
+        headers: Map<String, String>,
+        body: ByteArray,
+    ): ActivityPubPostResponse = client.post(url, headers, body)
 
-        val DEFAULT_PORTS = mapOf("https" to 443, "http" to 80)
+    override fun close() {
+        client.close()
     }
 }
