@@ -76,35 +76,58 @@ internal object PublicInetAddresses {
     }
 
     /**
-     * グローバルユニキャストは 2000::/3。その中の文書用、ベンチマーク用、Teredo、ORCHID は到達できない。
+     * グローバルユニキャストは 2000::/3。文書用（2001:db8::/32 と 3fff::/20）は到達できない。
+     * 2001::/23 は IETF の割り当て枠で、レジストリがグローバル到達可能とした範囲だけ許す。
      * リンクローカル、ULA、マルチキャストはこの範囲の外
      */
     private fun isPublicIpv6(bytes: ByteArray): Boolean {
         if (bytes.size != IPV6_LENGTH) return false
         if (bytes.u8(0) and GLOBAL_UNICAST_MASK != GLOBAL_UNICAST_VALUE) return false
-        if (isTeredo(bytes) || isDocumentation(bytes) || isBenchmarking(bytes) || isOrchid(bytes)) return false
+        if (isDocumentation(bytes)) return false
+        if (isIetfProtocolAssignment(bytes)) return isGloballyReachableAssignment(bytes)
         return true
     }
 
-    private fun isTeredo(bytes: ByteArray): Boolean = bytes.u8(0) == 0x20 && bytes.u8(1) == 0x01 && bytes.u8(2) == 0x00 && bytes.u8(3) == 0x00
+    /** 2001::/23。より具体的な割り当て以外は到達できない */
+    private fun isIetfProtocolAssignment(bytes: ByteArray): Boolean =
+        bytes.u8(0) == 0x20 && bytes.u8(1) == 0x01 && bytes.u8(2) and IETF_ASSIGNMENT_MASK == 0
+
+    /**
+     * IANA の IPv6 Special-Purpose Address Registry で Globally Reachable が True のもの。
+     * Teredo は N/A、ベンチマークと廃止された ORCHID は False なのでここには入らない
+     */
+    private fun isGloballyReachableAssignment(bytes: ByteArray): Boolean {
+        if (isAnycast(bytes, PCP_ANYCAST) || isAnycast(bytes, TURN_ANYCAST) || isAnycast(bytes, DNS_SD_ANYCAST)) {
+            return true
+        }
+        if (isAmt(bytes) || isAs112(bytes) || isOrchidV2(bytes) || isDet(bytes)) return true
+        return false
+    }
+
+    private fun isAnycast(
+        bytes: ByteArray,
+        last: Int,
+    ): Boolean {
+        if (bytes.u8(2) != 0 || bytes.u8(3) != 1) return false
+        if ((ANYCAST_BODY_START until IPV6_LENGTH - 1).any { bytes.u8(it) != 0 }) return false
+        return bytes.u8(IPV6_LENGTH - 1) == last
+    }
+
+    private fun isAmt(bytes: ByteArray): Boolean = bytes.u8(2) == 0 && bytes.u8(3) == AMT_HEXTET
+
+    private fun isAs112(bytes: ByteArray): Boolean =
+        bytes.u8(2) == 0 &&
+            bytes.u8(3) == AS112_HEXTET &&
+            bytes.u8(4) == AS112_SECOND &&
+            bytes.u8(5) == AS112_THIRD
+
+    private fun isOrchidV2(bytes: ByteArray): Boolean = bytes.u8(2) == 0 && bytes.u8(3) and PREFIX_28_MASK == ORCHID_V2
+
+    private fun isDet(bytes: ByteArray): Boolean = bytes.u8(2) == 0 && bytes.u8(3) and PREFIX_28_MASK == DET_PREFIX
 
     private fun isDocumentation(bytes: ByteArray): Boolean =
         (bytes.u8(0) == 0x20 && bytes.u8(1) == 0x01 && bytes.u8(2) == 0x0d && bytes.u8(3) == 0xb8) ||
             (bytes.u8(0) == 0x3f && bytes.u8(1) == 0xff && bytes.u8(2) and 0xf0 == 0x00)
-
-    private fun isBenchmarking(bytes: ByteArray): Boolean =
-        bytes.u8(0) == 0x20 &&
-            bytes.u8(1) == 0x01 &&
-            bytes.u8(2) == 0x00 &&
-            bytes.u8(3) == 0x02 &&
-            bytes.u8(4) == 0x00 &&
-            bytes.u8(5) == 0x00
-
-    private fun isOrchid(bytes: ByteArray): Boolean =
-        bytes.u8(0) == 0x20 &&
-            bytes.u8(1) == 0x01 &&
-            bytes.u8(2) == 0x00 &&
-            (bytes.u8(3) and 0xf0 == 0x10 || bytes.u8(3) and 0xf0 == 0x20)
 
     private fun ByteArray.u8(index: Int): Int = this[index].toInt() and 0xff
 
@@ -142,4 +165,16 @@ internal object PublicInetAddresses {
 
     private const val GLOBAL_UNICAST_MASK = 0xe0
     private const val GLOBAL_UNICAST_VALUE = 0x20
+    private const val IETF_ASSIGNMENT_MASK = 0xfe
+    private const val ANYCAST_BODY_START = 4
+    private const val PCP_ANYCAST = 1
+    private const val TURN_ANYCAST = 2
+    private const val DNS_SD_ANYCAST = 3
+    private const val AMT_HEXTET = 3
+    private const val AS112_HEXTET = 4
+    private const val AS112_SECOND = 0x01
+    private const val AS112_THIRD = 0x12
+    private const val PREFIX_28_MASK = 0xf0
+    private const val ORCHID_V2 = 0x20
+    private const val DET_PREFIX = 0x30
 }
