@@ -19,3 +19,4 @@ opentelemetry-extension-kotlin = { module = "io.opentelemetry:opentelemetry-exte
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
+nmcp = { id = "com.gradleup.nmcp", version = "1.6.2" }

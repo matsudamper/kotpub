@@ -7,6 +7,23 @@ plugins {
     // maven-publish はこれも別の variant として一緒に公開する
     `java-test-fixtures`
     `maven-publish`
+    alias(libs.plugins.nmcp)
+}
+
+nmcp {
+    publishAllPublicationsToCentralPortal {
+        username.set(providers.environmentVariable("MAVEN_CENTRAL_USERNAME"))
+        password.set(providers.environmentVariable("MAVEN_CENTRAL_PASSWORD"))
+    }
+}
+
+tasks.named("nmcpPublishAllPublicationsToCentralPortal").configure {
+    doFirst {
+        val publishedVersion = version.toString()
+        if (publishedVersion.endsWith("-SNAPSHOT")) {
+            throw GradleException("Maven Central にはリリースバージョンだけを公開する: $publishedVersion")
+        }
+    }
 }
 
 dependencies {
