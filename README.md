@@ -19,9 +19,9 @@ repositories {
 }
 
 dependencies {
-    implementation("net.matsudamper.kotpub:activitypub:<version>")
+    implementation("net.matsudamper.kotpub:core:<version>")
     // テスト用のフェイク（相手のアクター、送信先など）
-    testImplementation(testFixtures("net.matsudamper.kotpub:activitypub:<version>"))
+    testImplementation(testFixtures("net.matsudamper.kotpub:core:<version>"))
 }
 ```
 

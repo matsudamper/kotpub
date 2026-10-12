@@ -18,4 +18,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":activitypub")
+include(":core")
