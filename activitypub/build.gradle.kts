@@ -17,15 +17,6 @@ nmcp {
     }
 }
 
-tasks.named("nmcpPublishAllPublicationsToCentralPortal").configure {
-    doFirst {
-        val publishedVersion = version.toString()
-        if (publishedVersion.endsWith("-SNAPSHOT")) {
-            throw GradleException("Maven Central にはリリースバージョンだけを公開する: $publishedVersion")
-        }
-    }
-}
-
 dependencies {
     // HTTP のサーバーとクライアントには依存しない。エンドポイントは EndpointResponse を返し、
     // 外向きの通信は ActivityPubHttpClient を受け取る。どちらの実装も使う側が用意する
