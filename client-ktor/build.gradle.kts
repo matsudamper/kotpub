@@ -44,6 +44,7 @@ publishing {
 }
 
 mavenPublishing {
+    coordinates(artifactId = "client-ktor")
     pom {
         name.set("kotpub")
         description.set("Ktor CIO の ActivityPubHttpClient")

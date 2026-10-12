@@ -52,6 +52,7 @@ publishing {
 }
 
 mavenPublishing {
+    coordinates(artifactId = "core")
     pom {
         name.set("kotpub")
         description.set("Kotlin/JVM 向けの ActivityPub 実装")
