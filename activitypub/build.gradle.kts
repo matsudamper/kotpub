@@ -47,10 +47,7 @@ mavenPublishing {
         ),
     )
 
-    publishToMavenCentral(automaticRelease = true)
-
-    signAllPublications()
-
+    // Maven Central は publish-release の GHA だけが Gradle プロパティで有効化する（publish-snapshot の publish では不要）
     pom {
         name.set("kotpub activitypub")
         description.set("Kotlin/JVM 向けの ActivityPub 実装")
@@ -95,7 +92,7 @@ publishing {
     }
 }
 
-tasks.named("publishToMavenCentral") {
+tasks.matching { it.name == "publishToMavenCentral" }.configureEach {
     doFirst {
         val releaseVersion = version.toString()
         require(!releaseVersion.endsWith("SNAPSHOT")) {
