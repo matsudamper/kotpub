@@ -26,12 +26,7 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 
 ## 公開
 
-正式版:
-
-- `v0.1.0` のようなタグを push する
-- または Actions の Publish release を手動実行し、バージョンを指定する（`v<version>` タグと GitHub Release を作り、Maven Central にも出す）。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
-
-Maven Central 公開にはリポジトリシークレット `MAVEN_CENTRAL_USERNAME` / `MAVEN_CENTRAL_PASSWORD` と、署名用の `SIGNING_KEY_ID` / `SIGNING_PASSWORD` / `GPG_KEY_CONTENTS` が要る。
+`v0.1.0` のようなタグを push するか、Actions の Publish release でバージョンを指定する。
 
 # 注意事項
 
