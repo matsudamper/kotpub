@@ -7,14 +7,7 @@ plugins {
     // maven-publish はこれも別の variant として一緒に公開する
     `java-test-fixtures`
     `maven-publish`
-    alias(libs.plugins.nmcp)
-}
-
-nmcp {
-    publishAllPublicationsToCentralPortal {
-        username.set(providers.environmentVariable("MAVEN_CENTRAL_USERNAME"))
-        password.set(providers.environmentVariable("MAVEN_CENTRAL_PASSWORD"))
-    }
+    alias(libs.plugins.vanniktech.maven.publish)
 }
 
 dependencies {
@@ -47,11 +40,6 @@ tasks.test {
 }
 
 publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
-        }
-    }
     repositories {
         maven {
             name = "GitHubPackages"
