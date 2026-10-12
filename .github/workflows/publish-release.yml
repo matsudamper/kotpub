@@ -74,10 +74,14 @@ jobs:
           fi
           gh "${args[@]}"
 
-      - name: publish
+      - name: GitHub Packages に公開
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish -Pversion="$VERSION"
+
+      - name: Maven Central に公開
+        env:
           ORG_GRADLE_PROJECT_mavenCentralPublishing: "true"
           ORG_GRADLE_PROJECT_mavenCentralAutomaticPublishing: "true"
           ORG_GRADLE_PROJECT_signAllPublications: "true"
@@ -86,4 +90,4 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_KEY_CONTENTS }}
-        run: ./gradlew publish publishToMavenCentral -Pversion="$VERSION"
+        run: ./gradlew publishToMavenCentral -Pversion="$VERSION" -PmavenCentralOnly=true
