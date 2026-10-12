@@ -2,6 +2,7 @@ package net.matsudamper.activitypub.http
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import io.ktor.http.Headers
@@ -12,7 +13,9 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receive
 import io.ktor.server.request.uri
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import net.matsudamper.activitypub.TestActorKey
@@ -92,7 +95,7 @@ class KtorActivityPubHttpClientTest {
 
         val verification =
             withInbox { url ->
-                HttpActivityDelivery(TestActorKey.value, client = KtorActivityPubHttpClient(null)).use { delivery ->
+                HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
                     result =
                         delivery.deliver(inbox = url, sender = sender, body = """{"type":"Accept"}""".toByteArray())
                 }
@@ -108,7 +111,7 @@ class KtorActivityPubHttpClientTest {
         var result: DeliveryResult? = null
 
         withInbox { url ->
-            HttpActivityDelivery(TestActorKey.value, client = KtorActivityPubHttpClient(null)).use { delivery ->
+            HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
                 // ルーティングに無いパスなので 404 が返る
                 result =
                     delivery.deliver(
@@ -121,7 +124,72 @@ class KtorActivityPubHttpClientTest {
 
         assertIs<DeliveryResult.Failed>(result)
     }
+
+    @Test
+    fun `公開アドレスではない宛先には接続しない`() {
+        KtorActivityPubHttpClient(null).use { client ->
+            runBlocking {
+                assertFailsWith<NonPublicAddressException> {
+                    client.post(url = "http://127.0.0.1/", headers = mapOf(), body = byteArrayOf())
+                }
+                assertFailsWith<NonPublicAddressException> {
+                    client.get(
+                        url = "http://127.0.0.1/",
+                        headers = mapOf(),
+                        maxBodyBytes = 1,
+                        readsBody = { _, _ -> false },
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `リダイレクト先も名前解決で検査する`() {
+        val resolvedHosts = mutableListOf<String>()
+        val server =
+            embeddedServer(CIO, port = 0, host = "127.0.0.1") {
+                routing {
+                    get("/start") {
+                        call.respondRedirect("http://192.168.0.1/secret")
+                    }
+                }
+            }.start(wait = false)
+
+        try {
+            KtorActivityPubHttpClient(null) { hostname ->
+                resolvedHosts.add(hostname)
+                if (hostname == "127.0.0.1") {
+                    listOf(hostname)
+                } else {
+                    throw NonPublicAddressException(hostname)
+                }
+            }.use { client ->
+                runBlocking {
+                    val port = server.engine.resolvedConnectors().first().port
+                    assertFailsWith<NonPublicAddressException> {
+                        client.get(
+                            url = "http://127.0.0.1:$port/start",
+                            headers = mapOf(),
+                            maxBodyBytes = 1,
+                            readsBody = { _, _ -> false },
+                        )
+                    }
+                }
+            }
+        } finally {
+            server.stop(gracePeriodMillis = 0, timeoutMillis = 1_000)
+        }
+
+        assertEquals(listOf("127.0.0.1", "192.168.0.1"), resolvedHosts)
+    }
 }
+
+/**
+ * 署名の往復はループバックのサーバーへ送る。公開アドレス検査はそこでは落ちるので、表記のまま繋ぐ。
+ */
+private fun loopbackClient(): KtorActivityPubHttpClient =
+    KtorActivityPubHttpClient(null) { hostname -> listOf(hostname) }
 
 /**
  * Ktor のヘッダを [RequestHeaders] として渡す。大文字小文字を区別しないのは Ktor 側と同じ
