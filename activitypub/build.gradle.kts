@@ -51,3 +51,29 @@ publishing {
         }
     }
 }
+
+mavenPublishing {
+    pom {
+        name.set("kotpub")
+        description.set("Kotlin/JVM 向けの ActivityPub 実装")
+        url.set("https://github.com/matsudamper/kotpub")
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+            }
+        }
+        developers {
+            developer {
+                id.set("matsudamper")
+                name.set("matsudamper")
+                url.set("https://github.com/matsudamper")
+            }
+        }
+        scm {
+            url.set("https://github.com/matsudamper/kotpub")
+            connection.set("scm:git:https://github.com/matsudamper/kotpub.git")
+            developerConnection.set("scm:git:ssh://git@github.com/matsudamper/kotpub.git")
+        }
+    }
+}
