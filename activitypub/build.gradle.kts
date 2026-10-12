@@ -1,3 +1,7 @@
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinJvm
+import com.vanniktech.maven.publish.SourcesJar
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
@@ -6,7 +10,8 @@ plugins {
     // テスト用のフェイク（相手のアクター、送信先）を使う側のテストからも使えるようにする。
     // maven-publish はこれも別の variant として一緒に公開する
     `java-test-fixtures`
-    `maven-publish`
+    alias(libs.plugins.maven.publish)
+    signing
 }
 
 dependencies {
@@ -30,20 +35,54 @@ kotlin {
     jvmToolchain(25)
 }
 
-java {
-    withSourcesJar()
-}
-
 tasks.test {
     useJUnitPlatform()
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
+mavenPublishing {
+    configure(
+        KotlinJvm(
+            javadocJar = JavadocJar.Empty(),
+            sourcesJar = SourcesJar.Sources(),
+        ),
+    )
+
+    publishToMavenCentral(automaticRelease = true)
+
+    signAllPublications()
+
+    pom {
+        name.set("kotpub activitypub")
+        description.set("Kotlin/JVM 向けの ActivityPub 実装")
+        inceptionYear.set("2025")
+        url.set("https://github.com/matsudamper/kotpub")
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("repo")
+            }
+        }
+        developers {
+            developer {
+                id.set("matsudamper")
+                name.set("matsudamper")
+                url.set("https://github.com/matsudamper/")
+            }
+        }
+        scm {
+            url.set("https://github.com/matsudamper/kotpub")
+            connection.set("scm:git:git://github.com/matsudamper/kotpub.git")
+            developerConnection.set("scm:git:ssh://git@github.com/matsudamper/kotpub.git")
         }
     }
+}
+
+signing {
+    isRequired = false
+}
+
+publishing {
     repositories {
         maven {
             name = "GitHubPackages"
@@ -52,6 +91,18 @@ publishing {
                 username = providers.environmentVariable("GITHUB_ACTOR").orNull
                 password = providers.environmentVariable("GITHUB_TOKEN").orNull
             }
+        }
+    }
+}
+
+tasks.named("publishToMavenCentral") {
+    doFirst {
+        val releaseVersion = version.toString()
+        require(!releaseVersion.endsWith("SNAPSHOT")) {
+            "Maven Central には SNAPSHOT を公開しない: $releaseVersion"
+        }
+        require(!releaseVersion.contains("-pr")) {
+            "Maven Central には PR 用バージョンを公開しない: $releaseVersion"
         }
     }
 }

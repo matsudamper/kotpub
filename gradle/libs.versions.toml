@@ -5,6 +5,7 @@ kotlinxCoroutines = "1.10.2"
 slf4j = "2.0.20"
 ktlintGradle = "14.2.0"
 ktlint = "1.8.0"
+mavenPublish = "0.37.0"
 opentelemetry = "1.66.0"
 
 [libraries]
@@ -19,3 +20,4 @@ opentelemetry-extension-kotlin = { module = "io.opentelemetry:opentelemetry-exte
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }
