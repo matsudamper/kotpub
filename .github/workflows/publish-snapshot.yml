@@ -1,22 +1,11 @@
-name: Publish
+name: Publish snapshot
 
-# 公開するバージョン
-# - v0.1.0 のようなタグの push: タグのバージョン（0.1.0）
-# - 手動実行: 入力したバージョン
-# - main への push: gradle.properties の version（latest-SNAPSHOT）。main の最新で上書きする
-# - PR: 0.0.0-pr<番号>-<head のコミット 7 桁>。使う側の PR から、マージ前の変更を試すためのもの
-# GitHub Packages は SNAPSHOT 以外の同じバージョンを上書きできないので、PR 用はコミットごとに別のバージョンにする
+# main: gradle.properties の latest-SNAPSHOT を上書き公開
+# PR: 一意の仮バージョン（上書きしない）
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "公開するバージョン（例: 0.1.0）"
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -25,7 +14,6 @@ permissions:
 jobs:
   publish:
     name: GitHub Packages へ公開
-    # フォークからの PR には packages: write のトークンが渡らない
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -45,22 +33,14 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               version="0.0.0-pr${PR_NUMBER}-${PR_HEAD_SHA:0:7}"
               ;;
-            workflow_dispatch)
-              version="$INPUT_VERSION"
-              ;;
             push)
-              if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-                version="${GITHUB_REF_NAME#v}"
-              else
-                version="$(sed -n 's/^version=//p' gradle.properties)"
-              fi
+              version="$(sed -n 's/^version=//p' gradle.properties)"
               ;;
           esac
           echo "VERSION=$version" >> "$GITHUB_ENV"
