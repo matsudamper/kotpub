@@ -1,6 +1,6 @@
 name: Publish release
 
-# 正式版: 手動で GitHub Release + v タグを作って Packages に出す、または v* タグの push で Packages に出す
+# 正式版: 手動で GitHub Release + v タグを作る、または v* タグの push で、Maven Central と GitHub Packages に出す
 on:
   push:
     tags: ["v*"]
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   publish:
-    name: リリースと GitHub Packages 公開
+    name: リリースと Maven Central / GitHub Packages 公開
     runs-on: ubuntu-latest
     steps:
       - name: checkout
