@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "リリースするバージョン（例: 0.1.0）。タグは v<version>"
+        description: "リリースするバージョン（例: 0.1.0）"
         required: true
         type: string
       make_latest:
-        description: "Latest リリースにする（オンならリリースノートを自動生成）"
+        description: "Latest リリースにする"
         required: true
         type: boolean
         default: true
