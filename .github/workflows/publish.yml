@@ -6,6 +6,7 @@ name: Publish
 # - main への push: gradle.properties の version（latest-SNAPSHOT）。main の最新で上書きする
 # - PR: 0.0.0-pr<番号>-<head のコミット 7 桁>。使う側の PR から、マージ前の変更を試すためのもの
 # GitHub Packages は SNAPSHOT 以外の同じバージョンを上書きできないので、PR 用はコミットごとに別のバージョンにする
+# 手動実行では公開後に v<バージョン> のタグで GitHub Release も作る
 on:
   push:
     branches: [main]
@@ -71,3 +72,23 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew publish -Pversion="$VERSION"
+
+  release:
+    name: GitHub Release を作る
+    needs: publish
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # GITHUB_TOKEN で作ったタグの push ではワークフローが起動しないので、タグ push 側の公開は二重に走らない
+      - name: create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ inputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes
