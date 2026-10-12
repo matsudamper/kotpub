@@ -35,13 +35,14 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 
 ## 公開
 
-`v0.1.0` のようなタグを push すると、GitHub Actions がタグのバージョンで公開する。
-Actions の Publish を手動実行して、バージョンを指定して公開することもできる。
-Actions の Release を手動実行すると `v<version>` タグと GitHub Release（既定で Latest、オン時はリリースノート自動生成）を付けられる。タグの push で Publish も走る。
+正式版（GitHub Packages）:
 
-main への push では `latest-SNAPSHOT` として、main の最新で上書きしながら公開する。
+- `v0.1.0` のようなタグを push する
+- または Actions の Publish release を手動実行し、バージョンを指定する（`v<version>` タグと GitHub Release を作り、Packages にも出す）。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
 
-PR ごとにも `0.0.0-pr<番号>-<head のコミット 7 桁>` で公開する。使う側でマージ前の変更を試すときに使う。
+PR では `0.0.0-pr<番号>-<head のコミット 7 桁>` で試用版を出す。マージ前の変更を試すときに使う。
+
+main への push では Packages には出さない（ビルドは Build ワークフロー）。
 
 # 注意事項
 

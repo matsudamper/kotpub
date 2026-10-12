@@ -1,0 +1,43 @@
+name: Publish snapshot
+
+# PR ごとに一意の仮バージョンを GitHub Packages に出す（上書きしない）
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: GitHub Packages へ公開
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: setup JDK 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: バージョンを決める
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          version="0.0.0-pr${PR_NUMBER}-${PR_HEAD_SHA:0:7}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "::notice::公開するバージョン: $version"
+
+      - name: publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish -Pversion="$VERSION"

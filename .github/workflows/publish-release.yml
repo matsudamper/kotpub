@@ -1,0 +1,81 @@
+name: Publish release
+
+# 正式版: 手動で GitHub Release + v タグを作って Packages に出す、または v* タグの push で Packages に出す
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "リリースするバージョン（例: 0.1.0）。タグは v<version>"
+        required: true
+        type: string
+      make_latest:
+        description: "Latest リリースにする（オンならリリースノートを自動生成）"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    name: リリースと GitHub Packages 公開
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: setup JDK 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: バージョンを決める
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            workflow_dispatch)
+              trimmed="${INPUT_VERSION#v}"
+              if ! [[ "$trimmed" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+                echo "::error::version は 0.1.0 のような形式で指定してください（先頭の v は省略可）: $INPUT_VERSION"
+                exit 1
+              fi
+              version="$trimmed"
+              ;;
+            push)
+              version="${GITHUB_REF_NAME#v}"
+              ;;
+          esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+          echo "::notice::公開するバージョン: $version"
+
+      - name: GitHub Release を作成
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAKE_LATEST: ${{ inputs.make_latest }}
+        run: |
+          set -euo pipefail
+          args=(release create "$TAG" --target "$GITHUB_SHA" --title "$TAG")
+          if [ "$MAKE_LATEST" = "true" ]; then
+            args+=(--generate-notes --latest)
+          else
+            args+=(--latest=false)
+          fi
+          gh "${args[@]}"
+
+      - name: publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish -Pversion="$VERSION"
