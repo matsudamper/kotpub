@@ -21,11 +21,16 @@ import io.opentelemetry.instrumentation.ktor.v3_0.KtorClientTelemetry
  * GET と POST でリダイレクトの扱いが違うので、クライアントを分けて持つ。
  * 使わない側は作らない。
  *
+ * 接続のたびに [PublicAddressDnsResolver] で宛先を公開アドレスに限る。
+ * GET がリダイレクトを追っても、移った先の接続は同じ解決を通る。
+ *
  * @param openTelemetry null でなければ、外向きのリクエストを span として記録する
  */
-class KtorActivityPubHttpClient(
+class KtorActivityPubHttpClient internal constructor(
     private val openTelemetry: OpenTelemetry?,
+    private val resolveAddress: suspend (hostname: String) -> List<String>,
 ) : ActivityPubHttpClient {
+    constructor(openTelemetry: OpenTelemetry?) : this(openTelemetry, PublicAddressDnsResolver::resolve)
     private val getClient = lazy { createClient(followRedirects = true) }
     private val postClient = lazy { createClient(followRedirects = false) }
 
@@ -91,5 +96,9 @@ class KtorActivityPubHttpClient(
             // status を見て判断するので、4xx や 5xx で例外にしない
             expectSuccess = false
             this.followRedirects = followRedirects
+            // 接続のたび、リダイレクト先も含めてここを通る。プロキシを足すと CIO はここを通さない
+            engine {
+                dnsResolver = resolveAddress
+            }
         }
 }

@@ -92,7 +92,7 @@ class KtorActivityPubHttpClientTest {
 
         val verification =
             withInbox { url ->
-                HttpActivityDelivery(TestActorKey.value, client = KtorActivityPubHttpClient(null)).use { delivery ->
+                HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
                     result =
                         delivery.deliver(inbox = url, sender = sender, body = """{"type":"Accept"}""".toByteArray())
                 }
@@ -108,7 +108,7 @@ class KtorActivityPubHttpClientTest {
         var result: DeliveryResult? = null
 
         withInbox { url ->
-            HttpActivityDelivery(TestActorKey.value, client = KtorActivityPubHttpClient(null)).use { delivery ->
+            HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
                 // ルーティングに無いパスなので 404 が返る
                 result =
                     delivery.deliver(
@@ -122,6 +122,12 @@ class KtorActivityPubHttpClientTest {
         assertIs<DeliveryResult.Failed>(result)
     }
 }
+
+/**
+ * 署名の往復はループバックのサーバーへ送る。公開アドレス検査はそこでは落ちるので、表記のまま繋ぐ。
+ */
+private fun loopbackClient(): KtorActivityPubHttpClient =
+    KtorActivityPubHttpClient(null) { hostname -> listOf(hostname) }
 
 /**
  * Ktor のヘッダを [RequestHeaders] として渡す。大文字小文字を区別しないのは Ktor 側と同じ
