@@ -18,4 +18,5 @@ dependencyResolutionManagement {
     }
 }
 
-include(":activitypub")
+include(":core")
+include(":client-ktor")
