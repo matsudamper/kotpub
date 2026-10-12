@@ -1,7 +1,10 @@
 name: Publish snapshot
 
-# PR ごとに一意の仮バージョンを GitHub Packages に出す（上書きしない）
+# main: gradle.properties の latest-SNAPSHOT を上書き公開
+# PR: 一意の仮バージョン（上書きしない）
 on:
+  push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -11,7 +14,7 @@ permissions:
 jobs:
   publish:
     name: GitHub Packages へ公開
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -32,7 +35,14 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          version="0.0.0-pr${PR_NUMBER}-${PR_HEAD_SHA:0:7}"
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              version="0.0.0-pr${PR_NUMBER}-${PR_HEAD_SHA:0:7}"
+              ;;
+            push)
+              version="$(sed -n 's/^version=//p' gradle.properties)"
+              ;;
+          esac
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "::notice::公開するバージョン: $version"
 

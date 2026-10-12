@@ -42,7 +42,7 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 
 PR では `0.0.0-pr<番号>-<head のコミット 7 桁>` で試用版を出す。マージ前の変更を試すときに使う。
 
-main への push では Packages には出さない（ビルドは Build ワークフロー）。
+main への push では `latest-SNAPSHOT` として、main の最新で上書きしながら公開する。
 
 # 注意事項
 
