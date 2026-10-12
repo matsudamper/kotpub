@@ -20,6 +20,8 @@ repositories {
 
 dependencies {
     implementation("net.matsudamper.kotpub:core:<version>")
+    // Ktor CIO の ActivityPubHttpClient
+    implementation("net.matsudamper.kotpub:client-ktor:<version>")
     // テスト用のフェイク（相手のアクター、送信先など）
     testImplementation(testFixtures("net.matsudamper.kotpub:core:<version>"))
 }

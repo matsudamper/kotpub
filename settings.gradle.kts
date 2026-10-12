@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 }
 
 include(":core")
+include(":client-ktor")

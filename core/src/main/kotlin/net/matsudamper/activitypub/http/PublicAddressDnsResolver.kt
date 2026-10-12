@@ -13,16 +13,6 @@ import kotlinx.coroutines.withContext
  * 内部のホスト名や、内部アドレスを返す名前を書かれうる。
  * 接続に使うアドレスそのものを検査しないと、名前解決やリダイレクトの先で内部へ繋がる。
  *
- * Ktor CIO（3.6.0 以降）なら `dnsResolver` にそのまま渡せる。返したアドレスへ名前を引き直さずに繋ぐ。
- *
- * ```kotlin
- * HttpClient(CIO) {
- *     engine {
- *         dnsResolver = PublicAddressDnsResolver::resolve
- *     }
- * }
- * ```
- *
  * プロキシを設定すると名前解決はプロキシ側で行われ、ここを通らない
  */
 object PublicAddressDnsResolver {
