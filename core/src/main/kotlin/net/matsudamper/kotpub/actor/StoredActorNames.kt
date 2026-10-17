@@ -4,7 +4,7 @@ package net.matsudamper.kotpub.actor
  * リクエストで指定された username のアクターがこのサーバーに存在するかを確かめ、
  * 存在すれば保存されているとおりの綴り（大文字小文字）に揃えた username を返す。
  *
- * どこに保存されているかは [ActorDirectory] の関心ではないので、口だけを決めておく。
+ * どこに保存されているかは [ActorDirectory] の関心ではないので、インターフェースだけを決めておく。
  */
 interface StoredActorNames {
     /**

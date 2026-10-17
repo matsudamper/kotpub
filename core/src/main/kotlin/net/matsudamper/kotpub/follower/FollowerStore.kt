@@ -8,7 +8,7 @@ import net.matsudamper.kotpub.actor.RemoteActorProfile
  * フォロワーの記録の保存先。
  *
  * どこに保存されているかはこのモジュールの関心ではないので、
- * `StoredActorNames` と同じく口だけを決めておく。実装は `:backend` が
+ * `StoredActorNames` と同じくインターフェースだけを決めておく。実装は `:backend` が
  * repository に繋ぐ。ActivityPub 側が DB を知ると、フォローの扱いを変えるたびに
  * テーブルの都合が混ざってくる。
  *

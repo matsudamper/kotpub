@@ -5,7 +5,7 @@ import net.matsudamper.kotpub.actor.ActorUrls
 /**
  * アクティビティに署名を付けて相手の inbox に POST する。
  *
- * ネットワークに出る唯一の口なので interface にしておく。フォローに
+ * ネットワークに出る唯一の経路なので interface にしておく。フォローに
  * `Accept` を返せているかどうかは、ここを差し替えれば実際に送らずに確かめられる。
  *
  * リトライは持たない。失敗したらその場で諦めて [DeliveryResult.Failed] を返す。

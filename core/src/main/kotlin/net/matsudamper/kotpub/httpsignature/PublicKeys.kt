@@ -7,7 +7,7 @@ import java.security.PublicKey
  *
  * ActivityPub では相手のアクター文書を GET して `publicKey` を読むことになるが、
  * 署名の検証そのものは「鍵をどこから持ってくるか」と関係が無い。
- * ここを口にしておくと、検証のテストがネットワークなしで書ける。
+ * ここをインターフェースにしておくと、検証のテストがネットワークなしで書ける。
  */
 interface PublicKeys {
     /**

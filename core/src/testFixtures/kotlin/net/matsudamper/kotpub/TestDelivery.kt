@@ -7,7 +7,7 @@ import net.matsudamper.kotpub.delivery.DeliveryResult
 /**
  * 送信の差し替え。送ったつもりのものを溜めておく。
  *
- * ネットワークに出る唯一の口なので、テストからは必ずこちらを通す。
+ * ネットワークに出る唯一の経路なので、テストからは必ずこちらを通す。
  * 実際に POST するところまで含めた確認は `HttpActivityDeliveryTest` で行う。
  */
 class TestDelivery(

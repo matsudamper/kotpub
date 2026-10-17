@@ -6,14 +6,14 @@ import net.matsudamper.kotpub.entity.PublicNoteId
 /**
  * 配信した投稿の保存先。
  *
- * [net.matsudamper.kotpub.follower.FollowerStore] と同じく口だけを決めて、
+ * [net.matsudamper.kotpub.follower.FollowerStore] と同じくインターフェースだけを決めて、
  * 実装は `:backend` が repository に繋ぐ。
  *
  * 送ったら終わりにはできない。Mastodon は受け取った投稿のパーマリンクを後から
  * 取得しに来るので、送った中身をこちらにも残しておく必要がある。
  *
- * 記録する口は無い。投稿の記録は配信キューへの登録と 1 トランザクションで確定させる必要があり、
- * それは `:backend` が repository の配信キューへ登録する口で行う。
+ * 記録するメソッドは無い。投稿の記録は配信キューへの登録と 1 トランザクションで確定させる必要があり、
+ * それは `:backend` が repository の配信キューへ登録するメソッドで行う。
  */
 interface NoteStore {
     fun find(publicId: PublicNoteId): StoredNote?
@@ -74,7 +74,7 @@ interface NoteStore {
  * 一覧の続きを指す位置。
  *
  * `publishedAt` だけでは同じ時刻の投稿が並んだときに位置が決まらないので、
- * `publicId` まで見て一意にする。外に出す形は口ごとに決める
+ * `publicId` まで見て一意にする。外に出す形はエンドポイントごとに決める
  */
 data class NotePosition(
     val publishedAt: Instant,
