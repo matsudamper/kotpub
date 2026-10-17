@@ -20,7 +20,7 @@ interface RemoteActors :
      * 1 回の呼び出しで全部返すのは、これらが同じ 1 つの文書から読めるため。
      * フォロワーとして記録するときに inbox と公開鍵を別々に取りに行くと、
      * 相手のサーバーへの GET が増えるうえ、間に鍵が入れ替わると
-     * 記録した鍵と inbox が別の版のものになる。
+     * 記録した鍵と inbox が別のバージョンのものになる。
      */
     suspend fun findActor(actorId: String): RemoteActor?
 }

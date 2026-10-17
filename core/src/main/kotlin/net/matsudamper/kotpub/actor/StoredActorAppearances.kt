@@ -19,10 +19,10 @@ interface StoredActorAppearances {
  * Actor の `attachment`・`icon`・`image` に載せるもの。
  *
  * @param links プロフィールのリンク集。並べた順に出す
- * @param iconVersion プロフィール画像の版。null なら `icon` を出さない。
+ * @param iconVersion プロフィール画像のバージョン。null なら `icon` を出さない。
  *   相手に渡す URL の `v` に使う（[ActorUrls.icon]）。相手は画像を URL で覚えるので、
  *   中身を差し替えたときは違う値にすること
- * @param headerVersion プロフィールヘッダーの版。null なら `image` を出さない。
+ * @param headerVersion プロフィールヘッダーのバージョン。null なら `image` を出さない。
  *   扱いは [iconVersion] と同じ（[ActorUrls.header]）
  */
 data class ActorAppearance(
