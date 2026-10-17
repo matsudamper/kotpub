@@ -16,7 +16,7 @@ import net.matsudamper.kotpub.http.HttpUrl
  * あちらが「返すときに必ず入れるもの」を必須にしているため。相手の実装が
  * `following` を省略しただけで鍵が読めなくなるのは筋が悪い。
  *
- * 取りに行って読む場合（[HttpRemoteActors]）と、`Update` に丸ごと埋め込まれて
+ * 取得して読む場合（[HttpRemoteActors]）と、`Update` に丸ごと埋め込まれて
  * 届く場合（[net.matsudamper.kotpub.inbox.UpdateActorHandler]）があるので、
  * 読み取りはここに置いて両方から使う。
  */

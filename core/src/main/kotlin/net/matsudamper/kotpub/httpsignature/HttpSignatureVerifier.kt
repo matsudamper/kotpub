@@ -26,7 +26,7 @@ class HttpSignatureVerifier(
     /**
      * 署名の鍵の場所。検証はしないので、書かれている値が本物とは限らない。
      *
-     * 鍵を取りに行く前に、相手を見て断るために使う
+     * 鍵を取得する前に、相手を見て断るために使う
      */
     fun claimedKeyId(request: SignedRequest): String? =
         request.headers[SIGNATURE_HEADER]?.let { SignatureHeader.parse(it) }?.keyId

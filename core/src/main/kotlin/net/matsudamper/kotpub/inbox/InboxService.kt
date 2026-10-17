@@ -66,7 +66,7 @@ class InboxService(
         recipient: InboxRecipient,
         request: SignedRequest,
     ): InboxResult {
-        // 鍵を取りに行く前に断る。検証してからだと、止めている相手のサーバーに取りに行くことになる。
+        // 鍵を取得する前に断る。検証してからだと、止めている相手のサーバーから取得することになる。
         // 断っても 202 で返す。4xx や 5xx を返すと、相手は諦めるまで同じものを送り直してくる
         val claimedKeyId = verifier.claimedKeyId(request)
         if (claimedKeyId != null && blocksInboxFrom(claimedKeyId)) {
@@ -81,7 +81,7 @@ class InboxService(
                     InboxSpan.set(InboxSpan.SIGNATURE_REJECT_REASON, verification.reason)
                     // 消えたアクターからの Delete だけは、検証できないことを理由に
                     // 落とすと相手が送り直し続ける。削除の通知は本人が消えた後に届き、
-                    // 鍵はもう取りに行けない。フォロワーだった相手なら記録した鍵で
+                    // 鍵はもう取得できない。フォロワーだった相手なら記録した鍵で
                     // 検証できるが、Mastodon は面識の無いサーバーにも配るので、
                     // 記録の無い相手は通しようが無い
                     if (isSelfDelete(request.body)) {
@@ -208,7 +208,7 @@ class InboxService(
          * 送るのは受け取り側の都合と切り離す。
          *
          * @param remoteActors 相手のアクターの取得元。署名検証に使う公開鍵と、
-         *   `Accept` の宛先になる inbox、お気に入りやスタンプを押した相手として残す鍵をここから取る
+         *   `Accept` の宛先になる inbox、お気に入りやスタンプを押した相手として残す鍵をここから取得する
          * @param followers フォローの記録。配信先だけでなく、相手が消えて
          *   アクター文書を取得できなくなったときの公開鍵の参照先にもなる
          * @param favourites お気に入りの記録。[followers] と同じく、

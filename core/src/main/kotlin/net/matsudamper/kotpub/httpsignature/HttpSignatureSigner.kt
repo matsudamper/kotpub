@@ -26,7 +26,7 @@ class HttpSignatureSigner(
      * 署名済みのヘッダを作る。返すのは `Host` `Date` `Digest` `Signature` だけで、
      * `Content-Type` のような中身に関わるヘッダは呼び出し側が付ける。
      *
-     * @param keyId 相手がこちらの公開鍵を取りに来る URL。`<actor>#main-key` の形
+     * @param keyId 相手がこちらの公開鍵を取得しに来る URL。`<actor>#main-key` の形
      * @param requestTarget パスとクエリ。実際に送るリクエストラインと同じ綴りにすること
      * @param host `Host` ヘッダに載る値。既定ポートならポート番号は付けない
      */
