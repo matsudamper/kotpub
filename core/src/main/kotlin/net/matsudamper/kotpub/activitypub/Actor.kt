@@ -21,8 +21,8 @@ data class Actor(
     @SerialName("id")
     val id: String,
     /**
-     * `Service` は「自動化されたアカウント」を表す。人間ではなく RSS の
-     * 転送であることを相手に伝えられる。`Person` でも動く。
+     * `Service` は「自動化されたアカウント」を表す。人間ではなくプログラムが
+     * 動かしているアカウントだと相手に伝えられる。`Person` でも動く。
      */
     @SerialName("type")
     val type: String = TYPE_SERVICE,

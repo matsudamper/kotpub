@@ -11,7 +11,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * アクター情報の更新と削除を組み立てる。
  *
- * どちらも DB を触らず HTTP も出さない。保存と投函は `:backend` が repository の
+ * どちらも DB を触らず HTTP も出さない。保存と配信キューへの登録は `:backend` が repository の
  * 口で 1 トランザクションにまとめる。
  */
 class ActorPublisher(
@@ -49,7 +49,7 @@ class ActorPublisher(
     /**
      * アクターを消したことを伝える `Delete{Actor}` を組み立てる。
      *
-     * 記録を消すのは呼び出し側で、投函と同じトランザクションになる。
+     * 記録を消すのは呼び出し側で、配信キューへの登録と同じトランザクションになる。
      *
      * @return 署名対象になる JSON
      */

@@ -53,8 +53,8 @@ object TestLocalActor {
     val profiles: FakeStoredActorProfiles = FakeStoredActorProfiles(
         profiles = mapOf(
             STORED_USERNAME to ActorProfile(
-                displayName = "フィード 1",
-                summary = "1 つ目のフィード\n<b>タグ</b>",
+                displayName = "アカウント 1",
+                summary = "1 つ目のアカウント\n<b>タグ</b>",
             ),
         ),
     )

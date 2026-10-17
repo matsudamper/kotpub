@@ -23,7 +23,7 @@ class ActorUrlsTest {
     }
 
     @Test
-    fun `使い捨てアクターでも同じ形になる`() {
+    fun `ハイフンを含む名前でも同じ形になる`() {
         val urls = ActorUrls(domain = "example.com", username = "test-1")
 
         assertEquals("acct:test-1@example.com", urls.acct)

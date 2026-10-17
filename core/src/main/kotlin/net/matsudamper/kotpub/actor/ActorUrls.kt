@@ -45,7 +45,7 @@ data class ActorUrls(
     val icon: String = "$actorId$ICON_PATH"
 
     /**
-     * 版を付けたプロフィール画像の URL。
+     * バージョンを付けたプロフィール画像の URL。
      *
      * 相手はアイコンを URL で覚えるので、パスだけだと差し替えても前の画像が出続ける。
      * 値が変われば別の URL になり、取り直してもらえる
@@ -58,7 +58,7 @@ data class ActorUrls(
     val header: String = "$actorId$HEADER_PATH"
 
     /**
-     * 版を付けたプロフィールヘッダーの URL。
+     * バージョンを付けたプロフィールヘッダーの URL。
      */
     fun header(version: String): String = "$header?v=${QueryParameter.encode(version)}"
 
