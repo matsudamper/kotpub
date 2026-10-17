@@ -1,7 +1,7 @@
 package net.matsudamper.kotpub.actor
 
 /**
- * アクターのプロフィールの引き先。
+ * アクターのプロフィールの参照先。
  *
  * どこに保存されているかは Actor 側の関心ではないので、
  * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
