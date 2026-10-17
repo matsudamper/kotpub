@@ -1,6 +1,6 @@
 package net.matsudamper.kotpub.delivery
 
-import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 
 /**
  * アクティビティに署名を付けて相手の inbox に POST する。
@@ -17,12 +17,12 @@ interface ActivityDelivery : AutoCloseable {
      *   確認済みのものだけを渡すこと。相手が指定した URL をそのまま渡すと、
      *   こちらのサーバーから任意の宛先に POST させられる。確認は
      *   [net.matsudamper.kotpub.actor.RemoteActors.findInbox] で行っている
-     * @param sender 送り主になるこちらのアクター。署名の `keyId` はここから決まる
+     * @param sender 送り主になるこちらのアクター。署名の `keyId` と秘密鍵はここから決まる
      * @param body 署名対象になる JSON のバイト列。`Digest` はこれに対して計算される
      */
     suspend fun deliver(
         inbox: String,
-        sender: ActorUrls,
+        sender: LocalActor,
         body: ByteArray,
     ): DeliveryResult
 }

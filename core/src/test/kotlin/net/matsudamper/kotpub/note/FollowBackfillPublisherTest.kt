@@ -17,7 +17,7 @@ import net.matsudamper.kotpub.json.AppJson
 // フォローが成立した相手に、フォローより前の投稿を配るところ。
 // 成立した時点より前の投稿だけを、古い順に、上限まで配るのがこの publisher の肝になる。
 class FollowBackfillPublisherTest {
-    private val sender = TestLocalActor.urls
+    private val sender = TestLocalActor.actor
 
     private val followAcceptedAt: Instant = Instant.parse("2026-08-10T12:00:00Z")
 

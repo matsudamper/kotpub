@@ -21,6 +21,7 @@ import io.ktor.server.routing.routing
 import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 import net.matsudamper.kotpub.delivery.DeliveryResult
 import net.matsudamper.kotpub.delivery.HttpActivityDelivery
 import net.matsudamper.kotpub.httpsignature.HttpSignatureResult
@@ -36,12 +37,15 @@ import net.matsudamper.kotpub.httpsignature.SignedRequest
  * しか見えないので、ここだけは本物のサーバーを立てて往復させる。
  */
 class KtorActivityPubHttpClientTest {
-    private val sender = ActorUrls(domain = "example.com", username = "admin")
+    private val sender = LocalActor(
+        urls = ActorUrls(domain = "example.com", username = "admin"),
+        privateKey = TestActorPrivateKey.value,
+    )
 
     private val remoteActors =
         TestRemoteActors.of(
-            keyId = sender.publicKeyId,
-            owner = sender.actorId,
+            keyId = sender.urls.publicKeyId,
+            owner = sender.urls.actorId,
             publicKey = TestActorPrivateKey.value.publicKey,
         )
 
@@ -95,7 +99,7 @@ class KtorActivityPubHttpClientTest {
 
         val verification =
             withInbox { url ->
-                HttpActivityDelivery(TestActorPrivateKey.value, client = loopbackClient()).use { delivery ->
+                HttpActivityDelivery(client = loopbackClient()).use { delivery ->
                     result =
                         delivery.deliver(inbox = url, sender = sender, body = """{"type":"Accept"}""".toByteArray())
                 }
@@ -103,7 +107,7 @@ class KtorActivityPubHttpClientTest {
 
         assertIs<DeliveryResult.Delivered>(result)
         val verified = assertIs<HttpSignatureResult.Verified>(verification)
-        assertEquals(sender.actorId, verified.owner)
+        assertEquals(sender.urls.actorId, verified.owner)
     }
 
     @Test
@@ -111,7 +115,7 @@ class KtorActivityPubHttpClientTest {
         var result: DeliveryResult? = null
 
         withInbox { url ->
-            HttpActivityDelivery(TestActorPrivateKey.value, client = loopbackClient()).use { delivery ->
+            HttpActivityDelivery(client = loopbackClient()).use { delivery ->
                 // ルーティングに無いパスなので 404 が返る
                 result =
                     delivery.deliver(

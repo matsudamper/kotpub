@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
@@ -27,12 +28,15 @@ import net.matsudamper.kotpub.httpsignature.SignedRequest
  * 署名を付けて POST する部分。通信そのものは差し替えて、渡したものと応答の扱いを見る
  */
 class HttpActivityDeliveryTest {
-    private val sender = ActorUrls(domain = "example.com", username = "admin")
+    private val sender = LocalActor(
+        urls = ActorUrls(domain = "example.com", username = "admin"),
+        privateKey = TestActorPrivateKey.value,
+    )
 
     private val remoteActors =
         TestRemoteActors.of(
-            keyId = sender.publicKeyId,
-            owner = sender.actorId,
+            keyId = sender.urls.publicKeyId,
+            owner = sender.urls.actorId,
             publicKey = TestActorPrivateKey.value.publicKey,
         )
 
@@ -43,7 +47,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(client = client).use { delivery ->
                     delivery.deliver(inbox = "https://remote.example/users/alice/inbox?a=1", sender = sender, body = body)
                 }
             }
@@ -62,7 +66,7 @@ class HttpActivityDeliveryTest {
                 )
             }
         val verified = assertIs<HttpSignatureResult.Verified>(verification)
-        assertEquals(sender.actorId, verified.owner)
+        assertEquals(sender.urls.actorId, verified.owner)
         assertEquals("remote.example", client.headers["Host"])
         assertEquals("application/activity+json", client.headers["Content-Type"])
     }
@@ -72,7 +76,7 @@ class HttpActivityDeliveryTest {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
 
         runBlocking {
-            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(client = client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example:8443/inbox", sender = sender, body = ByteArray(0))
             }
         }
@@ -86,7 +90,7 @@ class HttpActivityDeliveryTest {
         val body = """{"type":"Accept"}""".toByteArray()
 
         runBlocking {
-            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(client = client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example/users/あ/inbox", sender = sender, body = body)
             }
         }
@@ -121,7 +125,7 @@ class HttpActivityDeliveryTest {
         var result: DeliveryResult? = null
 
         runBlocking {
-            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(client = client).use { delivery ->
                 val job = launch {
                     result = delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
@@ -149,7 +153,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(client = client).use { delivery ->
                     delivery.deliver(inbox = "https://example.com/users/alice/inbox", sender = sender, body = ByteArray(0))
                 }
             }
@@ -169,7 +173,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(client = client).use { delivery ->
                     delivery.deliver(inbox = "https://internal.example/inbox", sender = sender, body = ByteArray(0))
                 }
             }
@@ -182,7 +186,7 @@ class HttpActivityDeliveryTest {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(client = client).use { delivery ->
                     delivery.deliver(inbox = "not a url", sender = sender, body = ByteArray(0))
                 }
             }
@@ -213,7 +217,7 @@ class HttpActivityDeliveryTest {
     private fun deliverTo(status: Int): DeliveryResult.Failed {
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorPrivateKey.value, client = RecordingClient(status)).use { delivery ->
+                HttpActivityDelivery(client = RecordingClient(status)).use { delivery ->
                     delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
                         sender = sender,
