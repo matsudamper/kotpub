@@ -3,13 +3,13 @@ package net.matsudamper.kotpub.actor
 import net.matsudamper.kotpub.httpsignature.PublicKeys
 
 /**
- * 相手のサーバーからアクターを取得する口。
+ * 相手のサーバーからアクターを取得するインターフェース。
  *
  * 公開鍵も inbox も同じアクター文書の中にあり、取りに行く手順も
- * 安全のための決まりも共通なので 1 つの口にまとめる。
+ * 安全のための決まりも共通なので 1 つのインターフェースにまとめる。
  *
  * 署名の検証だけを見る側からは [PublicKeys] として渡す。検証は
- * 「鍵をどこから持ってくるか」と関係が無いので、そちらの口は狭いままにしておく。
+ * 「鍵をどこから持ってくるか」と関係が無いので、そちらのインターフェースは狭いままにしておく。
  */
 interface RemoteActors :
     PublicKeys,

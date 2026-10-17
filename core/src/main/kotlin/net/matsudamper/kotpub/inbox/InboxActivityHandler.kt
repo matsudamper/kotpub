@@ -22,7 +22,7 @@ interface InboxActivityHandler {
      * 中身の処理をする。
      *
      * 戻り値を持たないのは、inbox が処理の成否に関わらず 202 を返すため。
-     * 失敗しても相手に伝える口が無いので、何が起きたかを残すのは実装側の責任になる。
+     * 失敗しても相手に伝える手段が無いので、何が起きたかを残すのは実装側の責任になる。
      */
     suspend fun handle(
         recipient: InboxRecipient,
