@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
  * 相手が消えて取得できなくなった公開鍵を、こちらの記録から引く。
  *
  * ActivityPub で鍵を配る手段はアクター文書しかないので、相手が消えると鍵は
- * どこからも取れなくなる。アカウント削除の `Delete` は本人が消えた後に届くため、
+ * どこからも取得できなくなる。アカウント削除の `Delete` は本人が消えた後に届くため、
  * 取りに行くだけでは署名を検証できない。フォローとお気に入りとスタンプのどれを受けたときも
  * 相手のアクターを `remote_actors` に記録し、公開鍵もその行に 1 つ持っているので、
  * 記録のある相手ならそれで検証できる。
@@ -78,7 +78,7 @@ class RecordedFallbackPublicKeys(
                 ?.let { runCatching { RsaKeys.decodePublicKeyPem(it) }.getOrNull() }
                 ?: return null
 
-        // 持ち主はこちらの記録で決める。相手の文書を取れていない以上、
+        // 持ち主はこちらの記録で決める。相手の文書を取得できていない以上、
         // keyId の名乗りを裏付けるものは記録した行しか無い
         return PublicKeyLookup.Found(
             SignatureKey(keyId = keyId, owner = actorUri, publicKey = publicKey),

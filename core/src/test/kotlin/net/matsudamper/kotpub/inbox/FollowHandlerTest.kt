@@ -134,7 +134,7 @@ class FollowHandlerTest {
 
         handle(followHandler(followers = followers, remoteActors = TestRemoteActors()), followJson())
 
-        // inbox も鍵も取れていないので、記録する中身が揃っていない
+        // inbox も鍵も取得できていないので、記録する中身が揃っていない
         assertEquals(emptyList(), followers.rows)
     }
 

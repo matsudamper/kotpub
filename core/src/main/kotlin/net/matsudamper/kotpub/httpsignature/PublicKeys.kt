@@ -41,7 +41,7 @@ sealed interface PublicKeyLookup {
     /**
      * 相手のサーバーが「そのアクターはもう無い」と答えた。
      *
-     * この先この `keyId` の鍵が取れることはない
+     * この先この `keyId` の鍵を取得できることはない
      */
     data object Gone : PublicKeyLookup
 

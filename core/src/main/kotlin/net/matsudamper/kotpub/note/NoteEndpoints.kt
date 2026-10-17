@@ -119,7 +119,7 @@ class OutboxEndpoint(
                 totalItems = total,
                 partOf = urls.outbox,
                 orderedItems = items,
-                // 総数ではなく取れた件数で判断する。読んでいる間に増えていることがある
+                // 総数ではなく取得できた件数で判断する。読んでいる間に増えていることがある
                 next = if (page.size < COLLECTION_PAGE_SIZE) null else pageUrl(urls, page.last().position),
             ),
             contentType = contentType,
