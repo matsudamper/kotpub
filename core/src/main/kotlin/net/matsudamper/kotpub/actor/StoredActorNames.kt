@@ -20,13 +20,7 @@ interface StoredActorNames {
     fun find(username: String): String?
 
     /**
-     * [find] を複数の username でまとめて行う。
-     *
-     * 返すマップのキーは渡された username、値は保存されている username。
-     * 該当するアクターが無い username はキーに含めない。
-     *
-     * 例: `Feed1` だけが保存されているとき、`{feed1, unknown}` を渡すと
-     * `{feed1 -> Feed1}` を返す。
+     * [find] を複数の username でまとめて行う。キーは渡された username で、見つからなかったものは含めない。
      */
     fun finds(usernames: Set<String>): Map<String, String>
 }
