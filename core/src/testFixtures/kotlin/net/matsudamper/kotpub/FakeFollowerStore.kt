@@ -8,7 +8,7 @@ import net.matsudamper.kotpub.follower.FollowerStore
 /**
  * フォロワーの記録の差し替え。オンメモリで持つ。
  *
- * SQL の振る舞いは `:backend:repository` のテストが本物の SQLite で確かめる。
+ * SQL の振る舞いは利用側のアプリのテストが本物の DB で確かめる。
  * こちらが受け持つのは、inbox のハンドラや配信が何をどの順で呼んだかの確認。
  *
  * @param failOnRecord 記録に失敗する状況を作る

@@ -82,7 +82,7 @@ class FollowBackfillPublisher(
 
         var delivered = 0
         recentNotes.reversed().forEach { note ->
-            // 送っている間に管理画面から消されることがある。消えた投稿を送ると、
+            // 送っている間に利用側のアプリから消されることがある。消えた投稿を送ると、
             // 相手には `Delete` の後から `Create` が届いて消したものが戻る
             if (notes.find(note.publicId) == null) return@forEach
 

@@ -78,7 +78,7 @@ class ReactionHandler(
             return
         }
 
-        // 相手の公開鍵を remote_actors に持てないと、相手が消えた後の `Delete` を検証できず、
+        // 相手の公開鍵を記録できないと、相手が消えた後の `Delete` を検証できず、
         // 居ない相手のお気に入りやスタンプが公開画面に出たままになる
         val actor = remoteActors.findActor(verifiedSignerActorId)
         if (actor == null) {

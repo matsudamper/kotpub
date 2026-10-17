@@ -69,7 +69,7 @@ data class ActorUrls(
         const val SHARED_INBOX_PATH: String = "/inbox"
 
         /**
-         * アクターの id から見たプロフィール画像のパス。GraphQL も同じ綴りを使う
+         * アクターの id から見たプロフィール画像のパス。利用側のアプリも同じ綴りを使う
          */
         const val ICON_PATH: String = "/icon"
 

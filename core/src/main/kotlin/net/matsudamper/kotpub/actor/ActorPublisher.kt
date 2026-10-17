@@ -11,8 +11,8 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * アクター情報の更新と削除を組み立てる。
  *
- * どちらも DB を触らず HTTP も出さない。保存と配信キューへの登録は `:backend` が repository の
- * メソッドで 1 トランザクションにまとめる。
+ * どちらも DB を触らず HTTP も出さない。保存と配信キューへの登録は利用側のアプリが
+ * 1 トランザクションにまとめる。
  */
 class ActorPublisher(
     private val appearances: StoredActorAppearances,

@@ -7,9 +7,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * 有効期限つきのキーバリューキャッシュ。
  *
  * 相手のアクター文書を保持するためだけのもので、モジュールの外には出さない。
- * 元は `:backend:repository` に置いていたが、そちらは SQLite と jOOQ を抱える
- * アプリ側のモジュールで、ActivityPub の実装が依存するものではない。
- * このモジュールだけで完結させるために持ってきた。
  *
  * interface にしてあるのは差し替えのため。プロセスをまたいでキャッシュしたくなったら
  * [createExpiringCache] の戻りを変えれば済む。

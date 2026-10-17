@@ -6,7 +6,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * テストで渡す画面の URL。
  *
- * 本物の綴りは `:backend` が決めるので、ここでは同じ形の別物を返す。
+ * 本物の綴りは利用側のアプリが決めるので、ここでは同じ形の別物を返す。
  * ActivityPub の `id` とは別のパスになっていることだけを見る。
  */
 object TestWebPageUrls : WebPageUrls {
