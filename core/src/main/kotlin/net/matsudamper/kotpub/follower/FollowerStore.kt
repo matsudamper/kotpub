@@ -81,7 +81,7 @@ interface FollowerStore {
      * 相手のアクターの公開鍵の PEM を返す。記録が無ければ null。
      *
      * `Follow` を受けたときに読んだもの。`Accept` を返せていない相手も対象にする。
-     * 相手のサーバーから引けなくなった鍵の代わりに使う
+     * 相手のサーバーから取れなくなった鍵の代わりに使う
      */
     fun findPublicKeyPem(actorUri: String): String?
 

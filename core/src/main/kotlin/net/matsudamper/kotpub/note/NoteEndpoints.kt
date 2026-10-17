@@ -20,7 +20,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * 配信した投稿を返す。
  *
- * 相手は受け取った `Create` の `object.id` をパーマリンクとして引きに来る。
+ * 相手は受け取った `Create` の `object.id` をパーマリンクとして取りに来る。
  * ここが 404 だと、タイムラインには出ていても開けない投稿になる。
  */
 class NoteEndpoint(

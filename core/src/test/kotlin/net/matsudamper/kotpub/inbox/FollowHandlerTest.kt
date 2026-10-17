@@ -63,7 +63,7 @@ class FollowHandlerTest {
         val row = followers.rows.single()
         assertEquals(TestLocalActor.USERNAME, row.username)
         assertEquals(TestRemoteActor.ACTOR_ID, row.followerActorUri)
-        // 記録する inbox と鍵は、Accept を送るのに引いたアクター文書から取る
+        // 記録する inbox と鍵は、Accept を送るのに取ったアクター文書から読む
         assertEquals(TestRemoteActor.INBOX, row.inbox)
         assertTrue(row.publicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----"))
         assertEquals("https://remote.example/activities/1", row.followActivityUri)
@@ -129,7 +129,7 @@ class FollowHandlerTest {
     }
 
     @Test
-    fun `相手のアクターを引けなければ記録しない`() = runBlocking {
+    fun `相手のアクターを取れなければ記録しない`() = runBlocking {
         val followers = FakeFollowerStore()
 
         handle(followHandler(followers = followers, remoteActors = TestRemoteActors()), followJson())

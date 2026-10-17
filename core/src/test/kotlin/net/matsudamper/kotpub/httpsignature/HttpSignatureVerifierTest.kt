@@ -178,7 +178,7 @@ class HttpSignatureVerifierTest {
         }
 
     @Test
-    fun `覚えている鍵が古ければ引き直して通す`() =
+    fun `覚えている鍵が古ければ取り直して通す`() =
         runBlocking {
             // 相手が鍵を替えると、替わったことは通らない署名が届いて初めて分かる
             val publicKeys = RotatingPublicKeys(before = RsaKeys.generateKeyPair().public, after = TestRemoteActor.keyPair.public)
@@ -190,18 +190,18 @@ class HttpSignatureVerifierTest {
         }
 
     @Test
-    fun `引き直しても合わなければ通らない`() =
+    fun `取り直しても合わなければ通らない`() =
         runBlocking {
             val publicKeys = RotatingPublicKeys(before = RsaKeys.generateKeyPair().public, after = RsaKeys.generateKeyPair().public)
 
             val result = verifier(publicKeys).verify(request(signedHeaders()))
 
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
-            assertTrue(rejected.reason.contains("引き直した鍵でも署名が一致しない"))
+            assertTrue(rejected.reason.contains("取り直した鍵でも署名が一致しない"))
         }
 
     @Test
-    fun `署名が通れば引き直しには行かない`() =
+    fun `署名が通れば取り直しには行かない`() =
         runBlocking {
             val publicKeys = TestRemoteActor.remoteActors()
 
@@ -211,9 +211,9 @@ class HttpSignatureVerifierTest {
         }
 
     @Test
-    fun `鍵を引きに行く前に明らかな不備で落とす`() =
+    fun `鍵を取りに行く前に明らかな不備で落とす`() =
         runBlocking {
-            // 形が壊れたリクエストのたびに相手のサーバーを引きに行かない
+            // 形が壊れたリクエストのたびに相手のサーバーへ取りに行かない
             val publicKeys = TestRemoteActor.remoteActors()
             val headers = signedHeaders(date = now.minus(Duration.ofHours(1)))
 

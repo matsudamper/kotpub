@@ -166,15 +166,15 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `受信を止めているドメインからは鍵を引かずに受け取って捨てる`() =
+    fun `受信を止めているドメインからは鍵を取りに行かずに受け取って捨てる`() =
         runBlocking {
             val handler = RecordingHandler("Follow")
             val domainBlocks = FakeInboxDomainBlocks(blockedUrls = setOf(TestRemoteActor.KEY_ID))
-            // 鍵を引きに行くと落ちる。止めている相手のサーバーには取りに行かない
+            // 鍵を取りに行くと落ちる。止めている相手のサーバーには取りに行かない
             val publicKeys = object : PublicKeys {
-                override suspend fun find(keyId: String): PublicKeyLookup = fail("受信を止めているドメインの鍵を引きに行った")
+                override suspend fun find(keyId: String): PublicKeyLookup = fail("受信を止めているドメインの鍵を取りに行った")
 
-                override suspend fun refresh(keyId: String): PublicKeyLookup = fail("受信を止めているドメインの鍵を引きに行った")
+                override suspend fun refresh(keyId: String): PublicKeyLookup = fail("受信を止めているドメインの鍵を取りに行った")
             }
 
             val result = service(
@@ -233,7 +233,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `公開鍵を引けなければ拒否してハンドラを呼ばない`() =
+    fun `公開鍵を取れなければ拒否してハンドラを呼ばない`() =
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -301,7 +301,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `鍵を引けない自分自身の Delete は受け流す`() =
+    fun `鍵を取れない自分自身の Delete は受け流す`() =
         runBlocking {
             val handler = RecordingHandler("Delete")
 
