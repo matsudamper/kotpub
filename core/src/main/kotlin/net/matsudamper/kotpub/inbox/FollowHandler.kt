@@ -92,7 +92,7 @@ class FollowHandler(
             )
         }
         if (recorded.isFailure) {
-            // 記録できていないので Accept も投函されていない。相手には保留のまま見えるが、
+            // 記録できていないので Accept も配信キューに登録されていない。相手には保留のまま見えるが、
             // Follow は送り直されるので次の機会がある
             logger.warn(
                 "Follow を記録できなかったので Accept を返さない: ${followee.acct} ← $verifiedSignerActorId",
@@ -107,7 +107,7 @@ class FollowHandler(
             return
         }
 
-        logger.info("Follow を記録して Accept を投函した: ${followee.acct} ← $verifiedSignerActorId")
+        logger.info("Follow を記録して Accept を配信キューに登録した: ${followee.acct} ← $verifiedSignerActorId")
     }
 
     private companion object {

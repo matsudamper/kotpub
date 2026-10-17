@@ -12,8 +12,8 @@ import net.matsudamper.kotpub.entity.PublicNoteId
  * 送ったら終わりにはできない。Mastodon は受け取った投稿のパーマリンクを後から
  * 引きに来るので、送った中身をこちらにも残しておく必要がある。
  *
- * 記録する口は無い。投稿の記録は配信の投函と 1 トランザクションで確定させる必要があり、
- * それは `:backend` が repository の投函の口で行う。
+ * 記録する口は無い。投稿の記録は配信キューへの登録と 1 トランザクションで確定させる必要があり、
+ * それは `:backend` が repository の配信キューへ登録する口で行う。
  */
 interface NoteStore {
     fun find(publicId: PublicNoteId): StoredNote?
