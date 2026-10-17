@@ -31,7 +31,7 @@ class FakeFollowerStore(
         if (username in deletedUsernames) return false
 
         // 一意制約と同じ判定。同じ相手からの Follow が既にあれば、行は増やさず、
-        // 相手の情報と最後に受けた Follow の id、預かる `Accept` を差し替える。
+        // 相手の情報と最後に受けた Follow の id、配信待ちの `Accept` を差し替える。
         // 成立したかどうかは触らない
         val index = rows.indexOfFirst { it.username == username && it.followerActorUri == follower.actorId }
         if (index >= 0) {
@@ -62,7 +62,7 @@ class FakeFollowerStore(
     }
 
     /**
-     * 預かった `Accept` が相手に届いた状況を作る。本物では配信キューがここを書く
+     * 配信待ちの `Accept` が相手に届いた状況を作る。本物では配信キューがここを書く
      */
     fun markAccepted(
         username: String,
