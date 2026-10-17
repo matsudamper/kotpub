@@ -40,7 +40,7 @@ data class Actor(
     @SerialName("outbox")
     val outbox: String,
     /**
-     * プロフィールに載せる投稿の一覧。Mastodon は未フォローでもここを引きに来る。
+     * プロフィールに載せる投稿の一覧。Mastodon は未フォローでもここを取得しに来る。
      * outbox はフォロー後のバックフィル向けで、プロフィール表示には使われない。
      */
     @SerialName("featured")

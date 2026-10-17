@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 相手のサーバーを引きに行く回数を抑える土台。
+// 相手のサーバーから取得する回数を抑える土台。
 // 「1 つだけ通す」が壊れると、通らない署名を並べるだけで取得を増やせる。
 class ExpiringCacheTest {
     @Test

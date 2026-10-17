@@ -210,7 +210,7 @@ class InboxService(
          * @param remoteActors 相手のアクターの取得元。署名検証に使う公開鍵と、
          *   `Accept` の宛先になる inbox、お気に入りやスタンプを押した相手として残す鍵をここから取る
          * @param followers フォローの記録。配信先だけでなく、相手が消えて
-         *   アクター文書を引けなくなったときの公開鍵の参照先にもなる
+         *   アクター文書を取得できなくなったときの公開鍵の参照先にもなる
          * @param favourites お気に入りの記録。[followers] と同じく、
          *   消えた相手の公開鍵の参照先にもなる
          * @param stamps スタンプの記録。[favourites] と同じく、消えた相手の公開鍵の参照先にもなる

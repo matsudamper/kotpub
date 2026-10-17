@@ -70,7 +70,7 @@ class FollowHandler(
 
         val follower = remoteActors.findActor(verifiedSignerActorId)
         if (follower == null) {
-            logger.warn("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを引けない")
+            logger.warn("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを取得できない")
             return
         }
 

@@ -15,7 +15,7 @@ import net.matsudamper.kotpub.crypto.RsaSignature
  *
  * 検証の順番は安いものから。ヘッダの形 → 時刻 → ボディのダイジェスト →
  * 鍵の取得（ここだけ外に HTTP を投げる）→ 署名の検証、とすることで、
- * 明らかにおかしいリクエストで相手のサーバーを引きに行かずに済む。
+ * 明らかにおかしいリクエストで相手のサーバーから取得せずに済む。
  *
  * @param clock テストから時刻を固定するために持つ
  */
@@ -100,14 +100,14 @@ class HttpSignatureVerifier(
         }
 
         // 相手が鍵を替えていることがある。替わったことは、こちらが覚えている鍵では
-        // 通らない署名が届いて初めて分かるので、ここで 1 回だけ引き直して試す。
-        // 引き直さないと、覚えている鍵を捨てるまでの間その相手を拒み続ける
+        // 通らない署名が届いて初めて分かるので、ここで 1 回だけ取得し直して試す。
+        // 取得し直さないと、覚えている鍵を捨てるまでの間その相手を拒み続ける
         val refreshed =
             (publicKeys.refresh(signature.keyId) as? PublicKeyLookup.Found)?.key
                 ?: return HttpSignatureResult.Rejected("署名が一致しない: ${signature.keyId}")
 
         if (!matches(signature, signingString, refreshed)) {
-            return HttpSignatureResult.Rejected("引き直した鍵でも署名が一致しない: ${signature.keyId}")
+            return HttpSignatureResult.Rejected("取得し直した鍵でも署名が一致しない: ${signature.keyId}")
         }
 
         return HttpSignatureResult.Verified(keyId = refreshed.keyId, owner = refreshed.owner)

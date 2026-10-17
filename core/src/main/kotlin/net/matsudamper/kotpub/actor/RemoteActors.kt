@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.actor
 import net.matsudamper.kotpub.httpsignature.PublicKeys
 
 /**
- * 相手のサーバーのアクターを引く口。
+ * 相手のサーバーからアクターを取得する口。
  *
  * 公開鍵も inbox も同じアクター文書の中にあり、取りに行く手順も
  * 安全のための決まりも共通なので 1 つの口にまとめる。
@@ -15,7 +15,7 @@ interface RemoteActors :
     PublicKeys,
     AutoCloseable {
     /**
-     * アクター文書から、配信と記録に要る部分を引く。引けなければ null。
+     * アクター文書から、配信と記録に要る部分を取得する。取得できなければ null。
      *
      * 1 回の呼び出しで全部返すのは、これらが同じ 1 つの文書から読めるため。
      * フォロワーとして記録するときに inbox と公開鍵を別々に取りに行くと、
@@ -28,7 +28,7 @@ interface RemoteActors :
 /**
  * 相手のアクター文書のうち、こちらが使う部分。
  *
- * @param actorId 引いたアクターの id。呼び出しに使った URL がそのまま入る
+ * @param actorId 取得したアクターの id。呼び出しに使った URL がそのまま入る
  * @param inbox 配信先。https で、[actorId] と同じホストのものに限る。
  *   ここを緩めると、相手が自分のアクター文書に他所の URL を書くだけで、
  *   こちらのサーバーから任意の宛先に POST させられる
