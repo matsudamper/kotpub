@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import net.matsudamper.kotpub.TestActorKey
+import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.activitypub.Actor
 
@@ -58,7 +58,7 @@ class ActorDocumentTest {
         val urls = assertNotNull(TestLocalActor.directory.resolve(TestLocalActor.USERNAME))
         val actor = actorDocument(
             urls = urls,
-            actorKey = TestActorKey.value,
+            actorPrivateKey = TestActorPrivateKey.value,
             appearance = ActorAppearance(
                 links = listOf(ActorLink(name = "サイト", url = "HTTPS://example.org/")),
                 iconVersion = null,
@@ -89,7 +89,7 @@ class ActorDocumentTest {
         val urls = assertNotNull(TestLocalActor.directory.resolve(username))
         return actorDocument(
             urls = urls,
-            actorKey = TestActorKey.value,
+            actorPrivateKey = TestActorPrivateKey.value,
             appearance = TestLocalActor.appearances.find(username),
             profile = TestLocalActor.profiles.find(username),
             webPages = null,

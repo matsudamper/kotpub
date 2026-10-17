@@ -1,31 +1,39 @@
 package net.matsudamper.kotpub.actor
 
 import java.nio.file.Path
+import java.security.PrivateKey
+import java.security.PublicKey
+import net.matsudamper.kotpub.crypto.RsaKeys
 
 /**
- * アクターの秘密鍵の取得元。
+ * アクターが持つ鍵。
  *
- * 鍵はアクターの同一性そのもので、変わると相手側の署名検証が通らなくなるため、
- * どちらから読んだのかが起動ログから分かるように型で分けている。
+ * 保存するのは秘密鍵だけで、公開鍵はそこから導く。Actor JSON の
+ * `publicKey.publicKeyPem` に入れるのは [publicKeyPem]。
  *
- * 元は `ServerEnv` の中に置いていたが、環境変数の読み方はアプリ側の都合で、
- * このモジュールが決めることではない。[ActorKeyLoader] が受け取る形だけをここに置き、
- * 環境変数から組み立てるのはアプリの入口の仕事にする。
+ * @param origin どこから読んだ鍵か。起動ログに出すために持つ
  */
-sealed interface ActorPrivateKey {
-    /**
-     * PEM を直接渡す。Kubernetes の Secret や systemd の
-     * `EnvironmentFile` から入れる場合はこちら。
-     */
-    data class Pem(
-        val pem: String,
-    ) : ActorPrivateKey
+class ActorPrivateKey(
+    val privateKey: PrivateKey,
+    val origin: Origin,
+) {
+    val publicKey: PublicKey by lazy { RsaKeys.derivePublicKey(privateKey) }
 
-    /**
-     * PEM をファイルから読む。ファイルが無ければ生成して書き出す。
-     * docker compose のようにボリュームを持てる場合はこちら。
-     */
-    data class File(
-        val path: Path,
-    ) : ActorPrivateKey
+    /** Actor JSON にそのまま入る X.509 SubjectPublicKeyInfo の PEM */
+    val publicKeyPem: String by lazy { RsaKeys.encodeToPem(publicKey) }
+
+    sealed interface Origin {
+        /** 環境変数の PEM をそのまま使った */
+        data object Environment : Origin
+
+        /** 既にあったファイルから読んだ */
+        data class LoadedFile(
+            val path: Path,
+        ) : Origin
+
+        /** ファイルが無かったので生成して書き出した */
+        data class GeneratedFile(
+            val path: Path,
+        ) : Origin
+    }
 }

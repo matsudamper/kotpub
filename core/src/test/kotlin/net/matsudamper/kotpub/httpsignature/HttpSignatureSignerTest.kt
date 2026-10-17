@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
-import net.matsudamper.kotpub.TestActorKey
+import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.http.RequestHeaders
 
@@ -19,7 +19,7 @@ class HttpSignatureSignerTest {
 
     private val verifier =
         HttpSignatureVerifier(
-            TestRemoteActors.of(keyId = keyId, owner = actorId, publicKey = TestActorKey.value.publicKey),
+            TestRemoteActors.of(keyId = keyId, owner = actorId, publicKey = TestActorPrivateKey.value.publicKey),
         )
 
     private fun sign(
@@ -29,7 +29,7 @@ class HttpSignatureSignerTest {
     ): Map<String, String> =
         HttpSignatureSigner().sign(
             keyId = keyId,
-            privateKey = TestActorKey.value.privateKey,
+            privateKey = TestActorPrivateKey.value.privateKey,
             method = "POST",
             requestTarget = requestTarget,
             host = host,

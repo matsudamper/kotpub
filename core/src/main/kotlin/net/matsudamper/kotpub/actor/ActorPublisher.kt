@@ -15,7 +15,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
  * 口で 1 トランザクションにまとめる。
  */
 class ActorPublisher(
-    private val actorKey: ActorKey,
+    private val actorPrivateKey: ActorPrivateKey,
     private val appearances: StoredActorAppearances,
     private val profiles: StoredActorProfiles,
     private val webPages: WebPageUrls?,
@@ -38,7 +38,7 @@ class ActorPublisher(
             to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
             updatedActor = actorDocument(
                 urls = sender,
-                actorKey = actorKey,
+                actorPrivateKey = actorPrivateKey,
                 appearance = appearances.find(sender.username),
                 profile = profiles.find(sender.username),
                 webPages = webPages,

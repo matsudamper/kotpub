@@ -15,7 +15,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
  */
 class ActorEndpoint(
     private val directory: ActorDirectory,
-    private val actorKey: ActorKey,
+    private val actorPrivateKey: ActorPrivateKey,
     private val appearances: StoredActorAppearances,
     private val profiles: StoredActorProfiles,
     private val webPages: WebPageUrls?,
@@ -40,7 +40,7 @@ class ActorEndpoint(
             serializer = Actor.serializer(),
             value = actorDocument(
                 urls = urls,
-                actorKey = actorKey,
+                actorPrivateKey = actorPrivateKey,
                 appearance = appearances.find(urls.username),
                 profile = profiles.find(urls.username),
                 webPages = webPages,
@@ -57,7 +57,7 @@ class ActorEndpoint(
  */
 internal fun actorDocument(
     urls: ActorUrls,
-    actorKey: ActorKey,
+    actorPrivateKey: ActorPrivateKey,
     appearance: ActorAppearance,
     profile: ActorProfile,
     webPages: WebPageUrls?,
@@ -84,7 +84,7 @@ internal fun actorDocument(
         ActorPublicKey(
             id = urls.publicKeyId,
             owner = urls.actorId,
-            publicKeyPem = actorKey.publicKeyPem,
+            publicKeyPem = actorPrivateKey.publicKeyPem,
         ),
     )
 }

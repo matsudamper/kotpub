@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.delivery
 import java.io.Closeable
 import kotlin.coroutines.cancellation.CancellationException
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
-import net.matsudamper.kotpub.actor.ActorKey
+import net.matsudamper.kotpub.actor.ActorPrivateKey
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
@@ -18,12 +18,12 @@ import net.matsudamper.kotpub.httpsignature.HttpSignatureSigner
  * 足された値と、署名したときの値が食い違うと、相手側では「署名が一致しない」
  * としか見えず原因が追えなくなる。
  *
- * @param actorKey 署名に使う秘密鍵。いまはアクターが何人いても鍵は 1 本で、
+ * @param actorPrivateKey 署名に使う秘密鍵。いまはアクターが何人いても鍵は 1 本で、
  *   全アクターが同じ鍵を共有する。アクターごとの鍵になるのは Phase 6
  * @param client 閉じるのはこのクラスの [close] が受け持つ
  */
 class HttpActivityDelivery(
-    private val actorKey: ActorKey,
+    private val actorPrivateKey: ActorPrivateKey,
     private val client: ActivityPubHttpClient,
     private val signer: HttpSignatureSigner = HttpSignatureSigner(),
 ) : ActivityDelivery,
@@ -40,7 +40,7 @@ class HttpActivityDelivery(
         val headers =
             signer.sign(
                 keyId = sender.publicKeyId,
-                privateKey = actorKey.privateKey,
+                privateKey = actorPrivateKey.privateKey,
                 method = "POST",
                 // 相手はリクエストラインの綴りで署名文字列を組み直す。
                 // パスを組み立て直すとクエリや末尾の差で合わなくなる

@@ -7,46 +7,46 @@ import java.nio.file.attribute.PosixFilePermissions
 import net.matsudamper.kotpub.crypto.RsaKeys
 
 /**
- * [ActorPrivateKey] に従ってアクターの秘密鍵を用意する。
+ * [ActorPrivateKeySource] に従ってアクターの秘密鍵を用意する。
  *
  * ファイル指定で中身が無い場合だけ新しく生成する。既にあるファイルを書き換えることはしない。
  */
-object ActorKeyLoader {
+object ActorPrivateKeyLoader {
     fun load(
-        config: ActorPrivateKey,
-    ): ActorKey? =
+        config: ActorPrivateKeySource,
+    ): ActorPrivateKey? =
         when (config) {
-            is ActorPrivateKey.Pem -> {
-                ActorKey(
+            is ActorPrivateKeySource.Pem -> {
+                ActorPrivateKey(
                     privateKey = decode(config.pem) { "ACTOR_PRIVATE_KEY_PEM の PEM を読めなかった" },
-                    origin = ActorKey.Origin.Environment,
+                    origin = ActorPrivateKey.Origin.Environment,
                 )
             }
 
-            is ActorPrivateKey.File -> {
+            is ActorPrivateKeySource.File -> {
                 loadFromFile(config.path.toAbsolutePath().normalize())
             }
         }
 
     fun create(
-        file: ActorPrivateKey.File,
-    ): ActorKey {
+        file: ActorPrivateKeySource.File,
+    ): ActorPrivateKey {
         val path = file.path.toAbsolutePath().normalize()
         val keyPair = RsaKeys.generateKeyPair()
         write(path, RsaKeys.encodeToPem(keyPair.private))
-        return ActorKey(
+        return ActorPrivateKey(
             privateKey = keyPair.private,
-            origin = ActorKey.Origin.GeneratedFile(path),
+            origin = ActorPrivateKey.Origin.GeneratedFile(path),
         )
     }
 
     private fun loadFromFile(
         path: Path,
-    ): ActorKey? {
+    ): ActorPrivateKey? {
         if (Files.exists(path)) {
-            return ActorKey(
+            return ActorPrivateKey(
                 privateKey = decode(Files.readString(path)) { "$path の PEM を読めなかった" },
-                origin = ActorKey.Origin.LoadedFile(path),
+                origin = ActorPrivateKey.Origin.LoadedFile(path),
             )
         }
 
