@@ -36,7 +36,7 @@ data class NodeInfoDiscoveryLink(
  * `GET /nodeinfo/2.1` のレスポンス本体。
  *
  * ローカルユーザー数はまだ数えていないので [NodeInfoUsage.users] は常に total = 1。
- * 記事の配信数もまだ数えていないので `localPosts` は常に 0。
+ * 投稿数もまだ数えていないので `localPosts` は常に 0。
  */
 @Serializable
 data class NodeInfo(

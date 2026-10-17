@@ -19,7 +19,7 @@ import net.matsudamper.kotpub.httpsignature.HttpSignatureSigner
  * としか見えず原因が追えなくなる。
  *
  * @param actorKey 署名に使う秘密鍵。いまはアクターが何人いても鍵は 1 本で、
- *   使い捨てアクターも同じ鍵を共有する。アクターごとの鍵になるのは Phase 6
+ *   全アクターが同じ鍵を共有する。アクターごとの鍵になるのは Phase 6
  * @param client 閉じるのはこのクラスの [close] が受け持つ
  */
 class HttpActivityDelivery(
@@ -57,8 +57,6 @@ class HttpActivityDelivery(
                     body = body,
                 )
             }.getOrElse { error ->
-                // runCatching は Throwable を拾うので、呼び出し元が消えた合図まで
-                // 配信の失敗に化ける。化けると送れていない記事が投稿済みとして残る
                 if (error is CancellationException) throw error
                 // 公開アドレスではない宛先は、送り直しても届くようにならない。
                 // HTTP クライアントが包んで投げ直すことがあるので、原因までたどる
