@@ -57,8 +57,6 @@ class HttpActivityDelivery(
                     body = body,
                 )
             }.getOrElse { error ->
-                // runCatching は Throwable を拾うので、呼び出し元が消えた合図まで
-                // 配信の失敗に化ける。化けると送れていない投稿が配信済みとして残る
                 if (error is CancellationException) throw error
                 // 公開アドレスではない宛先は、送り直しても届くようにならない。
                 // HTTP クライアントが包んで投げ直すことがあるので、原因までたどる
