@@ -18,7 +18,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import net.matsudamper.kotpub.TestActorKey
+import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.delivery.DeliveryResult
@@ -42,7 +42,7 @@ class KtorActivityPubHttpClientTest {
         TestRemoteActors.of(
             keyId = sender.publicKeyId,
             owner = sender.actorId,
-            publicKey = TestActorKey.value.publicKey,
+            publicKey = TestActorPrivateKey.value.publicKey,
         )
 
     /**
@@ -95,7 +95,7 @@ class KtorActivityPubHttpClientTest {
 
         val verification =
             withInbox { url ->
-                HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = loopbackClient()).use { delivery ->
                     result =
                         delivery.deliver(inbox = url, sender = sender, body = """{"type":"Accept"}""".toByteArray())
                 }
@@ -111,7 +111,7 @@ class KtorActivityPubHttpClientTest {
         var result: DeliveryResult? = null
 
         withInbox { url ->
-            HttpActivityDelivery(TestActorKey.value, client = loopbackClient()).use { delivery ->
+            HttpActivityDelivery(TestActorPrivateKey.value, client = loopbackClient()).use { delivery ->
                 // ルーティングに無いパスなので 404 が返る
                 result =
                     delivery.deliver(

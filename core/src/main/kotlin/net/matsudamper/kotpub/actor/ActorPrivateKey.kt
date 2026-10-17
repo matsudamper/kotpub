@@ -13,7 +13,7 @@ import net.matsudamper.kotpub.crypto.RsaKeys
  *
  * @param origin どこから読んだ鍵か。起動ログに出すために持つ
  */
-class ActorKey(
+class ActorPrivateKey(
     val privateKey: PrivateKey,
     val origin: Origin,
 ) {

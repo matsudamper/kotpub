@@ -9,7 +9,7 @@ import java.nio.file.Path
  * どちらから読んだのかが起動ログから分かるように型で分けている。
  *
  * 元は `ServerEnv` の中に置いていたが、環境変数の読み方はアプリ側の都合で、
- * このモジュールが決めることではない。[ActorKeyLoader] が受け取る形だけをここに置き、
+ * このモジュールが決めることではない。[ActorPrivateKeyLoader] が受け取る形だけをここに置き、
  * 環境変数から組み立てるのはアプリの入口の仕事にする。
  */
 sealed interface ActorPrivateKeySource {

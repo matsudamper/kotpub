@@ -10,7 +10,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import net.matsudamper.kotpub.TestActorKey
+import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
@@ -33,7 +33,7 @@ class HttpActivityDeliveryTest {
         TestRemoteActors.of(
             keyId = sender.publicKeyId,
             owner = sender.actorId,
-            publicKey = TestActorKey.value.publicKey,
+            publicKey = TestActorPrivateKey.value.publicKey,
         )
 
     @Test
@@ -43,7 +43,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                     delivery.deliver(inbox = "https://remote.example/users/alice/inbox?a=1", sender = sender, body = body)
                 }
             }
@@ -72,7 +72,7 @@ class HttpActivityDeliveryTest {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example:8443/inbox", sender = sender, body = ByteArray(0))
             }
         }
@@ -86,7 +86,7 @@ class HttpActivityDeliveryTest {
         val body = """{"type":"Accept"}""".toByteArray()
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                 delivery.deliver(inbox = "https://remote.example/users/あ/inbox", sender = sender, body = body)
             }
         }
@@ -121,7 +121,7 @@ class HttpActivityDeliveryTest {
         var result: DeliveryResult? = null
 
         runBlocking {
-            HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+            HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                 val job = launch {
                     result = delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
@@ -149,7 +149,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                     delivery.deliver(inbox = "https://example.com/users/alice/inbox", sender = sender, body = ByteArray(0))
                 }
             }
@@ -169,7 +169,7 @@ class HttpActivityDeliveryTest {
 
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                     delivery.deliver(inbox = "https://internal.example/inbox", sender = sender, body = ByteArray(0))
                 }
             }
@@ -182,7 +182,7 @@ class HttpActivityDeliveryTest {
         val client = RecordingClient(status = HttpStatusCodes.ACCEPTED)
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = client).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = client).use { delivery ->
                     delivery.deliver(inbox = "not a url", sender = sender, body = ByteArray(0))
                 }
             }
@@ -213,7 +213,7 @@ class HttpActivityDeliveryTest {
     private fun deliverTo(status: Int): DeliveryResult.Failed {
         val result =
             runBlocking {
-                HttpActivityDelivery(TestActorKey.value, client = RecordingClient(status)).use { delivery ->
+                HttpActivityDelivery(TestActorPrivateKey.value, client = RecordingClient(status)).use { delivery ->
                     delivery.deliver(
                         inbox = "https://example.com/users/alice/inbox",
                         sender = sender,
