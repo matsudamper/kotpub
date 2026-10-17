@@ -8,7 +8,7 @@ import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
 
 /**
- * 相手のアクターの引き先の差し替え。
+ * 相手のアクターの取得元の差し替え。
  *
  * 本番は相手のサーバーに GET しに行くので、テストからは必ずこちらを通す。
  * 何も渡さなければ「どの keyId も引けず、どの inbox も分からない」サーバーになる。
