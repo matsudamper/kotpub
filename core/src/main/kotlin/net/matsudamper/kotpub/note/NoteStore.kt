@@ -4,7 +4,7 @@ import java.time.Instant
 import net.matsudamper.kotpub.entity.PublicNoteId
 
 /**
- * 配信した投稿の置き先。
+ * 配信した投稿の保存先。
  *
  * [net.matsudamper.kotpub.follower.FollowerStore] と同じく口だけを決めて、
  * 実装は `:backend` が repository に繋ぐ。

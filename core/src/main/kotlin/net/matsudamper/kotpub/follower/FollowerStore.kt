@@ -5,7 +5,7 @@ import net.matsudamper.kotpub.actor.RemoteActor
 import net.matsudamper.kotpub.actor.RemoteActorProfile
 
 /**
- * フォロワーの記録の置き先。
+ * フォロワーの記録の保存先。
  *
  * どこに保存されているかはこのモジュールの関心ではないので、
  * `StoredActorNames` と同じく口だけを決めておく。実装は `:backend` が
