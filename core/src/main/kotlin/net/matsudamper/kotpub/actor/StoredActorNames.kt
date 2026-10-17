@@ -1,14 +1,14 @@
 package net.matsudamper.kotpub.actor
 
 /**
- * このサーバーにいるローカルアクターの username の引き先。
+ * このサーバーにいるローカルアクターの username を、保存先から探すためのインターフェース。
  *
  * username は `https://{domain}/users/{username}` や
  * `acct:{username}@{domain}` の `{username}` 部分（例: `Feed1`）。
  * 表示名（`name`）ではない。
  *
  * どこに保存されているかは [ActorDirectory] の関心ではないので、
- * username を渡して引けることだけを決めておく。
+ * username を渡すと保存されている username が返ってくることだけを決めておく。
  */
 interface StoredActorNames {
     /**
