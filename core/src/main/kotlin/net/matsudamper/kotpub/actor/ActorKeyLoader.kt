@@ -7,29 +7,29 @@ import java.nio.file.attribute.PosixFilePermissions
 import net.matsudamper.kotpub.crypto.RsaKeys
 
 /**
- * [ActorPrivateKey] に従ってアクターの秘密鍵を用意する。
+ * [ActorPrivateKeySource] に従ってアクターの秘密鍵を用意する。
  *
  * ファイル指定で中身が無い場合だけ新しく生成する。既にあるファイルを書き換えることはしない。
  */
 object ActorKeyLoader {
     fun load(
-        config: ActorPrivateKey,
+        config: ActorPrivateKeySource,
     ): ActorKey? =
         when (config) {
-            is ActorPrivateKey.Pem -> {
+            is ActorPrivateKeySource.Pem -> {
                 ActorKey(
                     privateKey = decode(config.pem) { "ACTOR_PRIVATE_KEY_PEM の PEM を読めなかった" },
                     origin = ActorKey.Origin.Environment,
                 )
             }
 
-            is ActorPrivateKey.File -> {
+            is ActorPrivateKeySource.File -> {
                 loadFromFile(config.path.toAbsolutePath().normalize())
             }
         }
 
     fun create(
-        file: ActorPrivateKey.File,
+        file: ActorPrivateKeySource.File,
     ): ActorKey {
         val path = file.path.toAbsolutePath().normalize()
         val keyPair = RsaKeys.generateKeyPair()

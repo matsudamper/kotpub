@@ -12,14 +12,14 @@ import java.nio.file.Path
  * このモジュールが決めることではない。[ActorKeyLoader] が受け取る形だけをここに置き、
  * 環境変数から組み立てるのはアプリの入口の仕事にする。
  */
-sealed interface ActorPrivateKey {
+sealed interface ActorPrivateKeySource {
     /**
      * PEM を直接渡す。Kubernetes の Secret や systemd の
      * `EnvironmentFile` から入れる場合はこちら。
      */
     data class Pem(
         val pem: String,
-    ) : ActorPrivateKey
+    ) : ActorPrivateKeySource
 
     /**
      * PEM をファイルから読む。ファイルが無ければ生成して書き出す。
@@ -27,5 +27,5 @@ sealed interface ActorPrivateKey {
      */
     data class File(
         val path: Path,
-    ) : ActorPrivateKey
+    ) : ActorPrivateKeySource
 }
