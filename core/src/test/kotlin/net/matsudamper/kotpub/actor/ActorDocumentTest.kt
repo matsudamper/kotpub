@@ -82,7 +82,7 @@ class ActorDocumentTest {
     fun `説明文はHTMLにして出す`() {
         val actor = actorDocumentOf(TestLocalActor.STORED_USERNAME)
 
-        assertEquals("<p>1 つ目のフィード<br>&lt;b&gt;タグ&lt;/b&gt;</p>", actor.summary)
+        assertEquals("<p>1 つ目のアカウント<br>&lt;b&gt;タグ&lt;/b&gt;</p>", actor.summary)
     }
 
     private fun actorDocumentOf(username: String): Actor {
