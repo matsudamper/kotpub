@@ -39,7 +39,7 @@ object TestRemoteActor {
         )
     }
 
-    /** この相手だけを取れる [RemoteActors][net.matsudamper.kotpub.actor.RemoteActors] */
+    /** この相手だけを取得できる [RemoteActors][net.matsudamper.kotpub.actor.RemoteActors] */
     fun remoteActors(inbox: String? = INBOX): TestRemoteActors =
         TestRemoteActors.of(
             keyId = KEY_ID,

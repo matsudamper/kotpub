@@ -11,9 +11,9 @@ import net.matsudamper.kotpub.httpsignature.SignatureKey
  * 相手のアクターの取得元の差し替え。
  *
  * 本番は相手のサーバーに GET しに行くので、テストからは必ずこちらを通す。
- * 何も渡さなければ「どの keyId も取れず、どの inbox も分からない」サーバーになる。
+ * 何も渡さなければ「どの keyId も取得できず、どの inbox も分からない」サーバーになる。
  *
- * @param missing 取れない keyId をどう答えるか。既定は取りに行けなかった扱い。
+ * @param missing 取得できない keyId をどう答えるか。既定は取りに行けなかった扱い。
  *   アカウントが消えた相手を作るときは [PublicKeyLookup.Gone] を渡す
  */
 class TestRemoteActors(

@@ -21,7 +21,7 @@ data class Note(
     @SerialName("@context")
     val context: List<String>? = null,
     /**
-     * この投稿の id。相手はここをパーマリンクとして取りに来る
+     * この投稿の id。相手はここをパーマリンクとして取得しに来る
      */
     @SerialName("id")
     val id: ActivityPubId,
@@ -45,7 +45,7 @@ data class Note(
     @SerialName("cc")
     val cc: List<String>,
     /**
-     * Mastodon がパーマリンクの別名として取りに来ることがある
+     * Mastodon がパーマリンクの別名として取得しに来ることがある
      */
     @SerialName("atomUri")
     val atomUri: String? = null,

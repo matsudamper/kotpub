@@ -190,7 +190,7 @@ class ReactionHandlerTest {
     }
 
     @Test
-    fun `押した相手のアクター文書を取れなければ記録しない`() = runBlocking {
+    fun `押した相手のアクター文書を取得できなければ記録しない`() = runBlocking {
         val recorded = handleLike(
             json = """
             {"id":"https://remote.example/likes/1","type":"Like",

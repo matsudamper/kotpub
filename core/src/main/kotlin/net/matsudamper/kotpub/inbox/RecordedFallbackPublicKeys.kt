@@ -10,7 +10,7 @@ import net.matsudamper.kotpub.stamp.StampStore
 import org.slf4j.LoggerFactory
 
 /**
- * 相手が消えて取れなくなった公開鍵を、こちらの記録から引く。
+ * 相手が消えて取得できなくなった公開鍵を、こちらの記録から引く。
  *
  * ActivityPub で鍵を配る手段はアクター文書しかないので、相手が消えると鍵は
  * どこからも取れなくなる。アカウント削除の `Delete` は本人が消えた後に届くため、
@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory
  * 起きている間だけ、失効したはずの古い鍵で署名が通る。その鍵を持っている者は
  * 本人の `Delete` を装ってフォローを消させられる。
  *
- * 取れたときは記録を新しくする。`Follow` を受けたときの鍵のままにしておくと、
+ * 取得できたときは記録を新しくする。`Follow` を受けたときの鍵のままにしておくと、
  * 相手が鍵を替えてから消えた場合に、記録の鍵では検証できない。
  */
 class RecordedFallbackPublicKeys(
@@ -46,7 +46,7 @@ class RecordedFallbackPublicKeys(
     ): PublicKeyLookup =
         when (lookup) {
             is PublicKeyLookup.Found -> {
-                // 記録できなくても、取れた鍵での検証はできる。ここで例外を上げると
+                // 記録できなくても、取得できた鍵での検証はできる。ここで例外を上げると
                 // 書き込めない間、検証を通るはずのアクティビティまで落ちる
                 runCatching {
                     followers.rememberPublicKeyPem(

@@ -82,7 +82,7 @@ class ReactionHandler(
         // 居ない相手のお気に入りやスタンプが公開画面に出たままになる
         val actor = remoteActors.findActor(verifiedSignerActorId)
         if (actor == null) {
-            logger.warn("$type の押し手のアクター文書を取れないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId")
+            logger.warn("$type の押し手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("reaction.actor_unavailable")
             return
         }

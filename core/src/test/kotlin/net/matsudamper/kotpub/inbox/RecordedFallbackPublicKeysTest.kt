@@ -44,7 +44,7 @@ class RecordedFallbackPublicKeysTest {
     private fun gone(): TestRemoteActors = TestRemoteActors(missing = PublicKeyLookup.Gone)
 
     @Test
-    fun `相手のサーバーから取れたらそちらを使う`() =
+    fun `相手のサーバーから取得できたらそちらを使う`() =
         runBlocking {
             val remote = TestRemoteActor.remoteActors()
 
@@ -58,7 +58,7 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `取れたら記録の鍵を読み直したものにする`() =
+    fun `取得できたら記録の鍵を読み直したものにする`() =
         runBlocking {
             // 相手が鍵を替えてから消えると、Follow のときの鍵では Delete を検証できない
             val followers = followers(publicKeyPem = "替える前の鍵")
@@ -73,9 +73,9 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `取り直したときも記録の鍵を新しくする`() =
+    fun `取得し直したときも記録の鍵を新しくする`() =
         runBlocking {
-            // 取り直しは相手が鍵を替えたときに通る経路。記録も一緒に新しくしないと、
+            // 取得し直しは相手が鍵を替えたときに通る経路。記録も一緒に新しくしないと、
             // その相手が消えた後の Delete を検証できない
             val followers = followers(publicKeyPem = "替える前の鍵")
 

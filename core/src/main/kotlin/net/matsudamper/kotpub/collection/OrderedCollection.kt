@@ -75,7 +75,7 @@ const val COLLECTION_PAGE_SIZE: Int = 12
 /**
  * featured に載せる投稿の件数。
  *
- * Mastodon はプロフィールを開いたとき featured を取りに来る。outbox は
+ * Mastodon はプロフィールを開いたとき featured を取得しに来る。outbox は
  * フォロー後のバックフィル用で、未フォローでは読まない。
  */
 const val FEATURED_COLLECTION_SIZE: Int = 20

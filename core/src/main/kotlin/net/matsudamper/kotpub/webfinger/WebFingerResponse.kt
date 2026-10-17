@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 /**
  * WebFinger (RFC 7033) の JRD レスポンス。
  *
- * Mastodon は `@admin@example.com` の検索でまずここを取りに来て、`links` の
+ * Mastodon は `@admin@example.com` の検索でまずここを取得して、`links` の
  * `rel: "self"` から Actor の URL を得る。ActivityPub 自体の仕様ではないが、
  * この 1 ホップ目が無いとアカウントを発見できない。
  *
