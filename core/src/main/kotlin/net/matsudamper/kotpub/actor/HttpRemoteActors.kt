@@ -214,9 +214,9 @@ class HttpRemoteActors(
             // 取りに行くことにしたので、次に取り直すまでの間隔をここから数える
             recentlyFetched.put(key = cacheKey, value = Unit, ttlMillis = REFRESH_INTERVAL_MILLIS)
         } else if (!recentlyFetched.tryPut(key = cacheKey, value = Unit, ttlMillis = REFRESH_INTERVAL_MILLIS)) {
-            // 取りに行く枠を取れなかった。覚えているものを使わない呼び出しは、
+            // 前回取りに行ってから間隔が空いていない。覚えているものを使わない呼び出しは、
             // 通らない署名を投げ込むだけで誰でも起こせるので間隔を空ける。
-            // 枠は取れたかどうかに関わらず塞ぐ。落ちている相手に繋ぎ直しても同じ結果になる。
+            // 間隔は取得に成功したかどうかに関わらず数える。落ちている相手に繋ぎ直しても同じ結果になる。
             //
             // 直前に取りに行ったばかりなら、覚えているものはそのとき読んだ文書で、
             // 取り直しても同じものにしかならない
