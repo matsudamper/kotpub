@@ -58,7 +58,7 @@ class ActorDocumentTest {
         val urls = assertNotNull(TestLocalActor.directory.resolve(TestLocalActor.USERNAME))
         val actor = actorDocument(
             urls = urls,
-            actorPrivateKey = TestActorPrivateKey.value,
+            publicKeyPem = TestActorPrivateKey.value.publicKeyPem,
             appearance = ActorAppearance(
                 links = listOf(ActorLink(name = "サイト", url = "HTTPS://example.org/")),
                 iconVersion = null,
@@ -89,7 +89,7 @@ class ActorDocumentTest {
         val urls = assertNotNull(TestLocalActor.directory.resolve(username))
         return actorDocument(
             urls = urls,
-            actorPrivateKey = TestActorPrivateKey.value,
+            publicKeyPem = TestActorPrivateKey.value.publicKeyPem,
             appearance = TestLocalActor.appearances.find(username),
             profile = TestLocalActor.profiles.find(username),
             webPages = null,

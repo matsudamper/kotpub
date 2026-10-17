@@ -15,7 +15,6 @@ import net.matsudamper.kotpub.url.WebPageUrls
  * 口で 1 トランザクションにまとめる。
  */
 class ActorPublisher(
-    private val actorPrivateKey: ActorPrivateKey,
     private val appearances: StoredActorAppearances,
     private val profiles: StoredActorProfiles,
     private val webPages: WebPageUrls?,
@@ -27,20 +26,21 @@ class ActorPublisher(
      * 中身を受け取ると、更新の保存とここの組み立てで別々に同じものを作ることになり、
      * 片方だけ変わったときに相手の表示だけが食い違う。
      *
+     * @param sender 更新するアクター。載せる `publicKey` はこの鍵から導く
      * @return 署名対象になる JSON。宛先が何件でも同じものを送る
      */
-    fun prepareUpdate(sender: ActorUrls): String = AppJson.encodeToString(
+    fun prepareUpdate(sender: LocalActor): String = AppJson.encodeToString(
         UpdateActorActivity.serializer(),
         UpdateActorActivity(
             // 同じアクターを何度更新しても、相手の重複判定で落ちない id にする
-            id = ActivityPubId("${sender.actorId}#update-${UuidV7.generate()}"),
-            actor = sender.actorId,
+            id = ActivityPubId("${sender.urls.actorId}#update-${UuidV7.generate()}"),
+            actor = sender.urls.actorId,
             to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
             updatedActor = actorDocument(
-                urls = sender,
-                actorPrivateKey = actorPrivateKey,
-                appearance = appearances.find(sender.username),
-                profile = profiles.find(sender.username),
+                urls = sender.urls,
+                publicKeyPem = sender.privateKey.publicKeyPem,
+                appearance = appearances.find(sender.urls.username),
+                profile = profiles.find(sender.urls.username),
                 webPages = webPages,
             ),
         ),

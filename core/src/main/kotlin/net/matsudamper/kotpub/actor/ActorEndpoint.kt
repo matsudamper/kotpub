@@ -40,7 +40,7 @@ class ActorEndpoint(
             serializer = Actor.serializer(),
             value = actorDocument(
                 urls = urls,
-                actorPrivateKey = actorPrivateKey,
+                publicKeyPem = actorPrivateKey.publicKeyPem,
                 appearance = appearances.find(urls.username),
                 profile = profiles.find(urls.username),
                 webPages = webPages,
@@ -57,7 +57,7 @@ class ActorEndpoint(
  */
 internal fun actorDocument(
     urls: ActorUrls,
-    actorPrivateKey: ActorPrivateKey,
+    publicKeyPem: String,
     appearance: ActorAppearance,
     profile: ActorProfile,
     webPages: WebPageUrls?,
@@ -84,7 +84,7 @@ internal fun actorDocument(
         ActorPublicKey(
             id = urls.publicKeyId,
             owner = urls.actorId,
-            publicKeyPem = actorPrivateKey.publicKeyPem,
+            publicKeyPem = publicKeyPem,
         ),
     )
 }
