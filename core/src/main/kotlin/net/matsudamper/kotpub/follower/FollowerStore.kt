@@ -21,7 +21,7 @@ import net.matsudamper.kotpub.actor.RemoteActorProfile
  */
 interface FollowerStore {
     /**
-     * `Follow` を受けたことを記録して、`Accept` の送り出しを預ける。
+     * `Follow` を受けたことを記録して、`Accept` を配信キューに登録する。
      *
      * 同じ相手からの記録が既にあれば行は増やさない。まだ送れていない `Accept` が
      * 残っていれば、最後に受けた `Follow` への `Accept` で置き換える。

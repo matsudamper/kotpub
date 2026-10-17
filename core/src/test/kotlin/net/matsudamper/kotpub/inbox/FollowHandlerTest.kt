@@ -15,7 +15,7 @@ import net.matsudamper.kotpub.activity.OutgoingActivity
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.json.AppJson
 
-// Follow を受けてフォロワーとして記録し、Accept を預けるところまで。
+// Follow を受けてフォロワーとして記録し、Accept を配信キューに登録するところまで。
 // 記録と Accept が一方だけ残らないことがこのハンドラの肝になる。
 class FollowHandlerTest {
     private val recipient = TestLocalActor.urls
@@ -55,7 +55,7 @@ class FollowHandlerTest {
         AppJson.decodeFromString(OutgoingActivity.serializer(), followers.rows.single().acceptBody)
 
     @Test
-    fun `記録と一緒に Accept を預ける`() = runBlocking {
+    fun `記録と一緒に Accept を配信キューに登録する`() = runBlocking {
         val followers = FakeFollowerStore()
 
         handle(followHandler(followers), followJson())
@@ -74,7 +74,7 @@ class FollowHandlerTest {
     }
 
     @Test
-    fun `預けただけではフォロワーに数えない`() = runBlocking {
+    fun `配信キューに登録しただけではフォロワーに数えない`() = runBlocking {
         val followers = FakeFollowerStore()
 
         handle(followHandler(followers), followJson())
@@ -100,7 +100,7 @@ class FollowHandlerTest {
     }
 
     @Test
-    fun `記録できなければ Accept も預けない`() = runBlocking {
+    fun `記録できなければ Accept も配信キューに登録しない`() = runBlocking {
         val followers = FakeFollowerStore(failOnRecord = true)
 
         handle(followHandler(followers), followJson())
