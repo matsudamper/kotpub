@@ -30,7 +30,7 @@ data class InboxActivity(
     @SerialName("content")
     val content: String? = null,
 ) {
-    /** 実行した相手のアクター id。取れなければ null */
+    /** 実行した相手のアクター id。取得できなければ null */
     val actorId: String?
         get() = actor?.id
 }

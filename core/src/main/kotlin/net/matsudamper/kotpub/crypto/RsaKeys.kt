@@ -47,7 +47,7 @@ object RsaKeys {
      * 避けるため、保存するのは秘密鍵だけにして公開鍵は起動のたびにここで作る。
      */
     fun derivePublicKey(privateKey: PrivateKey): PublicKey {
-        // PKCS#8 で読めば通常こちらになる。CRT の情報を持たない鍵だと modulus しか取れず導けない
+        // PKCS#8 で読めば通常こちらになる。CRT の情報を持たない鍵だと modulus しか取得できず導けない
         require(privateKey is RSAPrivateCrtKey) {
             "公開鍵を導けない秘密鍵: ${privateKey.javaClass.name}"
         }

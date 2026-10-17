@@ -40,7 +40,7 @@ sealed interface LinkOrObject {
  * 指している対象の id。
  *
  * 埋め込まれたオブジェクトの場合は中の `id` を読む。id を持たないオブジェクトも
- * 書けてしまうので、取れなければ null。
+ * 書けてしまうので、取得できなければ null。
  */
 val LinkOrObject.id: String?
     get() =

@@ -81,7 +81,7 @@ class HttpRemoteActors(
     }
 
     /**
-     * 取れた文書から検証に使う鍵を読む。
+     * 取得できた文書から検証に使う鍵を読む。
      *
      * @param requestUrl 取得先。文書が名乗る鍵の持ち主が、取得先と同じホストか確かめる
      */
@@ -162,7 +162,7 @@ class HttpRemoteActors(
 
     /**
      * 1 回の inbox の処理で、署名の検証と宛先の引き当てのために何度か取りに行く。
-     * どの取得がキャッシュで済み、どれが何で取れなかったかを取得ごとに分けて残す
+     * どの取得がキャッシュで済み、どれが何で取得できなかったかを取得ごとに分けて残す
      */
     private suspend fun fetch(
         rawUrl: String,
@@ -194,7 +194,7 @@ class HttpRemoteActors(
 
     /**
      * アクター文書を取る。取得先の URL を [requestUrl] として渡すのは、
-     * 取れた文書の中身を突き合わせる基準がその URL のホストだから。
+     * 取得できた文書の中身を突き合わせる基準がその URL のホストだから。
      */
     private suspend fun fetchDocument(
         rawUrl: String,
@@ -318,7 +318,7 @@ class HttpRemoteActors(
     }
 
     /**
-     * [fetch] の結果。取れなかった理由のうち「もう無い」だけは区別する
+     * [fetch] の結果。取得できなかった理由のうち「もう無い」だけは区別する
      */
     private sealed interface DocumentFetch {
         data class Found(
