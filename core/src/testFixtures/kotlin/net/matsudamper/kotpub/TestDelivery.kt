@@ -1,6 +1,6 @@
 package net.matsudamper.kotpub
 
-import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 import net.matsudamper.kotpub.delivery.ActivityDelivery
 import net.matsudamper.kotpub.delivery.DeliveryResult
 
@@ -17,7 +17,7 @@ class TestDelivery(
 
     override suspend fun deliver(
         inbox: String,
-        sender: ActorUrls,
+        sender: LocalActor,
         body: ByteArray,
     ): DeliveryResult {
         delivered += Delivered(inbox = inbox, sender = sender, body = body.decodeToString())
@@ -29,7 +29,7 @@ class TestDelivery(
 
     data class Delivered(
         val inbox: String,
-        val sender: ActorUrls,
+        val sender: LocalActor,
         val body: String,
     )
 }

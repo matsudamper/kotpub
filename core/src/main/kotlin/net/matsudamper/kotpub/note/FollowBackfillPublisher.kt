@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.note
 import java.time.Instant
 import kotlinx.coroutines.sync.Semaphore
 import net.matsudamper.kotpub.activity.CreateNoteActivity
-import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 import net.matsudamper.kotpub.delivery.ActivityDelivery
 import net.matsudamper.kotpub.delivery.DeliveryResult
 import net.matsudamper.kotpub.entity.PublicNoteId
@@ -48,13 +48,13 @@ class FollowBackfillPublisher(
      *   届くので送らない。含めると、その分だけフォロー前の投稿が上限から押し出される
      */
     suspend fun deliverRecentNotes(
-        sender: ActorUrls,
+        sender: LocalActor,
         inbox: String,
         publishedBefore: Instant,
     ) {
         if (!running.tryAcquire()) {
             // 配れなくてもフォローは成立している。次の新着からは普通に届く
-            logger.warn("過去の投稿を配る余裕が無いので諦めた: ${sender.acct} → $inbox")
+            logger.warn("過去の投稿を配る余裕が無いので諦めた: ${sender.urls.acct} → $inbox")
             return
         }
 
@@ -66,7 +66,7 @@ class FollowBackfillPublisher(
     }
 
     private suspend fun deliver(
-        sender: ActorUrls,
+        sender: LocalActor,
         inbox: String,
         publishedBefore: Instant,
     ) {
@@ -74,7 +74,7 @@ class FollowBackfillPublisher(
         // 一覧の位置として渡して、絞ってから 5 件を取る。id は空にする。
         // 同じ時刻の投稿は id の降順に並ぶので、空の id より後ろには何も無い
         val recentNotes = notes.list(
-            username = sender.username,
+            username = sender.urls.username,
             after = NotePosition(publishedAt = publishedBefore, publicId = PublicNoteId("")),
             limit = BACKFILL_LIMIT,
         )
@@ -88,7 +88,7 @@ class FollowBackfillPublisher(
 
             val body = AppJson.encodeToString(
                 CreateNoteActivity.serializer(),
-                CreateNoteActivityFactory.create(sender = sender, note = note, webPages = webPages),
+                CreateNoteActivityFactory.create(sender = sender.urls, note = note, webPages = webPages),
             ).toByteArray()
 
             when (val result = delivery.deliver(inbox = inbox, sender = sender, body = body)) {
@@ -97,12 +97,12 @@ class FollowBackfillPublisher(
                 is DeliveryResult.Failed -> {
                     // 再送はしない。届かなくてもフォロー自体は成立しているので、
                     // 次の新着からは普通に届く
-                    logger.warn("過去の投稿を配れなかった: ${sender.acct} → $inbox ${note.publicId} ${result.reason}")
+                    logger.warn("過去の投稿を配れなかった: ${sender.urls.acct} → $inbox ${note.publicId} ${result.reason}")
                 }
             }
         }
 
-        logger.info("フォローされたので過去の投稿を配った: ${sender.acct} → $inbox 宛先=${recentNotes.size} 成功=$delivered")
+        logger.info("フォローされたので過去の投稿を配った: ${sender.urls.acct} → $inbox 宛先=${recentNotes.size} 成功=$delivered")
     }
 
     private companion object {

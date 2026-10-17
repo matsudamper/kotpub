@@ -5,6 +5,7 @@ import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.ActorLink
 import net.matsudamper.kotpub.actor.ActorProfile
 import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.LocalActor
 
 /**
  * テストで配信側に立つ、こちらのアクター。
@@ -22,6 +23,9 @@ object TestLocalActor {
     const val STORED_USERNAME: String = "feed1"
 
     val urls: ActorUrls = ActorUrls(domain = DOMAIN, username = USERNAME)
+
+    /** 署名が要る経路で送り主に立つ。鍵は [TestActorPrivateKey] を共有する */
+    val actor: LocalActor = LocalActor(urls = urls, privateKey = TestActorPrivateKey.value)
 
     val directory: ActorDirectory = ActorDirectory(
         domain = DOMAIN,
