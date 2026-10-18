@@ -12,6 +12,11 @@ permissions:
   packages: write
   pull-requests: write
 
+# 古い実行が後から終わって、新しいバージョンのコメントを上書きしないようにする
+concurrency:
+  group: publish-snapshot-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   publish:
     name: GitHub Packages へ公開
