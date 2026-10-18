@@ -27,7 +27,7 @@ class HttpUrlTest {
     }
 
     @Test
-    fun `同じホストかはUnicodeとpunycodeの綴りの違いを問わない`() {
+    fun `同じホストかはUnicodeとpunycodeの表記の違いを問わない`() {
         val unicode = assertNotNull(HttpUrl.parse("https://例え.テスト/users/a"))
         val punycode = assertNotNull(HttpUrl.parse("https://xn--r8jz45g.xn--zckzah/users/a"))
 

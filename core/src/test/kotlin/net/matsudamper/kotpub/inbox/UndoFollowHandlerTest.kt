@@ -139,7 +139,7 @@ class UndoFollowHandlerTest {
     }
 
     @Test
-    fun `Follow の object の綴りが大文字でも解除する`() = runBlocking {
+    fun `Follow の object の文字列が大文字でも解除する`() = runBlocking {
         val store = followers()
 
         handle(

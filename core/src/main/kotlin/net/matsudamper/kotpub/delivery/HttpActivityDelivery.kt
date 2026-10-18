@@ -38,7 +38,7 @@ class HttpActivityDelivery(
                 keyId = sender.urls.publicKeyId,
                 privateKey = sender.privateKey.privateKey,
                 method = "POST",
-                // 相手はリクエストラインの綴りで署名文字列を組み直す。
+                // 相手はリクエストラインの文字列で署名文字列を組み直す。
                 // パスを組み立て直すとクエリや末尾の差で合わなくなる
                 requestTarget = requestTarget(url),
                 host = hostHeader(url),

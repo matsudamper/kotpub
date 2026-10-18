@@ -7,7 +7,7 @@ import net.matsudamper.kotpub.http.QueryParameter
  *
  * WebFinger の `subject`、Actor の `id`、`publicKey.id`、inbox の宛先はすべて
  * ドメインとユーザー名から機械的に決まる。組み立てを散らすと 1 箇所だけ
- * 綴りが違う、という形の不具合になり、相手側のキャッシュに残って厄介なので
+ * 文字列が違う、という形の不具合になり、相手側のキャッシュに残って厄介なので
  * ここに集約する。
  *
  * scheme は常に `https`。ActivityPub の実装は平文 HTTP のアクターを
@@ -69,7 +69,7 @@ data class ActorUrls(
         const val SHARED_INBOX_PATH: String = "/inbox"
 
         /**
-         * アクターの id から見たプロフィール画像のパス。利用側のアプリも同じ綴りを使う
+         * アクターの id から見たプロフィール画像のパス。利用側のアプリも同じパスを使う
          */
         const val ICON_PATH: String = "/icon"
 

@@ -45,8 +45,8 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `保存されている綴りで返る`() {
-        // 要求された綴りをそのまま返すと、同じアカウントが 2 つの ID で相手側にキャッシュされる
+    fun `保存されている文字列で返る`() {
+        // 要求された文字列をそのまま返すと、同じアカウントが 2 つの ID で相手側にキャッシュされる
         assertEquals("https://example.com/users/Gihyo", directory.resolve("gihyo")?.actorId)
     }
 

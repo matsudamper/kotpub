@@ -10,7 +10,7 @@ import net.matsudamper.kotpub.actor.LocalActor
 /**
  * テストで配信側に立つ、こちらのアクター。
  *
- * ルーティングのテストはどれもアクターを 1 つ必要とするので、綴りをここに集める。
+ * ルーティングのテストはどれもアクターを 1 つ必要とするので、名前と URL をここに集める。
  * 相手側は [TestRemoteActor]。
  */
 object TestLocalActor {

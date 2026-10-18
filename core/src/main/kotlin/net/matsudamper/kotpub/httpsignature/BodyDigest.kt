@@ -10,7 +10,7 @@ import java.util.Base64
  * ボディの同一性は `Digest` ヘッダを署名対象に含めることで担保する。
  * つまり `Digest` を検証しない限り、署名が通ってもボディは差し替え可能になる。
  *
- * 形式は `SHA-256=<Base64>`。Mastodon はこの綴りで送ってくる。
+ * 形式は `SHA-256=<Base64>`。Mastodon はこの形式で送ってくる。
  */
 object BodyDigest {
     private const val ALGORITHM = "SHA-256"

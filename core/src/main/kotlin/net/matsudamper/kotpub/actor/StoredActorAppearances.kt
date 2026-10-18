@@ -10,7 +10,7 @@ interface StoredActorAppearances {
     /**
      * 名前で探す。何も持たないアカウントは [ActorAppearance.EMPTY]。
      *
-     * 渡すのは [StoredActorNames] が返した保存側の綴り。
+     * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */
     fun find(username: String): ActorAppearance
 }
