@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
   packages: write
+  pull-requests: write
+
+# 古い実行が後から終わって、新しいバージョンのコメントを上書きしないようにする
+concurrency:
+  group: publish-snapshot-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   publish:
@@ -51,3 +57,10 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew publishAllPublicationsToGitHubPackagesRepository -Pversion="$VERSION"
+
+      - name: PR に公開したバージョンを書く
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: pr-version
+          message: "試用版を公開しました: `${{ env.VERSION }}`"
