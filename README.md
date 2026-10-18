@@ -40,6 +40,7 @@ repositories {
 
 dependencies {
     implementation("net.matsudamper.kotpub:core:latest-SNAPSHOT")
+    // PR の試用版は 0.0.0-pr<番号>-<head のコミット 7 桁> を指定する
 }
 ```
 
