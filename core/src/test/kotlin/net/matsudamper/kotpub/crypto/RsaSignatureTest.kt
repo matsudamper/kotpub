@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 // SHA256withRSA での署名と検証を確認する。
 // RsaKeysTest と同じく nativeTest でも実行され、
-// Phase 2 の HTTP Signatures が native-image 上で成立することの確認を兼ねる。
+// HTTP Signatures が native-image 上で成立することの確認を兼ねる。
 class RsaSignatureTest {
     private val data = "(request-target): post /users/feed/inbox".toByteArray()
 
