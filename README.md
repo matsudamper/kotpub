@@ -37,10 +37,10 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 
 ## 公開
 
-正式版（Maven Central と GitHub Packages）:
+正式版（Maven Central / GitHub Packages / maven.matsudamper.net）:
 
-- `v0.1.0` のようなタグを push する
-- または Actions の Publish release を手動実行し、バージョンを指定する（`v<version>` タグと GitHub Release を作り、Maven Central と GitHub Packages に出す）。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
+- `v0.1.0` のようなタグを push する（GitHub Packages と maven.matsudamper.net に出す）
+- または Actions の Publish release を手動実行し、バージョンを指定する（公開に成功した後に `v<version>` タグと GitHub Release を作る）。配布先はチェックで選ぶ（Maven Central はデフォルトオフ、GitHub Packages と maven.matsudamper.net はデフォルトオン）。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
 
 PR では `0.0.0-pr<番号>-<head のコミット 7 桁>` で試用版を出す。マージ前の変更を試すときに使う。
 

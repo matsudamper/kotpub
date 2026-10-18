@@ -1,6 +1,7 @@
 name: Publish release
 
-# 正式版: 手動で GitHub Release + v タグを作る、または v* タグの push で、Maven Central と GitHub Packages に出す
+# 正式版: 手動実行または v* タグの push で公開する。手動実行では公開に成功した後に GitHub Release + v タグを作る
+# 配布先は手動実行時に選ぶ。タグ push では各入力のデフォルト値と同じ配布先に出す
 on:
   push:
     tags: ["v*"]
@@ -15,6 +16,21 @@ on:
         required: true
         type: boolean
         default: true
+      publish_maven_central:
+        description: "Maven Central に公開する"
+        required: true
+        type: boolean
+        default: false
+      publish_github_packages:
+        description: "GitHub Packages に公開する"
+        required: true
+        type: boolean
+        default: true
+      publish_matsudamper_maven:
+        description: "maven.matsudamper.net に公開する"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -22,7 +38,7 @@ permissions:
 
 jobs:
   publish:
-    name: リリースと Maven Central / GitHub Packages 公開
+    name: リリースと Maven リポジトリへの公開
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -59,6 +75,47 @@ jobs:
           echo "TAG=v$version" >> "$GITHUB_ENV"
           echo "::notice::公開するバージョン: $version"
 
+      - name: 公開タスクを決める
+        env:
+          PUBLISH_MAVEN_CENTRAL: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_maven_central || false }}
+          PUBLISH_GITHUB_PACKAGES: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_github_packages }}
+          PUBLISH_MATSUDAMPER_MAVEN: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_matsudamper_maven }}
+        run: |
+          set -euo pipefail
+          tasks=()
+          if [ "$PUBLISH_MAVEN_CENTRAL" = "true" ]; then
+            tasks+=(publishToMavenCentral)
+            echo "MAVEN_CENTRAL_PUBLISHING=true" >> "$GITHUB_ENV"
+          else
+            echo "MAVEN_CENTRAL_PUBLISHING=false" >> "$GITHUB_ENV"
+          fi
+          if [ "$PUBLISH_GITHUB_PACKAGES" = "true" ]; then
+            tasks+=(publishAllPublicationsToGitHubPackagesRepository)
+          fi
+          if [ "$PUBLISH_MATSUDAMPER_MAVEN" = "true" ]; then
+            tasks+=(publishAllPublicationsToMatsudamperMavenRepository)
+          fi
+          if [ "${#tasks[@]}" -eq 0 ]; then
+            echo "::error::配布先が 1 つも選ばれていません"
+            exit 1
+          fi
+          echo "PUBLISH_TASKS=${tasks[*]}" >> "$GITHUB_ENV"
+          echo "::notice::公開タスク: ${tasks[*]}"
+
+      - name: publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_MATSUDAMPER_USERNAME: ${{ secrets.MAVEN_MATSUDAMPER_USERNAME }}
+          MAVEN_MATSUDAMPER_TOKEN: ${{ secrets.MAVEN_MATSUDAMPER_TOKEN }}
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        # PUBLISH_TASKS は空白区切りで複数タスクを渡すため、あえてクォートしない。
+        # --continue: 1 つの配布先で失敗しても残りの配布先へのアップロードは続ける（ステップは失敗扱いになり Release は作らない）
+        run: ./gradlew --continue $PUBLISH_TASKS -PmavenCentralPublishing="$MAVEN_CENTRAL_PUBLISHING" -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
+
       - name: GitHub Release を作成
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -73,13 +130,3 @@ jobs:
             args+=(--latest=false)
           fi
           gh "${args[@]}"
-
-      - name: publish
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_PRIVATE_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
-        run: ./gradlew publish -PmavenCentralPublishing=true -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
