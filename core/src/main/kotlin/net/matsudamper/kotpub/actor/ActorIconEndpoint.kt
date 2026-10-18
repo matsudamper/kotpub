@@ -69,7 +69,7 @@ interface ActorIcons {
 /**
  * プロフィール画像の中身。
  *
- * @param contentType 取得元が名乗った種類。そのまま返す
+ * @param contentType 取得元が返した種類。そのまま返す
  * @param version 取得元の URL から決まる値。要求された値と一致すれば入れ替わらない中身と分かる
  * @param cacheFor 取得元から決まる値が付いていない URL で来たときに持たせる時間。0 なら持たせない
  */

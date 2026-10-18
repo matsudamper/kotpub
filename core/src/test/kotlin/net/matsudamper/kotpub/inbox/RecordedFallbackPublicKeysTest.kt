@@ -98,7 +98,7 @@ class RecordedFallbackPublicKeysTest {
             // 削除された相手の Delete を検証できるのはこの経路だけ
             val found = lookup as PublicKeyLookup.Found
             assertEquals(TestRemoteActor.keyPair.public, found.key.publicKey)
-            // 持ち主は keyId の名乗りではなく、記録したアクター id
+            // 持ち主は keyId に書かれた値ではなく、記録したアクター id
             assertEquals(TestRemoteActor.ACTOR_ID, found.key.owner)
             assertEquals(TestRemoteActor.KEY_ID, found.key.keyId)
         }

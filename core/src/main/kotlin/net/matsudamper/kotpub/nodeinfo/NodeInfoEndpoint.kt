@@ -13,7 +13,7 @@ import net.matsudamper.kotpub.http.MediaType
  * @param domain `/nodeinfo/2.1` の絶対 URL を組み立てるためだけに使う。
  *   [net.matsudamper.kotpub.actor.ActorUrls] と違いここでは id 等を持たないので、
  *   専用の URL 組み立てクラスは作らずそのまま受け取る
- * @param software 名乗るソフトウェア。使う側のアプリケーションの名前とバージョンを渡す
+ * @param software 公開するソフトウェア情報。使う側のアプリケーションの名前とバージョンを渡す
  */
 class NodeInfoEndpoint(
     private val domain: String,
