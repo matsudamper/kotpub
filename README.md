@@ -56,7 +56,7 @@ Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.m
 正式版（maven.matsudamper.net / GitHub Packages）:
 
 - `v0.1.0` のようなタグを push する（maven.matsudamper.net と GitHub Packages に出す）
-- または Actions の Publish release を手動実行し、バージョンを指定する（公開に成功した後に `v<version>` タグと GitHub Release を作る）。配布先はチェックで選ぶ。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
+- または Actions の Publish release を手動実行し、バージョンを指定する（公開に成功した後に `v<version>` タグと GitHub Release を作る）。Latest にするかは入力で選べる（オン時はリリースノートを自動生成）
 
 PR では `0.0.0-pr<番号>-<head のコミット 7 桁>` で試用版を出す。マージ前の変更を試すときに使う。
 
