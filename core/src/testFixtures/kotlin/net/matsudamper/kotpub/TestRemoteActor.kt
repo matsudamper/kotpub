@@ -18,8 +18,8 @@ object TestRemoteActor {
     val keyPair: KeyPair by lazy { RsaKeys.generateKeyPair() }
 
     /**
-     * 何も名乗っていない相手のプロフィール。
-     * 一覧の表示を見ないテストは、相手が名乗ったかどうかで変わらない
+     * 何も設定していない相手のプロフィール。
+     * 一覧の表示を見ないテストは、相手が設定したかどうかで変わらない
      */
     val noProfile: RemoteActorProfile =
         RemoteActorProfile(

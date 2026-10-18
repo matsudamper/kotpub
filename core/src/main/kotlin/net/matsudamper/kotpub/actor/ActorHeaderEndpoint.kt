@@ -68,7 +68,7 @@ interface ActorHeaders {
 /**
  * プロフィールヘッダーの中身。
  *
- * @param contentType 取得元が名乗った種類。そのまま返す
+ * @param contentType 取得元が返した種類。そのまま返す
  * @param version 中身から決まる値。要求された値と一致すれば同じ中身と分かる
  * @param cacheFor 見に来た側に持たせる時間。0 なら持たせない
  */

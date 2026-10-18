@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * interface にしてあるのは差し替えのため。プロセスをまたいでキャッシュしたくなったら
  * [createExpiringCache] の戻りを変えれば済む。
  *
- * キーは外から来る値（相手が名乗った `keyId`）になりうる。使い捨てのキーを
+ * キーは外から来る値（相手が指定した `keyId`）になりうる。使い捨てのキーを
  * いくらでも作れる以上、期限切れの行は読み直されなくても片付ける必要がある。
  */
 internal interface ExpiringCache<K : Any, V : Any> {
