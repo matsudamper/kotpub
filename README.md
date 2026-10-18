@@ -7,8 +7,6 @@ HTTP Signature の署名と検証、相手のアクター文書の取得、ア�
 
 ### 正式版
 
-maven.matsudamper.net から取得する。
-
 ```kotlin
 repositories {
     maven { url = uri("https://maven.matsudamper.net/releases") }
