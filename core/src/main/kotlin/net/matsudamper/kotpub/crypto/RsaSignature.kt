@@ -4,12 +4,13 @@ import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.Signature
 import java.security.SignatureException
+import net.matsudamper.kotpub.httpsignature.SigningString
 
 /**
  * RSA-SHA256 の署名と検証。
  *
  * HTTP Signatures の `algorithm="rsa-sha256"` に対応する。
- * 署名対象のバイト列（署名文字列）の組み立ては [net.matsudamper.kotpub.httpsignature.SigningString] が受け持つ。
+ * 署名対象のバイト列（署名文字列）の組み立ては [SigningString] が受け持つ。
  */
 object RsaSignature {
     private const val ALGORITHM = "SHA256withRSA"
