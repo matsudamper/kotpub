@@ -12,7 +12,7 @@ class RemoteActorDocumentTest {
         AppJson.decodeFromString(RemoteActorDocument.serializer(), json).profile()
 
     @Test
-    fun `文字列で名乗った名前とアイコンを読む`() {
+    fun `文字列で書かれた名前とアイコンを読む`() {
         val profile = profile(
             """
             {"id":"https://remote.example/users/alice","preferredUsername":"alice","name":"アリス",
@@ -34,7 +34,7 @@ class RemoteActorDocumentTest {
     }
 
     @Test
-    fun `名前がオブジェクトなら名乗っていない扱い`() {
+    fun `名前がオブジェクトなら未設定の扱い`() {
         val profile = profile("""{"id":"https://remote.example/users/alice","name":{"ja":"アリス"}}""")
 
         assertNull(profile.displayName)
@@ -55,7 +55,7 @@ class RemoteActorDocumentTest {
     }
 
     @Test
-    fun `https でない URL は名乗っていない扱い`() {
+    fun `https でない URL は未設定の扱い`() {
         val profile = profile(
             """{"id":"https://remote.example/users/alice","url":"http://remote.example/@alice","icon":"data:image/png;base64,AAAA"}""",
         )

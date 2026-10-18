@@ -50,7 +50,7 @@ class RecordedFallbackPublicKeys(
                 // 書き込めない間、検証を通るはずのアクティビティまで落ちる
                 runCatching {
                     followers.rememberPublicKeyPem(
-                        // 引き当てるのは keyId の名乗りではなく、検証で決まった持ち主
+                        // 引き当てるのは keyId に書かれた値ではなく、検証で決まった持ち主
                         actorUri = lookup.key.owner,
                         publicKeyPem = RsaKeys.encodeToPem(lookup.key.publicKey),
                     )
@@ -79,7 +79,7 @@ class RecordedFallbackPublicKeys(
                 ?: return null
 
         // 持ち主はこちらの記録で決める。相手の文書を取得できていない以上、
-        // keyId の名乗りを裏付けるものは記録した行しか無い
+        // keyId に書かれた値を裏付けるものは記録した行しか無い
         return PublicKeyLookup.Found(
             SignatureKey(keyId = keyId, owner = actorUri, publicKey = publicKey),
         )

@@ -274,7 +274,7 @@ class InboxServiceTest {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
-            // 署名は自分の鍵で正しく作りつつ、actor だけ他人を名乗る
+            // 署名は自分の鍵で正しく作りつつ、actor だけ他人の id にする
             val request = signedRequest(follow(actor = "https://remote.example/users/bob"))
             val result = service(listOf(handler)).receive(recipient, request)
 
@@ -293,7 +293,7 @@ class InboxServiceTest {
 
             val result = service(listOf(handler)).receive(recipient, signedRequest(body))
 
-            // 名乗っていない以上なりすましようが無いので、署名した相手のものとして扱う
+            // actor が無い以上なりすましようが無いので、署名した相手のものとして扱う
             assertEquals(InboxResult.Accepted, result)
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertNull(call.activity.actorId)

@@ -147,7 +147,7 @@ class HttpSignatureVerifierTest {
     @Test
     fun `別の鍵で署名されていたら通らない`() =
         runBlocking {
-            // keyId は本人のものを名乗りつつ、署名だけ手元の鍵で作った場合
+            // keyId は本人のものを指定しつつ、署名だけ手元の鍵で作った場合
             val headers =
                 TestSigning.headers(
                     privateKey = RsaKeys.generateKeyPair().private,
