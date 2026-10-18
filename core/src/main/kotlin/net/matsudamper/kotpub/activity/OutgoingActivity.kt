@@ -8,8 +8,8 @@ import net.matsudamper.kotpub.activitypub.StringListSerializer
 /**
  * こちらから相手の inbox に送るアクティビティ。
  *
- * いま送るのは `Follow` に返す `Accept` だけ。Phase 4 で投稿を配信するときの
- * `Create` も同じ形になるので、`type` と `object` を差し替えられるようにしてある。
+ * 送るのは `Follow` に返す `Accept`。`type` と `object` を差し替えられるようにしてあるので、
+ * 受け取ったものをそのまま `object` に載せて返す形のアクティビティに使い回せる。
  *
  * `@context` に `security/v1` は入れない。[net.matsudamper.kotpub.activitypub.Actor] と違って鍵を含まないため。
  */

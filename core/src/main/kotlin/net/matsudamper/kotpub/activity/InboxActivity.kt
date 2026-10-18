@@ -8,7 +8,6 @@ import net.matsudamper.kotpub.activitypub.id
 /**
  * inbox で受け取るアクティビティのうち、今のところ見ている部分だけ。
  *
- * `Follow` / `Undo` / `Delete` などの種類ごとの扱いは Phase 2 以降で足す。
  * ここでは「誰が」「何をしようとしているか」をログに出し、署名した相手と
  * `actor` が一致しているかを確かめるところまで。
  *
