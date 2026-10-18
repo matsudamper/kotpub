@@ -48,6 +48,14 @@ publishing {
                 password = providers.environmentVariable("GITHUB_TOKEN").orNull
             }
         }
+        maven {
+            name = "MatsudamperMaven"
+            url = uri("https://maven.matsudamper.net")
+            credentials {
+                username = providers.environmentVariable("MAVEN_MATSUDAMPER_USERNAME").orNull
+                password = providers.environmentVariable("MAVEN_MATSUDAMPER_TOKEN").orNull
+            }
+        }
     }
 }
 
