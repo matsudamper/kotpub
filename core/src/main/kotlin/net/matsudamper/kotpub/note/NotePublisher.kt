@@ -13,8 +13,8 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * 投稿の `Create{Note}` と、投稿を消す `Delete{Note}` を組み立てる。
  *
- * どれも DB を触らず HTTP も出さない。記録と配信キューへの登録は `:backend` が repository の
- * 配信キューへ登録するメソッドで 1 トランザクションにまとめる。記録と配信をここで続けて行うと、
+ * どれも DB を触らず HTTP も出さない。記録と配信キューへの登録は利用側のアプリが
+ * 1 トランザクションにまとめる。記録と配信をここで続けて行うと、
  * 呼び出し側の記録と別々に確定して、途中で落ちたときに同じ内容を二重に投稿する。
  */
 class NotePublisher(

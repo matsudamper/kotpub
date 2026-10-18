@@ -16,7 +16,7 @@ interface StoredActorProfiles {
 }
 
 /**
- * 管理画面から編集できるプロフィール。
+ * 利用側のアプリが編集するプロフィール。
  *
  * @param displayName Actor の `name` に出す表示名。未設定なら null
  * @param summary Actor の `summary` に出す説明文。プレーンテキストで持つ。未設定なら null

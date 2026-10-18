@@ -5,7 +5,7 @@ import net.matsudamper.kotpub.favourite.FavouriteStore
 import net.matsudamper.kotpub.favourite.FavouriteStore.ReceivedFavourite
 
 /**
- * SQL の振る舞いは `:backend:repository` のテストが本物の SQLite で確かめる。
+ * SQL の振る舞いは利用側のアプリのテストが本物の DB で確かめる。
  * こちらが受け持つのは、inbox のハンドラが何を記録して何を消したかの確認。
  */
 class FakeFavouriteStore : FavouriteStore {
