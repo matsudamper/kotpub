@@ -42,7 +42,7 @@ publishing {
         }
         maven {
             name = "MatsudamperMaven"
-            url = uri("https://maven.matsudamper.net")
+            url = uri("https://maven.matsudamper.net/releases")
             credentials {
                 username = providers.environmentVariable("MAVEN_MATSUDAMPER_USERNAME").orNull
                 password = providers.environmentVariable("MAVEN_MATSUDAMPER_TOKEN").orNull
