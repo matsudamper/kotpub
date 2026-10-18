@@ -12,7 +12,7 @@ interface StoredActorPublicKeys {
      * 名前で引く。返すのは Actor JSON の `publicKey.publicKeyPem` にそのまま入る
      * X.509 SubjectPublicKeyInfo の PEM（[ActorPrivateKey.publicKeyPem] と同じ形）。
      *
-     * 渡すのは [StoredActorNames] が返した保存側の綴り。
+     * 渡すのは [StoredActorNames] が返した保存されている文字列。
      * 鍵の無いアクターは署名も検証もされないので、存在するアクターには必ず鍵がある前提
      */
     fun find(username: String): String

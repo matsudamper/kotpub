@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.actor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// URL の綴りは一度 Mastodon 側にキャッシュされると直せないので、
+// URL の文字列は一度 Mastodon 側にキャッシュされると直せないので、
 // 組み立ての結果を文字列として固定しておく。
 class ActorUrlsTest {
     @Test

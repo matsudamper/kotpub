@@ -40,7 +40,7 @@ class WebFingerEndpoint(
             serializer = WebFingerResponse.serializer(),
             value =
             WebFingerResponse(
-                // 要求された綴りではなく正規の acct を返す。
+                // 要求された文字列ではなく正規の acct を返す。
                 // 大文字小文字が混ざったまま返すと相手側の突き合わせで揺れる
                 subject = urls.acct,
                 aliases = listOf(urls.actorId),

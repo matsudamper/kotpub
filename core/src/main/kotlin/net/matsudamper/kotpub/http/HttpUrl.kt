@@ -29,12 +29,12 @@ internal class HttpUrl private constructor(
             val authority = iri.hostAndPort() ?: return null
 
             // Unicode のホスト名は、送るときと同じ punycode にする。
-            // Host ヘッダは署名に入るので、送るときの綴りと揃っていないと検証が通らない
+            // Host ヘッダは署名に入るので、送るときの文字列と揃っていないと検証が通らない
             val host = runCatching { IDN.toASCII(authority.host) }.getOrNull()?.takeIf { it.isNotEmpty() }
                 ?: return null
 
             // パスやクエリに percent-encoding されていない非 ASCII 文字があると、rawPath はそれを
-            // そのまま返す。送るときは UTF-8 で符号化されるので、署名する綴りもそちらに揃える
+            // そのまま返す。送るときは UTF-8 で符号化されるので、署名する文字列もそちらに揃える
             val ascii = runCatching { URI(iri.toASCIIString()) }.getOrNull() ?: return null
 
             return HttpUrl(

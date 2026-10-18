@@ -88,7 +88,7 @@ class InboxEndpoint(
 /**
  * inbox に届いたリクエスト。
  *
- * @param requestTarget パスとクエリ。送信側が署名したのはリクエストラインの綴りそのものなので、
+ * @param requestTarget パスとクエリ。送信側が署名したのはリクエストラインの文字列そのものなので、
  *   パスを組み直さずにそのまま渡すこと。末尾やクエリの差で署名が合わなくなる
  * @param readBody ボディを読む。`Content-Length` で弾けなかったときだけ呼ばれる。
  *   渡した上限を 1 バイト超えるところまでで読むのを止めること。`Content-Length` の無い
