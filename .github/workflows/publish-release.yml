@@ -1,6 +1,6 @@
 name: Publish release
 
-# 正式版: 手動で GitHub Release + v タグを作る、または v* タグの push で公開する
+# 正式版: 手動実行または v* タグの push で公開する。手動実行では公開に成功した後に GitHub Release + v タグを作る
 # 配布先は手動実行時に選ぶ。タグ push では各入力のデフォルト値と同じ配布先に出す
 on:
   push:
@@ -102,6 +102,19 @@ jobs:
           echo "PUBLISH_TASKS=${tasks[*]}" >> "$GITHUB_ENV"
           echo "::notice::公開タスク: ${tasks[*]}"
 
+      - name: publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_MATSUDAMPER_USERNAME: ${{ secrets.MAVEN_MATSUDAMPER_USERNAME }}
+          MAVEN_MATSUDAMPER_TOKEN: ${{ secrets.MAVEN_MATSUDAMPER_TOKEN }}
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        # PUBLISH_TASKS は空白区切りで複数タスクを渡すため、あえてクォートしない
+        run: ./gradlew $PUBLISH_TASKS -PmavenCentralPublishing="$MAVEN_CENTRAL_PUBLISHING" -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
+
       - name: GitHub Release を作成
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -116,16 +129,3 @@ jobs:
             args+=(--latest=false)
           fi
           gh "${args[@]}"
-
-      - name: publish
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_MATSUDAMPER_USERNAME: ${{ secrets.MAVEN_MATSUDAMPER_USERNAME }}
-          MAVEN_MATSUDAMPER_TOKEN: ${{ secrets.MAVEN_MATSUDAMPER_TOKEN }}
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_PRIVATE_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
-        # PUBLISH_TASKS は空白区切りで複数タスクを渡すため、あえてクォートしない
-        run: ./gradlew $PUBLISH_TASKS -PmavenCentralPublishing="$MAVEN_CENTRAL_PUBLISHING" -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
