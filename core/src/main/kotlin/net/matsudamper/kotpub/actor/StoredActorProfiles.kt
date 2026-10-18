@@ -10,7 +10,7 @@ interface StoredActorProfiles {
     /**
      * 名前で引く。何も設定していないアカウントは [ActorProfile.EMPTY]。
      *
-     * 渡すのは [StoredActorNames] が返した保存側の綴り。
+     * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */
     fun find(username: String): ActorProfile
 }

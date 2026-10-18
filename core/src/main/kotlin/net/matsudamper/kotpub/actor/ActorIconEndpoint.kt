@@ -61,7 +61,7 @@ interface ActorIcons {
     /**
      * 名前で引く。アイコンが無いか、取ってこられなければ null。
      *
-     * 渡すのは [StoredActorNames] が返した保存側の綴り。
+     * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */
     suspend fun find(username: String): ActorIcon?
 }

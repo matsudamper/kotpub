@@ -14,7 +14,7 @@ import net.matsudamper.kotpub.activity.InboxActivity
  * 確認は済んでいる。
  */
 interface InboxActivityHandler {
-    /** 処理するアクティビティの `type`。`"Follow"` のように綴りそのものを返す */
+    /** 処理するアクティビティの `type`。`"Follow"` のように文字列そのものを返す */
     val type: String
 
     /**

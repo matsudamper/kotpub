@@ -60,7 +60,7 @@ interface ActorHeaders {
     /**
      * 名前で引く。ヘッダーが無ければ null。
      *
-     * 渡すのは [StoredActorNames] が返した保存側の綴り。
+     * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */
     suspend fun find(username: String): ActorHeader?
 }

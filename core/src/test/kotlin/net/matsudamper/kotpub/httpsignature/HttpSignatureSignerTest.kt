@@ -86,10 +86,10 @@ class HttpSignatureSignerTest {
     }
 
     @Test
-    fun `Date は GMT の綴りで入る`() {
+    fun `Date は GMT の形式で入る`() {
         val date = sign().getValue("Date")
 
-        // RFC 1123 のパーサは Z を受け付けない。相手が読める綴りであることを見る
+        // RFC 1123 のパーサは Z を受け付けない。相手が読める形式であることを見る
         assertTrue(date.endsWith(" GMT"), date)
         assertTrue(HttpDate.parse(date) != null, date)
     }

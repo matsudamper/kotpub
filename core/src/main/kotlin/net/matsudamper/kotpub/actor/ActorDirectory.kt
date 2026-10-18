@@ -16,7 +16,7 @@ class ActorDirectory(
     /**
      * パスの `{username}` から引く。
      *
-     * 大文字小文字は保存側で吸収する。返すのは保存されている綴り。
+     * 大文字小文字は保存側で吸収する。返すのは保存されている文字列。
      */
     fun resolve(username: String?): ActorUrls? {
         if (username.isNullOrEmpty()) return null
