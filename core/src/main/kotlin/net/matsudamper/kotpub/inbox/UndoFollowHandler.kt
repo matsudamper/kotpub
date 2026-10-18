@@ -87,7 +87,7 @@ class UndoFollowHandler(
      * `Follow` でなければ null を返して呼び出し側に何もさせない。
      * `Follow` だと分かっていて id が無い場合も null になるが、そのときは
      * [FollowerStore.remove] に null を渡して id を問わずに消す、とは区別が付かない。
-     * 区別が要るほどの実装差は見ていないので、id が無ければ消さない側に倒す。
+     * 区別が要るほどの実装差は見ていないので、id が無ければ消さない方を選ぶ。
      */
     private fun embeddedFollow(
         recipient: InboxRecipient,
