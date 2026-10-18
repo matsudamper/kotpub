@@ -94,7 +94,7 @@ class OutboxEndpoint(
 
         val page = notes.list(
             username = urls.username,
-            // 読めない cursor は先頭に倒す。相手が辿るだけの値なので、
+            // 読めない cursor は先頭のページとして扱う。相手が辿るだけの値なので、
             // 壊れていることを教えても直しようが無い
             after = cursor.ifEmpty { null }?.let { decodeCursor(it) },
             limit = COLLECTION_PAGE_SIZE,
@@ -175,7 +175,7 @@ private fun pageUrl(
 private fun NotePosition.encodeCursor(): String = "${publishedAt.epochSecond}_${publishedAt.nano}_${publicId.value}"
 
 /**
- * 読めない形なら null。壊れた cursor は先頭に倒す。
+ * 読めない形なら null。壊れた cursor は先頭のページとして扱う。
  * 相手に教えても直しようが無いので、拒否はしない
  */
 private fun decodeCursor(raw: String): NotePosition? {
