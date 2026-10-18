@@ -75,21 +75,6 @@ jobs:
           echo "TAG=v$version" >> "$GITHUB_ENV"
           echo "::notice::公開するバージョン: $version"
 
-      - name: GitHub Release を作成
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAKE_LATEST: ${{ inputs.make_latest }}
-        run: |
-          set -euo pipefail
-          args=(release create "$TAG" --target "$GITHUB_SHA" --title "$TAG")
-          if [ "$MAKE_LATEST" = "true" ]; then
-            args+=(--generate-notes --latest)
-          else
-            args+=(--latest=false)
-          fi
-          gh "${args[@]}"
-
       - name: 公開タスクを決める
         env:
           PUBLISH_MAVEN_CENTRAL: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_maven_central || false }}
@@ -116,6 +101,21 @@ jobs:
           fi
           echo "PUBLISH_TASKS=${tasks[*]}" >> "$GITHUB_ENV"
           echo "::notice::公開タスク: ${tasks[*]}"
+
+      - name: GitHub Release を作成
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAKE_LATEST: ${{ inputs.make_latest }}
+        run: |
+          set -euo pipefail
+          args=(release create "$TAG" --target "$GITHUB_SHA" --title "$TAG")
+          if [ "$MAKE_LATEST" = "true" ]; then
+            args+=(--generate-notes --latest)
+          else
+            args+=(--latest=false)
+          fi
+          gh "${args[@]}"
 
       - name: publish
         env:
