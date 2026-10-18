@@ -12,8 +12,8 @@ import net.matsudamper.kotpub.actor.RemoteActorProfile
  * 用意する。ActivityPub 側が DB を知ると、フォローの扱いを変えるたびに
  * テーブルの都合が混ざってくる。
  *
- * こちらのアカウントは名前で指す。引き当ての正は
- * [net.matsudamper.kotpub.actor.ActorDirectory] で、その結果の綴りが渡ってくる。
+ * こちらのアカウントは名前で指す。引き当ては
+ * [net.matsudamper.kotpub.actor.ActorDirectory] が行い、その結果の綴りが渡ってくる。
  *
  * `Accept` を返す前のフォローも記録する。相手から見ると成立していないので
  * [list] と [count] と [deliveryTargets] には出さないが、送り直されたときに
