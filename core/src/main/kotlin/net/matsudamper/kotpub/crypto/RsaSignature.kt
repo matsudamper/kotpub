@@ -9,7 +9,6 @@ import java.security.SignatureException
  * RSA-SHA256 の署名と検証。
  *
  * HTTP Signatures の `algorithm="rsa-sha256"` に対応する。
- * 署名対象のバイト列（署名文字列）の組み立ては Phase 2 で別に用意する。
  */
 object RsaSignature {
     private const val ALGORITHM = "SHA256withRSA"

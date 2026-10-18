@@ -8,8 +8,8 @@ import kotlin.test.assertTrue
 
 // 鍵の生成と PEM の相互変換を確認する。
 // このテストは nativeTest でも実行され、JCA が native-image 上で動くことの確認も兼ねる。
-// native バイナリで RSA が使えないと Phase 1 のアクター公開鍵も
-// Phase 2 の署名も成立しないため、ここで先に落とす。
+// native バイナリで RSA が使えないとアクター公開鍵も HTTP Signatures も
+// 成立しないため、ここで先に落とす。
 class RsaKeysTest {
     @Test
     fun `2048bit の鍵ペアを生成する`() {
