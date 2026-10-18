@@ -55,18 +55,7 @@ jobs:
 
       - name: PR に公開したバージョンを書く
         if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          # push のたびにコメントが増えないよう、目印付きのコメントを上書きする
-          marker="<!-- kotpub-pr-version -->"
-          body="$(printf '%s\n試用版を公開しました: `%s`' "$marker" "$VERSION")"
-          comment_id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)"
-          if [ -n "$comment_id" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body"
-          else
-            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
-          fi
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: pr-version
+          message: "試用版を公開しました: `${{ env.VERSION }}`"
