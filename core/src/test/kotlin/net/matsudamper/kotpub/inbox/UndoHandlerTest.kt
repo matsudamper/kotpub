@@ -205,7 +205,7 @@ class UndoHandlerTest {
             earlyUndoneLikes = earlyUndoneLikes,
         )
 
-        // Mastodon と同じく、Like の id は記録していないので引き当てられない
+        // Mastodon と同じく、Like の id は記録していないので突き合わせられない
         assertEquals(1, favourites.rows.size)
         assertEquals(1, followers.rows.size)
         assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))

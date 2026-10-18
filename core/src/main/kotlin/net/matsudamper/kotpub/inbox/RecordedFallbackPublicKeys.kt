@@ -10,7 +10,7 @@ import net.matsudamper.kotpub.stamp.StampStore
 import org.slf4j.LoggerFactory
 
 /**
- * 相手が消えて取得できなくなった公開鍵を、こちらの記録から引く。
+ * 相手が消えて取得できなくなった公開鍵を、こちらの記録から探す。
  *
  * ActivityPub で鍵を配る手段はアクター文書しかないので、相手が消えると鍵は
  * どこからも取得できなくなる。アカウント削除の `Delete` は本人が消えた後に届くため、
@@ -50,7 +50,7 @@ class RecordedFallbackPublicKeys(
                 // 書き込めない間、検証を通るはずのアクティビティまで落ちる
                 runCatching {
                     followers.rememberPublicKeyPem(
-                        // 引き当てるのは keyId の名乗りではなく、検証で決まった持ち主
+                        // 持ち主として使うのは keyId の名乗りではなく、検証で決まった持ち主
                         actorUri = lookup.key.owner,
                         publicKeyPem = RsaKeys.encodeToPem(lookup.key.publicKey),
                     )
@@ -66,7 +66,7 @@ class RecordedFallbackPublicKeys(
         }
 
     private fun findRecorded(keyId: String): PublicKeyLookup.Found? {
-        // `keyId` はアクター id にフラグメントを付けたもの。記録はアクター id で引く
+        // `keyId` はアクター id にフラグメントを付けたもの。記録はアクター id で探す
         val actorUri = keyId.substringBefore('#')
 
         val publicKey =

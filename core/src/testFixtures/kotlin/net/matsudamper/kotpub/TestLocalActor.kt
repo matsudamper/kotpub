@@ -18,7 +18,7 @@ object TestLocalActor {
     const val USERNAME: String = "admin"
 
     /**
-     * 別のアカウント。引き当ての対象が複数ある経路を見るときに使う。
+     * 別のアカウント。名前の解決の対象が複数ある経路を見るときに使う。
      */
     const val STORED_USERNAME: String = "feed1"
 

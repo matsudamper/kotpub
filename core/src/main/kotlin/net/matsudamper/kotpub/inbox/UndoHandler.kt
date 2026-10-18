@@ -6,7 +6,7 @@ import net.matsudamper.kotpub.activitypub.LinkOrObject
 
 /**
  * `Undo` は取り消せるものが 1 つではないので、`object` が何だったのかで
- * 渡し先を決める。`type` でハンドラを引き当てる [InboxService] からは
+ * 渡し先を決める。`type` でハンドラを選ぶ [InboxService] からは
  * `Undo` が 1 つに見えるようにする。
  */
 class UndoHandler(

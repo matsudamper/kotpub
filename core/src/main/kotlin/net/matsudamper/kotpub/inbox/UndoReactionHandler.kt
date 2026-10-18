@@ -59,7 +59,7 @@ class UndoReactionHandler(
 
         val notePublicId = undoneActivity.target?.id?.let { NoteUrls.publicIdOf(domain = domain, url = it) }
         if (notePublicId == null) {
-            logger.info("取り消す $undoneType を引き当てられない: ${recipient.logLabel} ← $verifiedSignerActorId")
+            logger.info("取り消す $undoneType が見つからない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("undo_reaction.not_local_note")
             return true
         }

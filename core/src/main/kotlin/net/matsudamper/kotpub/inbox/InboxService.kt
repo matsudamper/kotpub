@@ -42,7 +42,7 @@ class InboxService(
         }
 
     /**
-     * @param recipient 届いた inbox。アカウントごとの inbox なら、宛先の引き当ては呼び出し側で済ませておく
+     * @param recipient 届いた inbox。アカウントごとの inbox なら、宛先の特定は呼び出し側で済ませておく
      * @param request 署名の検証にかけるリクエスト。ボディは受け取り終えたものを渡す
      */
     suspend fun receive(
@@ -130,7 +130,7 @@ class InboxService(
                 "id=${activity.id} actor=$verifiedSignerActorId",
         )
 
-        // 引き当てられない type は何もしない。未対応のアクティビティに 5xx を返すと
+        // 対応するハンドラが無い type は何もしない。未対応のアクティビティに 5xx を返すと
         // 相手は同じものを送り直し続けることになる
         val handler = handlersByType[activity.type]
         if (handler == null) InboxSpan.outcome("no_handler")
@@ -158,12 +158,12 @@ class InboxService(
     }
 
     /**
-     * 引けなければ止めているものとして捨てる。止めていないものとして通すと、止めている相手の
+     * 判定できなければ止めているものとして捨てる。止めていないものとして通すと、止めている相手の
      * アクティビティが処理される。5xx を返すと相手は同じものを送り直し続けるので、落としもしない
      */
     private fun blocksInboxFrom(keyId: String): Boolean =
         runCatching { domainBlocks.blocksInboxFrom(keyId) }
-            .onFailure { failure -> logger.warn("受信を止めているドメインかを引けなかったので捨てる: $keyId", failure) }
+            .onFailure { failure -> logger.warn("受信を止めているドメインかを判定できなかったので捨てる: $keyId", failure) }
             .getOrDefault(true)
 
     /**

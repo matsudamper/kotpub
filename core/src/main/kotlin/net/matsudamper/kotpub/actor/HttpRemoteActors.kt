@@ -161,7 +161,7 @@ class HttpRemoteActors(
     }
 
     /**
-     * 1 回の inbox の処理で、署名の検証と宛先の引き当てのために何度か取得する。
+     * 1 回の inbox の処理で、署名の検証と宛先の特定のために何度か取得する。
      * どの取得がキャッシュで済み、どれが何で取得できなかったかを取得ごとに分けて残す
      */
     private suspend fun fetch(
@@ -202,7 +202,7 @@ class HttpRemoteActors(
         useCache: Boolean,
     ): DocumentFetch {
         // `keyId` はアクター id にフラグメントを付けたもので、フラグメントはサーバーに
-        // 送られない。落としてから引くと、署名の検証で取得した文書を
+        // 送られない。落としてからキャッシュを探すと、署名の検証で取得した文書を
         // `Accept` の宛先を決めるときにも使える
         val cacheKey = rawUrl.substringBefore('#')
 

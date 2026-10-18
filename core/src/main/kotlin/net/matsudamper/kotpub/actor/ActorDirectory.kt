@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.actor
 /**
  * リクエストで指定された名前から、どのアクターを指しているかを決める。
  *
- * 引き当てる先は [StoredActorNames] だけ。無ければ存在しない。
+ * 探す先は [StoredActorNames] だけ。無ければ存在しない。
  *
  * WebFinger の `resource` とパスの `{username}` で判定がずれると、
  * 「検索には出るが開けない」という分かりにくい壊れ方をするので、
@@ -14,14 +14,14 @@ class ActorDirectory(
     private val stored: StoredActorNames,
 ) {
     /**
-     * パスの `{username}` から引く。
+     * パスの `{username}` から探す。
      *
      * 大文字小文字は保存側で吸収する。返すのは保存されている綴り。
      */
     fun resolve(username: String?): ActorUrls? {
         if (username.isNullOrEmpty()) return null
 
-        // 保存されている名前は必ずこの形式なので、引く前に落とせる。
+        // 保存されている名前は必ずこの形式なので、探す前に落とせる。
         // `test-1/inbox` のようにパスを含んだものが保存先まで届かなくなる
         if (!ActorUsernameUtil.isValid(username)) return null
 
@@ -54,9 +54,9 @@ class ActorDirectory(
     }
 
     /**
-     * WebFinger の `resource` から引く。
+     * WebFinger の `resource` から探す。
      *
-     * Mastodon は `acct:name@domain` で引いてくるが、実装によっては Actor の URL を
+     * Mastodon は `acct:name@domain` で問い合わせてくるが、実装によっては Actor の URL を
      * そのまま渡してくるものもあるので両方を受ける。`acct:` を省いた形も受ける。
      */
     fun resolveResource(resource: String): ActorUrls? {

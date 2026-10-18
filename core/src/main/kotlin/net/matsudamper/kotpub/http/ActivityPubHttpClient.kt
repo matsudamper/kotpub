@@ -14,7 +14,7 @@ package net.matsudamper.kotpub.http
  * - 相手が応答しないまま待ち続けない。inbox の処理や配信が詰まる
  * - 公開アドレスにだけ接続する。宛先の URL は相手が決めるので、検査しないと内部のサービスへ
  *   リクエストを送らされる。接続に使うアドレスを [PublicAddressDnsResolver] で解決すれば満たせる。
- *   名前を引き直すクライアントや、プロキシを通すクライアントでは満たせない
+ *   名前解決をやり直すクライアントや、プロキシを通すクライアントでは満たせない
  */
 interface ActivityPubHttpClient : AutoCloseable {
     /**

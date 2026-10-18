@@ -16,7 +16,7 @@ class ActorDirectoryTest {
     )
 
     @Test
-    fun `保存されているアカウントを引ける`() {
+    fun `保存されているアカウントが見つかる`() {
         assertEquals("https://example.com/users/admin", directory.resolve("admin")?.actorId)
         assertEquals("https://example.com/users/feed1", directory.resolve("feed1")?.actorId)
         // Mastodon 側の扱いに合わせて大文字小文字は区別しない
@@ -24,7 +24,7 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `複数アカウントをまとめて引ける`() {
+    fun `複数アカウントをまとめて探せる`() {
         val resolved = directory.resolve(setOf("admin", "ADMIN", "feed1", "gihyo", "other", "invalid/name"))
 
         assertEquals(listOf("admin", "ADMIN", "feed1", "gihyo"), resolved.map { it.key })
@@ -37,7 +37,7 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `Actor の id から引ける`() {
+    fun `Actor の id から見つかる`() {
         assertEquals("https://example.com/users/feed1", directory.resolveActorId("https://example.com/users/feed1")?.actorId)
         assertNull(directory.resolveActorId("https://other.example/users/feed1"))
         assertNull(directory.resolveActorId("https://example.com/users/feed1/inbox"))
@@ -51,7 +51,7 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `使えない文字を含む名前は保存先まで引きに行かない`() {
+    fun `使えない文字を含む名前は保存先を探さない`() {
         stored += "feed1/inbox"
 
         assertNull(directory.resolve("feed1/inbox"))
@@ -62,13 +62,13 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `関係ない名前は引けない`() {
+    fun `関係ない名前は見つからない`() {
         assertNull(directory.resolve("other"))
         assertNull(directory.resolve("test-1"))
     }
 
     @Test
-    fun `resource は acct でも Actor の URL でも引ける`() {
+    fun `resource は acct でも Actor の URL でも見つかる`() {
         assertEquals("acct:admin@example.com", directory.resolveResource("acct:admin@example.com")?.acct)
         assertEquals("acct:admin@example.com", directory.resolveResource("admin@example.com")?.acct)
         assertEquals(
@@ -89,7 +89,7 @@ class ActorDirectoryTest {
     }
 
     @Test
-    fun `別ドメインや壊れた resource は引けない`() {
+    fun `別ドメインや壊れた resource は見つからない`() {
         assertNull(directory.resolveResource("acct:admin@example.org"))
         assertNull(directory.resolveResource("https://example.org/users/admin"))
         assertNull(directory.resolveResource("acct:admin"))
