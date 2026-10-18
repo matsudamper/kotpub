@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * カスタム絵文字の画像を、アクティビティの `tag` から引く。
+ * カスタム絵文字の画像を、アクティビティの `tag` から探す。
  *
  * カスタム絵文字は `content` に `:name:` としか入らないので、画像は同じ
  * アクティビティの `tag` に並ぶ `Emoji` から取る。

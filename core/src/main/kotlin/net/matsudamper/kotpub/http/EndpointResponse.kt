@@ -33,7 +33,7 @@ class EndpointResponse(
         /**
          * serializer を明示して JSON にする。
          *
-         * 値の型からリフレクションで serializer を引く形にすると、native-image では
+         * 値の型からリフレクションで serializer を解決する形にすると、native-image では
          * 解決できず実行時に落ちる。引数で受けてコンパイル時に決めておく。
          *
          * @param contentType ActivityPub のエンドポイントでは `application/json` ではなく

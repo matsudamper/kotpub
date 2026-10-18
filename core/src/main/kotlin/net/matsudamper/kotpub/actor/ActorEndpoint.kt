@@ -11,7 +11,7 @@ import net.matsudamper.kotpub.url.WebPageUrls
 /**
  * Actor エンドポイント。WebFinger から辿り着く 2 ホップ目。
  *
- * 引き当ては [ActorDirectory] に任せる。知らない名前は 404。
+ * 名前の解決は [ActorDirectory] に任せる。知らない名前は 404。
  */
 class ActorEndpoint(
     private val directory: ActorDirectory,

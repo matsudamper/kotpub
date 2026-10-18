@@ -14,7 +14,7 @@ object ActorUsernameUtil {
     const val MAX_LENGTH: Int = 30
 
     /**
-     * 名前の無いアクターは引けない
+     * 名前の無いアクターは見つからない
      */
     const val MIN_LENGTH: Int = 1
 

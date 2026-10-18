@@ -156,7 +156,7 @@ class UndoFollowHandlerTest {
     }
 
     @Test
-    fun `共有 inbox では埋まっている Follow の object から宛先のアカウントを引いて解除する`() = runBlocking {
+    fun `共有 inbox では埋まっている Follow の object から宛先のアカウントを特定して解除する`() = runBlocking {
         val store = followers()
 
         handle(
@@ -174,7 +174,7 @@ class UndoFollowHandlerTest {
     }
 
     @Test
-    fun `共有 inbox に届いた id だけの Undo は、記録している Follow の id から宛先を引いて解除する`() = runBlocking {
+    fun `共有 inbox に届いた id だけの Undo は、記録している Follow の id から宛先を特定して解除する`() = runBlocking {
         val store = followers()
 
         handle(

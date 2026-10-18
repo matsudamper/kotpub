@@ -9,7 +9,7 @@ import net.matsudamper.kotpub.httpsignature.SignedRequest
 /**
  * inbox エンドポイント。相手のサーバーからアクティビティが POST されてくる。
  *
- * ここでやるのは HTTP との変換だけ。宛先のアクターを引き当て、ボディを受け取り、
+ * ここでやるのは HTTP との変換だけ。宛先のアクターを特定し、ボディを受け取り、
  * [InboxService] に渡して、返ってきた結果を status に直す。中身を信用してよいかの
  * 判断と、種類ごとの処理は [InboxService] にある。
  *

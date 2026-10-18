@@ -21,7 +21,7 @@ data class ActorUrls(
     val acct: String = "acct:$username@$domain"
 
     /**
-     * Mastodon の検索窓に貼る形。`acct:` を付けたままだと引けない
+     * Mastodon の検索窓に貼る形。`acct:` を付けたままだと見つからない
      */
     val mention: String = "@$username@$domain"
 

@@ -4,11 +4,11 @@ package net.matsudamper.kotpub.actor
  * アクターの見た目（プロフィールのリンク集と画像）の参照先。
  *
  * 何をリンクに並べ、画像をどこから持ってくるかは使う側の都合なので、
- * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
+ * [StoredActorNames] と同じく名前を渡して探せることだけを決めておく。
  */
 interface StoredActorAppearances {
     /**
-     * 名前で引く。何も持たないアカウントは [ActorAppearance.EMPTY]。
+     * 名前で探す。何も持たないアカウントは [ActorAppearance.EMPTY]。
      *
      * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */

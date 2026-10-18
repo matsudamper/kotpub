@@ -78,7 +78,7 @@ class SignatureHeader(
          * 引用符のエスケープ（`\"`）は扱わない。keyId は URL、signature は Base64 で、
          * どちらにも `"` は現れないため。
          *
-         * パラメータ名は小文字に揃える。`keyId` と `keyid` のどちらで来ても引けるようにする。
+         * パラメータ名は小文字に揃える。`keyId` と `keyid` のどちらで来ても見つかるようにする。
          */
         private fun parseParameters(raw: String): Map<String, String> {
             val result = mutableMapOf<String, String>()

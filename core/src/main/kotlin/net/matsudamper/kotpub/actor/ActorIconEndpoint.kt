@@ -55,11 +55,11 @@ class ActorIconEndpoint(
  * アクターのプロフィール画像の取得元。
  *
  * どこから取得するかは Actor 側の関心ではないので、
- * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
+ * [StoredActorNames] と同じく名前を渡して探せることだけを決めておく。
  */
 interface ActorIcons {
     /**
-     * 名前で引く。アイコンが無いか、取ってこられなければ null。
+     * 名前で探す。アイコンが無いか、取ってこられなければ null。
      *
      * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */

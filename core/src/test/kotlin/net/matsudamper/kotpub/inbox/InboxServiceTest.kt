@@ -190,7 +190,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `受信を止めているかを引けなければハンドラに渡さずに受け取って捨てる`() =
+    fun `受信を止めているかを判定できなければハンドラに渡さずに受け取って捨てる`() =
         runBlocking {
             val handler = RecordingHandler("Follow")
             val domainBlocks = object : InboxDomainBlocks {
@@ -221,7 +221,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `引き当てられない type は何もせずに受け取る`() =
+    fun `対応するハンドラが無い type は何もせずに受け取る`() =
         runBlocking {
             val handler = RecordingHandler("Follow")
 

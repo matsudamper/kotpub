@@ -4,11 +4,11 @@ package net.matsudamper.kotpub.actor
  * アクターのプロフィールの参照先。
  *
  * どこに保存されているかは Actor 側の関心ではないので、
- * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
+ * [StoredActorNames] と同じく名前を渡して探せることだけを決めておく。
  */
 interface StoredActorProfiles {
     /**
-     * 名前で引く。何も設定していないアカウントは [ActorProfile.EMPTY]。
+     * 名前で探す。何も設定していないアカウントは [ActorProfile.EMPTY]。
      *
      * 渡すのは [StoredActorNames] が返した保存されている文字列。
      */

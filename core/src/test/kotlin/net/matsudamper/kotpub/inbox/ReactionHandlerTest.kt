@@ -94,7 +94,7 @@ class ReactionHandlerTest {
     }
 
     @Test
-    fun `カスタム絵文字の画像を tag から引く`() = runBlocking {
+    fun `カスタム絵文字の画像を tag から探す`() = runBlocking {
         val recorded = handleLike(
             """
             {"id":"https://remote.example/likes/1","type":"Like",

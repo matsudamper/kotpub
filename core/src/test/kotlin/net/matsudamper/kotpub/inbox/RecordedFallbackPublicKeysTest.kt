@@ -16,7 +16,7 @@ import net.matsudamper.kotpub.favourite.FavouriteStore.ReceivedFavourite
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.stamp.StampStore.ReceivedStamp
 
-// 消えたアクターの鍵を、フォローとお気に入りとスタンプのどの記録からも引けること。
+// 消えたアクターの鍵を、フォローとお気に入りとスタンプのどの記録からも探せること。
 // 相手のサーバーに GET しに行く方は TestRemoteActors で差し替える。
 class RecordedFallbackPublicKeysTest {
     private val now: Instant = Instant.parse("2026-08-10T00:00:00Z")
@@ -89,7 +89,7 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `消えた相手はフォローの記録から引く`() =
+    fun `消えた相手はフォローの記録から探す`() =
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(remote = gone(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
@@ -125,7 +125,7 @@ class RecordedFallbackPublicKeysTest {
     }
 
     @Test
-    fun `消えた相手はフォローしていなくてもお気に入りの記録から引く`() =
+    fun `消えた相手はフォローしていなくてもお気に入りの記録から探す`() =
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(
@@ -141,7 +141,7 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `消えた相手はスタンプしか押していなくてもスタンプの記録から引く`() =
+    fun `消えた相手はスタンプしか押していなくてもスタンプの記録から探す`() =
         runBlocking {
             val stamps = FakeStampStore().apply {
                 put(
@@ -169,7 +169,7 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `フォローもお気に入りもスタンプも記録が無ければ引けない`() =
+    fun `フォローもお気に入りもスタンプも記録が無ければ見つからない`() =
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(remote = gone(), followers = FakeFollowerStore(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
@@ -179,7 +179,7 @@ class RecordedFallbackPublicKeysTest {
         }
 
     @Test
-    fun `記録した PEM を読めなければ引けない`() =
+    fun `記録した PEM を読めなければ見つからない`() =
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(

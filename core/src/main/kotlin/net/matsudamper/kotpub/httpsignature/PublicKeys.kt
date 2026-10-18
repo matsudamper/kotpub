@@ -3,7 +3,7 @@ package net.matsudamper.kotpub.httpsignature
 import java.security.PublicKey
 
 /**
- * `keyId` から検証用の公開鍵を引く。
+ * `keyId` から検証用の公開鍵を探す。
  *
  * ActivityPub では相手のアクター文書を GET して `publicKey` を読むことになるが、
  * 署名の検証そのものは「鍵をどこから持ってくるか」と関係が無い。
@@ -11,7 +11,7 @@ import java.security.PublicKey
  */
 interface PublicKeys {
     /**
-     * 引けなければ [PublicKeyLookup.Gone] か [PublicKeyLookup.Unavailable]。
+     * 見つからなければ [PublicKeyLookup.Gone] か [PublicKeyLookup.Unavailable]。
      * どちらでも検証は通らないが、区別しないと「消えた相手」と
      * 「今だけ取得できない相手」が同じ扱いになる
      */
@@ -56,7 +56,7 @@ sealed interface PublicKeyLookup {
 /**
  * 検証に使う鍵と、その持ち主。
  *
- * @param keyId 引くのに使った `keyId`
+ * @param keyId 探すのに使った `keyId`
  * @param owner この鍵を持つアクターの id。署名した相手が誰なのかはこれで決まる。
  *   アクティビティの `actor` と突き合わせて、他人になりすました投稿を弾く
  */

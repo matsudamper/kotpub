@@ -5,11 +5,11 @@ package net.matsudamper.kotpub.actor
  *
  * Actor エンドポイントが載せるのは公開鍵だけなので、秘密鍵まで読まずに済む形にする。
  * どこに保存されているかは Actor 側の関心ではないので、
- * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
+ * [StoredActorNames] と同じく名前を渡して探せることだけを決めておく。
  */
 interface StoredActorPublicKeys {
     /**
-     * 名前で引く。返すのは Actor JSON の `publicKey.publicKeyPem` にそのまま入る
+     * 名前で探す。返すのは Actor JSON の `publicKey.publicKeyPem` にそのまま入る
      * X.509 SubjectPublicKeyInfo の PEM（[ActorPrivateKey.publicKeyPem] と同じ形）。
      *
      * 渡すのは [StoredActorNames] が返した保存されている文字列。

@@ -101,7 +101,7 @@ class FollowHandler(
             return
         }
 
-        // 引き当てた後に消されたアカウント宛。返す先のアカウントがもう無い
+        // 特定した後に消されたアカウント宛。返す先のアカウントがもう無い
         if (recorded.getOrDefault(false).not()) {
             logger.info("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
             return

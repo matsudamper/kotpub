@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  *
  * 仕様で、誰でも取得できる公開の URI と決まっている
  * （[ActivityPub 3.1 Object Identifiers](https://www.w3.org/TR/activitypub/#obj-id)）。
- * 相手はこの値を鍵にして受け取り済みのものを引き当てるので、1 文字でも違うと別のものになる。
+ * 相手はこの値を鍵にして受け取り済みのものと突き合わせるので、1 文字でも違うと別のものになる。
  *
  * ただの URL と混ぜないために型を分ける。JSON には中の文字列がそのまま出る。
  */
