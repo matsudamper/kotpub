@@ -112,8 +112,9 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
-        # PUBLISH_TASKS は空白区切りで複数タスクを渡すため、あえてクォートしない
-        run: ./gradlew $PUBLISH_TASKS -PmavenCentralPublishing="$MAVEN_CENTRAL_PUBLISHING" -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
+        # PUBLISH_TASKS は空白区切りで複数タスクを渡すため、あえてクォートしない。
+        # --continue: 1 つの配布先で失敗しても残りの配布先へのアップロードは続ける（ステップは失敗扱いになり Release は作らない）
+        run: ./gradlew --continue $PUBLISH_TASKS -PmavenCentralPublishing="$MAVEN_CENTRAL_PUBLISHING" -PmavenCentralAutomaticPublishing=true -PsignAllPublications=true -Pversion="$VERSION"
 
       - name: GitHub Release を作成
         if: github.event_name == 'workflow_dispatch'
