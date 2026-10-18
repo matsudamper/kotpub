@@ -12,7 +12,7 @@ import java.util.Base64
  *            headers="(request-target) host date digest content-type",signature="Base64=="
  * ```
  *
- * @param keyId 公開鍵の場所。ここを GET してアクターの `publicKey` を取る
+ * @param keyId 公開鍵の場所。ここを GET してアクターの `publicKey` を取得する
  * @param algorithm 署名アルゴリズム。省略されることがあるので null を許す
  * @param headers 署名対象にしたヘッダ名。この並び順のまま署名文字列を組み立てる
  * @param signature Base64 をデコードした署名バイト列

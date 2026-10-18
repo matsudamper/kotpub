@@ -53,7 +53,7 @@ class ActorHeaderEndpoint(
 /**
  * アクターのプロフィールヘッダーの取得元。
  *
- * どこから取ってくるかは Actor 側の関心ではないので、
+ * どこから取得するかは Actor 側の関心ではないので、
  * [StoredActorNames] と同じく名前を渡して引けることだけを決めておく。
  */
 interface ActorHeaders {
@@ -96,7 +96,7 @@ private fun ActorHeader.cacheControl(requestedVersion: String?): String {
 }
 
 /**
- * 1 年。`immutable` を見ない側でも取り直しに来なくなるだけの長さ
+ * 1 年。`immutable` を見ない側でも取得し直しに来なくなるだけの長さ
  */
 private const val IMMUTABLE = "public, max-age=31536000, immutable"
 private const val CACHE_CONTROL_HEADER = "Cache-Control"

@@ -28,7 +28,7 @@ object ActivityPubContentTypes {
      * `Accept` ヘッダを見て、アクターやアクティビティを返すときの Content-Type を選ぶ。
      *
      * Mastodon は `application/activity+json` と、profile パラメータ付きの
-     * `application/ld+json` のどちらでも取りに来る。要求された方で返さないと
+     * `application/ld+json` のどちらでも取得しに来る。要求された方で返さないと
      * 実装によっては解釈してもらえない。
      *
      * 判断できない場合は [ActivityJson] を返す。`Accept` を送ってこない相手や
