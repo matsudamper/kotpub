@@ -18,7 +18,7 @@ package net.matsudamper.kotpub.http
  */
 interface ActivityPubHttpClient : AutoCloseable {
     /**
-     * リダイレクトは追ってよい。追った場合は、最後に取りに行った URL を
+     * リダイレクトは追ってよい。追った場合は、最後に取得した URL を
      * [ActivityPubClientResponse.finalUrl] に入れること。別のホストに移っていないかを
      * 呼び出し側がそこで確かめる。
      *

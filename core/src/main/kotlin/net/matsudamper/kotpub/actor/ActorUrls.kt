@@ -48,7 +48,7 @@ data class ActorUrls(
      * バージョンを付けたプロフィール画像の URL。
      *
      * 相手はアイコンを URL で覚えるので、パスだけだと差し替えても前の画像が出続ける。
-     * 値が変われば別の URL になり、取り直してもらえる
+     * 値が変われば別の URL になり、取得し直してもらえる
      */
     fun icon(version: String): String = "$icon?v=${QueryParameter.encode(version)}"
 

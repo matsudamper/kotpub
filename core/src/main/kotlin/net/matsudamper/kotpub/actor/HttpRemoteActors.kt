@@ -15,15 +15,15 @@ import net.matsudamper.kotpub.httpsignature.SignatureKey
 import net.matsudamper.kotpub.json.AppJson
 
 /**
- * 相手のアクター文書を実際に GET して、公開鍵と inbox を取る。
+ * 相手のアクター文書を実際に GET して、公開鍵と inbox を取得する。
  *
  * ActivityPub では鍵も配信先も「アクター文書の中に入っている」しか配布方法が無いので、
- * 知らない相手から署名付きのリクエストが来たら、その場で相手のサーバーに取りに行くことになる。
+ * 知らない相手から署名付きのリクエストが来たら、その場で相手のサーバーから取得することになる。
  *
  * 取得先は相手が `keyId` や `actor` として指定してきた URL で、こちらが選べない。
  * つまり任意の URL に GET させられる経路でもあるため、次を守る。
  *
- * - https のみ。平文で取った鍵は途中で差し替えられる
+ * - https のみ。平文で取得した鍵は途中で差し替えられる
  * - 宛先が公開アドレスであることは [client] が接続の前に確かめる
  * - リダイレクトで別ホストに移ったら捨てる。移った先のサーバーが
  *   他人のアクターの鍵を名乗れてしまう
@@ -32,12 +32,12 @@ import net.matsudamper.kotpub.json.AppJson
  * - 大きすぎる応答は読まない
  *
  * 取得結果は [ExpiringCache] を通してキャッシュし、TTL の間は GET しない。
- * フォローや投稿のたびに毎回相手のサーバーへ取りに行くのは、相手に対しても
+ * フォローや投稿のたびに毎回相手のサーバーから取得するのは、相手に対しても
  * 自分の inbox 処理に対しても無駄が大きいため。取得に失敗した場合はキャッシュしない。
- * 相手のサーバーが一時的に落ちているだけなら、次の呼び出しで取り直せるようにする。
+ * 相手のサーバーが一時的に落ちているだけなら、次の呼び出しで取得し直せるようにする。
  *
  * 覚えている鍵が古くなったかどうかは期限では分からないので、期限は鍵と関係なく決める。
- * 古い鍵に気付けるのは署名の検証が失敗したときだけで、そこからの取り直しは [refresh]。
+ * 古い鍵に気付けるのは署名の検証が失敗したときだけで、そこからの再取得は [refresh]。
  *
  * @param client 閉じるのはこのクラスの [close] が受け持つ
  * @param openTelemetry 取得ごとの span を記録する先。null なら記録しない
@@ -56,7 +56,7 @@ class HttpRemoteActors(
     private val documents: ExpiringCache<String, RemoteActorDocument> = createExpiringCache(MAX_CACHED_ACTORS)
 
     /**
-     * 直前に相手のサーバーへ取りに行ったアクター。[refresh] の間隔を空けるのに使う
+     * 直前に相手のサーバーから取得したアクター。[refresh] の間隔を空けるのに使う
      */
     private val recentlyFetched: ExpiringCache<String, Unit> = createExpiringCache(MAX_CACHED_ACTORS)
 
@@ -69,9 +69,9 @@ class HttpRemoteActors(
     /**
      * 覚えているものを使わずに取得し直す。
      *
-     * 覚えている文書を先に捨てないのは、取り直しに失敗したときに元の文書まで
+     * 覚えている文書を先に捨てないのは、再取得に失敗したときに元の文書まで
      * 失うため。通らない署名を 1 通投げ込むだけで、相手のサーバーが落ちている間
-     * その相手の正当なアクティビティを全部落とせる状態になる。取り直せなければ
+     * その相手の正当なアクティビティを全部落とせる状態になる。取得し直せなければ
      * 覚えている文書がそのまま返り、[find] と同じ結果になる。
      */
     override suspend fun refresh(keyId: String): PublicKeyLookup {
@@ -122,8 +122,8 @@ class HttpRemoteActors(
      * 相手が引っ越した後の古い値を書くと、こちらから届かなくなったことに
      * 気付く手がかりが無い。鍵と違って、間違いが後から直る経路が無い。
      *
-     * 実際には署名の検証が直前に同じ文書を取っているので、取りに行く回数は増えない。
-     * その場合に使うのはそのとき読んだ文書で、古くても取り直しの間隔のぶんだけ
+     * 実際には署名の検証が直前に同じ文書を取得しているので、取得する回数は増えない。
+     * その場合に使うのはそのとき読んだ文書で、古くても再取得の間隔のぶんだけ
      */
     override suspend fun findActor(actorId: String): RemoteActor? {
         val url = parseHttpsUrl(actorId) ?: return null
@@ -161,7 +161,7 @@ class HttpRemoteActors(
     }
 
     /**
-     * 1 回の inbox の処理で、署名の検証と宛先の引き当てのために何度か取りに行く。
+     * 1 回の inbox の処理で、署名の検証と宛先の引き当てのために何度か取得する。
      * どの取得がキャッシュで済み、どれが何で取得できなかったかを取得ごとに分けて残す
      */
     private suspend fun fetch(
@@ -193,7 +193,7 @@ class HttpRemoteActors(
     }
 
     /**
-     * アクター文書を取る。取得先の URL を [requestUrl] として渡すのは、
+     * アクター文書を取得する。取得先の URL を [requestUrl] として渡すのは、
      * 取得できた文書の中身を突き合わせる基準がその URL のホストだから。
      */
     private suspend fun fetchDocument(
@@ -202,7 +202,7 @@ class HttpRemoteActors(
         useCache: Boolean,
     ): DocumentFetch {
         // `keyId` はアクター id にフラグメントを付けたもので、フラグメントはサーバーに
-        // 送られない。落としてから引くと、署名の検証で取った文書を
+        // 送られない。落としてから引くと、署名の検証で取得した文書を
         // `Accept` の宛先を決めるときにも使える
         val cacheKey = rawUrl.substringBefore('#')
 
@@ -211,15 +211,15 @@ class HttpRemoteActors(
                 RemoteActorSpan.outcome("cache_hit")
                 return DocumentFetch.Found(it)
             }
-            // 取りに行くことにしたので、次に取り直すまでの間隔をここから数える
+            // 取得することにしたので、次に取得し直すまでの間隔をここから数える
             recentlyFetched.put(key = cacheKey, value = Unit, ttlMillis = REFRESH_INTERVAL_MILLIS)
         } else if (!recentlyFetched.tryPut(key = cacheKey, value = Unit, ttlMillis = REFRESH_INTERVAL_MILLIS)) {
-            // 前回取りに行ってから間隔が空いていない。覚えているものを使わない呼び出しは、
+            // 前回取得してから間隔が空いていない。覚えているものを使わない呼び出しは、
             // 通らない署名を投げ込むだけで誰でも起こせるので間隔を空ける。
             // 間隔は取得に成功したかどうかに関わらず数える。落ちている相手に繋ぎ直しても同じ結果になる。
             //
-            // 直前に取りに行ったばかりなら、覚えているものはそのとき読んだ文書で、
-            // 取り直しても同じものにしかならない
+            // 直前に取得したばかりなら、覚えているものはそのとき読んだ文書で、
+            // 取得し直しても同じものにしかならない
             RemoteActorSpan.outcome("throttled")
             return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Unavailable
         }
@@ -254,7 +254,7 @@ class HttpRemoteActors(
         // 404 は消したのか置き場所が変わったのかを区別できず、
         // 一時的なルーティングの不調でも返るので、分からないものとして扱う
         if (response.status == HttpStatusCodes.GONE) {
-            // 消えた相手の文書を覚えたままにしない。取り直しの間隔の中に来た次の
+            // 消えた相手の文書を覚えたままにしない。再取得の間隔の中に来た次の
             // 呼び出しが覚えているものを使い、消えたアクターを生きているものとして扱う
             documents.invalidate(cacheKey)
             RemoteActorSpan.outcome("gone")
@@ -288,7 +288,7 @@ class HttpRemoteActors(
 
         // 使えると分かった文書だけを覚える。中身を見ずに入れ替えると、相手が 200 で
         // 空の JSON や他所のアクターの鍵を返した瞬間に、それまでの正しい文書を失う。
-        // 取り直しは通らない署名を投げ込むだけで起こせるので、外から狙える
+        // 再取得は通らない署名を投げ込むだけで起こせるので、外から狙える
         if (!document.hasUsableKey(requestUrl)) {
             RemoteActorSpan.outcome("no_usable_key")
             return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Found(document)
@@ -359,7 +359,7 @@ class HttpRemoteActors(
         const val CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000L
 
         /**
-         * 同じアクターを取り直すまでに空ける間隔。
+         * 同じアクターを取得し直すまでに空ける間隔。
          *
          * 相手が鍵を替えてから、こちらが受け取れるようになるまでの遅れの上限になる。
          * 相手のサーバーは送り直してくるので、短くする意味はこの遅れを縮めることだけ。
@@ -372,7 +372,7 @@ class HttpRemoteActors(
          *
          * キーは相手が名乗る `keyId` で、使い捨てのものをいくらでも送り込める。
          * 期限だけに任せると、送られた分がその期限のあいだ残る。溢れた分を捨てても
-         * 次に要るときに取り直すだけで、判断は変わらない
+         * 次に要るときに取得し直すだけで、判断は変わらない
          */
         const val MAX_CACHED_ACTORS = 10_000
     }

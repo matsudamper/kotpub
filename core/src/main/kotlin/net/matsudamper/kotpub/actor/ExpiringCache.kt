@@ -112,11 +112,11 @@ private class InMemoryExpiringCache<K : Any, V : Any>(
      * 捨てる行を期限の近さで選ばないのは、上限に張り付いた状態で 1 行入るたびに
      * 全部を並べ替えることになるため。上限まで埋めてから 1 行ずつ送り込むだけで、
      * その並べ替えにこちらの CPU を使わせられる。どの行を捨てても、次に要るときに
-     * 取り直すだけで判断は変わらない。
+     * 取得し直すだけで判断は変わらない。
      *
      * ただし今入れた行だけは捨てない。この呼び出しが書いたものをその場で捨てると、
      * 上限まで埋めた状態では書いても残らなくなり、間隔を空けるために使っている側
-     * （[net.matsudamper.kotpub.actor.HttpRemoteActors] の取り直し）で
+     * （[net.matsudamper.kotpub.actor.HttpRemoteActors] の再取得）で
      * 間隔が効かなくなる
      *
      * @param inserted この呼び出しで書いた行のキー
