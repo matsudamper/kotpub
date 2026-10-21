@@ -106,8 +106,10 @@ class HttpWebFingerLookup(
                 if (username.any { it.isWhitespace() }) return null
                 if (host.any { it.isWhitespace() || it in forbiddenHostCharacters }) return null
 
-                // IDN のホストは、接続するときと同じ punycode で問い合わせる
+                // IDN のホストは、接続するときと同じ punycode で問い合わせる。
+                // 全角の `／` などは正規化で ASCII の区切りになるので、正規化した後も確かめる
                 val url = HttpUrl.parseHttps("https://$host/") ?: return null
+                if (url.host.any { it in forbiddenHostCharacters }) return null
                 val normalizedHost = if (url.port == -1) url.host else "${url.host}:${url.port}"
                 return Acct(username = username, host = normalizedHost)
             }

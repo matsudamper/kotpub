@@ -71,6 +71,16 @@ class HttpWebFingerLookupTest {
     }
 
     @Test
+    fun `IDNの正規化で区切り文字になる全角文字を含むホストでは問い合わせない`() {
+        val client = RespondingClient(body = webFingerBody(href = "https://example.com/users/alice"))
+
+        val actorId = runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com／admin＃") }
+
+        assertNull(actorId)
+        assertEquals(listOf(), client.requestedUrls)
+    }
+
+    @Test
     fun `呼び出し元のキャンセルは握りつぶさない`() {
         val client = CancellingClient()
 
