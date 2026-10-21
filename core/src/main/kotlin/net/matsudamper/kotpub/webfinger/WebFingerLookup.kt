@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.webfinger
 
 import java.net.URLEncoder
+import kotlinx.coroutines.CancellationException
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
@@ -46,7 +47,7 @@ class HttpWebFingerLookup(
         val account = Acct.parse(acct) ?: return null
 
         val response =
-            runCatching {
+            try {
                 client.get(
                     url = account.webFingerUrl(),
                     headers = mapOf(ACCEPT_HEADER to "${ActivityPubContentTypes.JrdJson}, application/json"),
@@ -55,7 +56,11 @@ class HttpWebFingerLookup(
                         HttpStatusCodes.isSuccess(status) && HttpUrl.parseHttps(finalUrl) != null
                     },
                 )
-            }.getOrNull() ?: return null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return null
+            }
 
         if (!HttpStatusCodes.isSuccess(response.status)) return null
         if (HttpUrl.parseHttps(response.finalUrl) == null) return null

@@ -3,7 +3,9 @@ package net.matsudamper.kotpub.webfinger
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
@@ -66,6 +68,15 @@ class HttpWebFingerLookupTest {
 
         assertEquals(listOf(null, null, null, null, null, null, null), results)
         assertEquals(listOf(), client.requestedUrls)
+    }
+
+    @Test
+    fun `呼び出し元のキャンセルは握りつぶさない`() {
+        val client = CancellingClient()
+
+        assertFailsWith<CancellationException> {
+            runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }
+        }
     }
 
     @Test
@@ -176,6 +187,23 @@ class HttpWebFingerLookupTest {
                 body = if (readsBody(status, respondedUrl)) Result.success(body.toByteArray()) else null,
             )
         }
+
+        override suspend fun post(
+            url: String,
+            headers: Map<String, String>,
+            body: ByteArray,
+        ): ActivityPubPostResponse = error("WebFinger では POST しない")
+
+        override fun close() = Unit
+    }
+
+    private class CancellingClient : ActivityPubHttpClient {
+        override suspend fun get(
+            url: String,
+            headers: Map<String, String>,
+            maxBodyBytes: Int,
+            readsBody: (status: Int, finalUrl: String) -> Boolean,
+        ): ActivityPubClientResponse = throw CancellationException("呼び出し元がキャンセルした")
 
         override suspend fun post(
             url: String,
