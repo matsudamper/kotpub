@@ -1,7 +1,7 @@
 # kotpub
 
 Kotlin/JVM 向けの ActivityPub 実装。WebFinger・Actor・inbox・NodeInfo の応答、
-HTTP Signature の署名と検証、相手のアクター文書の取得、アクティビティの配送を持つ。
+HTTP Signature の署名と検証、WebFinger による相手のアクターの発見、相手のアクター文書の取得、アクティビティの配送を持つ。
 
 ## 使い方
 
