@@ -1,4 +1,16 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/load-agent-docs.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "deny": [
       "mcp__Claude_Code_Remote__send_later",
