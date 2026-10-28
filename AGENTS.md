@@ -5,7 +5,7 @@ Kotlin/JVM 向けの ActivityPub 実装。HTTP サーバー / クライアント
 
 ## ビルド
 - JDK: Java 25（Kotlin `jvmToolchain`、Gradle daemon は `gradle/gradle-daemon-jvm.properties`）
-- ビルド: `./gradlew build`
+- ビルド（包括的テストを実行しない）: `./gradlew assemble`
 - lint: `./gradlew ktlintCheck`
 
 # 共通ルール
