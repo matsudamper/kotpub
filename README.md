@@ -42,6 +42,13 @@ dependencies {
 }
 ```
 
+## リモートユーザーの公開投稿
+
+`HttpRemoteOutbox(client).recent(actorId, limit)` で、アクターの outbox から公開投稿を取得できる。
+`limit` は 1〜20 件。最大 3 ページを読み、本人の `Note` と本人による `Create` の投稿だけを返す。
+他のアクターの投稿・ブースト・非公開投稿は返さない。取得先は HTTPS かつアクターと同じホストに限る。
+`RemoteActorProfile.summary` には自己紹介の HTML が入るため、表示する側で安全な形式に変換する。
+
 ## ビルド
 
 Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.md）。

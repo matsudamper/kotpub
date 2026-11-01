@@ -62,4 +62,5 @@ data class RemoteActorProfile(
     val displayName: String?,
     val profileUrl: String?,
     val iconUrl: String?,
+    val summary: String? = null,
 )

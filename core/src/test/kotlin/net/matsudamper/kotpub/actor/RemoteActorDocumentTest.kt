@@ -12,6 +12,14 @@ class RemoteActorDocumentTest {
         AppJson.decodeFromString(RemoteActorDocument.serializer(), json).profile()
 
     @Test
+    fun readsSummaryWithoutRequiringItForOtherProfileFields() {
+        assertEquals("<p>自己紹介</p>", profile("""{"summary":"<p>自己紹介</p>"}""").summary)
+        assertEquals("自己紹介", profile("""{"summary":[null,"自己紹介"]}""").summary)
+        assertNull(profile("""{"preferredUsername":"alice"}""").summary)
+        assertNull(profile("""{"summary":{"ja":"自己紹介"}}""").summary)
+    }
+
+    @Test
     fun `文字列で書かれた名前とアイコンを読む`() {
         val profile = profile(
             """
