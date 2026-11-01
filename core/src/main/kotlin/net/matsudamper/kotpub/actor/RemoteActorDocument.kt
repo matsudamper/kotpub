@@ -54,6 +54,8 @@ internal data class RemoteActorDocument(
      */
     @SerialName("icon")
     val icon: JsonElement? = null,
+    @SerialName("summary")
+    val summary: JsonElement? = null,
 ) {
     /**
      * 一覧に出すためだけの部分。
@@ -71,6 +73,7 @@ internal data class RemoteActorDocument(
             // そこのアイコンが軒並み出なくなる。ここから POST することはないので、
             // 他所のホストでも送信先として使われる危険は無い
             iconUrl = icon.firstHttpsUrl(),
+            summary = summary.firstText(),
         )
 }
 
