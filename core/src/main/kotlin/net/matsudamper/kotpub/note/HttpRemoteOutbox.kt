@@ -22,42 +22,45 @@ class HttpRemoteOutbox(
         check(actor.text("id") == actorId) { "アクターの ID が一致しません" }
         val outbox = actor["outbox"] ?: return listOf()
         val collection = document(outbox, actorUrl) ?: error("outbox を取得できませんでした")
-        return pages(collection, actorId, actorUrl, limit, MAX_PAGES, setOf())
-            .distinctBy { it.id }
+        val firstPage = if (collection.items() == null) document(collection["first"], actorUrl) else collection
+        if (firstPage == null) return listOf()
+        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
             .sortedByDescending { Instant.parse(it.publishedAt) }
             .take(limit)
     }
 
     private suspend fun pages(
-        collection: JsonObject,
+        page: JsonObject,
         actorId: String,
         actorUrl: HttpUrl,
         limit: Int,
         remainingPages: Int,
-        visited: Set<String>,
+        visitedPageIds: Set<String>,
+        collectedNotes: List<RemoteOutboxNote>,
     ): List<RemoteOutboxNote> {
-        if (remainingPages == 0) return listOf()
-        val pageId = collection.text("id")
-        if (pageId != null && pageId in visited) return listOf()
-        val items = (collection["orderedItems"] ?: collection["items"]) as? JsonArray
-        val notes = items.orEmpty().take(MAX_NOTES).mapNotNull { item ->
-            val activity = document(item, actorUrl) ?: return@mapNotNull null
-            val note = when (activity.text("type")) {
-                "Create" -> {
-                    if (activity.text("actor") != actorId) return@mapNotNull null
-                    document(activity["object"], actorUrl)
-                }
-
-                "Note" -> activity
-
-                else -> null
-            } ?: return@mapNotNull null
-            readNote(note, actorId)
-        }
+        val pageId = page.text("id")
+        if (pageId != null && pageId in visitedPageIds) return collectedNotes
+        val pageNotes = page.items().orEmpty().take(MAX_NOTES).mapNotNull { item -> readItem(item, actorId, actorUrl) }
+        val notes = (collectedNotes + pageNotes).distinctBy { it.id }
         if (notes.size >= limit) return notes.take(limit)
-        val next = if (items == null) collection["first"] else collection["next"]
-        val nextPage = document(next, actorUrl) ?: return notes
-        return notes + pages(nextPage, actorId, actorUrl, limit - notes.size, remainingPages - 1, visited + listOfNotNull(pageId))
+        if (remainingPages <= 1) return notes
+        val nextPage = document(page["next"], actorUrl) ?: return notes
+        return pages(nextPage, actorId, actorUrl, limit, remainingPages - 1, visitedPageIds + listOfNotNull(pageId), notes)
+    }
+
+    private suspend fun readItem(item: JsonElement, actorId: String, actorUrl: HttpUrl): RemoteOutboxNote? {
+        val activity = document(item, actorUrl) ?: return null
+        val note = when (activity.text("type")) {
+            "Create" -> {
+                if (activity.text("actor") != actorId) return null
+                document(activity["object"], actorUrl)
+            }
+
+            "Note" -> activity
+
+            else -> null
+        } ?: return null
+        return readNote(note, actorId)
     }
 
     private fun readNote(note: JsonObject, actorId: String): RemoteOutboxNote? {
@@ -99,6 +102,8 @@ class HttpRemoteOutbox(
     }
 
     private fun JsonObject.text(name: String): String? = (this[name] as? JsonPrimitive)?.content
+
+    private fun JsonObject.items(): JsonArray? = (this["orderedItems"] ?: this["items"]) as? JsonArray
 
     private companion object {
         const val MAX_NOTES = 20

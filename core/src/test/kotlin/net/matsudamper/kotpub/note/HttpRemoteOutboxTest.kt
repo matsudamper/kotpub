@@ -59,6 +59,25 @@ class HttpRemoteOutboxTest {
         assertEquals(listOf(actorId, outboxUrl), requests)
     }
 
+    @Test
+    fun doesNotCountCollectionEntryAsPage() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","first":"$outboxUrl?page=1"}"""
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[],"next":"$outboxUrl?page=3"}"""
+        documents["$outboxUrl?page=3"] = """{"id":"$outboxUrl?page=3","orderedItems":[${note("third", actorId, true)}],"next":"$outboxUrl?page=4"}"""
+        assertEquals(listOf("$actorId/third"), outbox.recent(actorId, 20).map { it.id })
+        assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1", "$outboxUrl?page=2", "$outboxUrl?page=3"), requests)
+    }
+
+    @Test
+    fun countsOnlyUniqueNotesTowardLimit() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("a", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("a", actorId, true)},${note("b", actorId, true)}]}"""
+        assertEquals(setOf("$actorId/a", "$actorId/b"), outbox.recent(actorId, 2).map { it.id }.toSet())
+    }
+
     private fun note(id: String, author: String, public: Boolean): String =
         """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"2026-11-01T00:00:00Z","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
 }
