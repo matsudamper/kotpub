@@ -40,12 +40,27 @@ class HttpRemoteOutbox(
     ): List<RemoteOutboxNote> {
         val pageId = page.text("id")
         if (pageId != null && pageId in visitedPageIds) return collectedNotes
-        val pageNotes = page.items().orEmpty().take(MAX_NOTES).mapNotNull { item -> readItem(item, actorId, actorUrl) }
-        val notes = (collectedNotes + pageNotes).distinctBy { it.id }
-        if (notes.size >= limit) return notes.take(limit)
+        val pageItems = page.items().orEmpty().take(MAX_ITEMS_PER_PAGE)
+        val notes = collectUniqueNotes(pageItems, 0, actorId, actorUrl, limit, collectedNotes)
+        if (notes.size >= limit) return notes
         if (remainingPages <= 1) return notes
         val nextPage = document(page["next"], actorUrl) ?: return notes
         return pages(nextPage, actorId, actorUrl, limit, remainingPages - 1, visitedPageIds + listOfNotNull(pageId), notes)
+    }
+
+    private tailrec suspend fun collectUniqueNotes(
+        items: List<JsonElement>,
+        index: Int,
+        actorId: String,
+        actorUrl: HttpUrl,
+        limit: Int,
+        collectedNotes: List<RemoteOutboxNote>,
+    ): List<RemoteOutboxNote> {
+        if (collectedNotes.size >= limit) return collectedNotes
+        val item = items.getOrNull(index) ?: return collectedNotes
+        val note = readItem(item, actorId, actorUrl)
+        val notes = if (note == null || collectedNotes.any { it.id == note.id }) collectedNotes else collectedNotes + note
+        return collectUniqueNotes(items, index + 1, actorId, actorUrl, limit, notes)
     }
 
     private suspend fun readItem(item: JsonElement, actorId: String, actorUrl: HttpUrl): RemoteOutboxNote? {
@@ -108,6 +123,7 @@ class HttpRemoteOutbox(
     private companion object {
         const val MAX_NOTES = 20
         const val MAX_PAGES = 3
+        const val MAX_ITEMS_PER_PAGE = 100
         const val MAX_BODY_BYTES = 1024 * 1024
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }

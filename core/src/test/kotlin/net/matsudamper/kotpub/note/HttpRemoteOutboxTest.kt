@@ -78,6 +78,14 @@ class HttpRemoteOutboxTest {
         assertEquals(setOf("$actorId/a", "$actorId/b"), outbox.recent(actorId, 2).map { it.id }.toSet())
     }
 
+    @Test
+    fun scansItemsBeyondNoteLimitInSamePage() = runBlocking {
+        val boosts = (1..20).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[$boosts,${note("own", actorId, true)}]}"""
+        assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).map { it.id })
+    }
+
     private fun note(id: String, author: String, public: Boolean): String =
         """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"2026-11-01T00:00:00Z","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
 }
