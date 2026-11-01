@@ -29,3 +29,48 @@ jobs:
       # ktlintCheck とテストを含む
       - name: build
         run: ./gradlew build
+
+      - name: upload jars
+        id: upload-jars
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jars-pr${{ github.event.pull_request.number }}
+          path: "*/build/libs/*.jar"
+          if-no-files-found: error
+
+    outputs:
+      jars-artifact-url: ${{ steps.upload-jars.outputs.artifact-url }}
+
+  comment-jars:
+    name: comment jars link
+    needs: build
+    # フォークからの PR はトークンに書き込み権限が無くコメントできない
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: comment jars link
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          JARS_ARTIFACT_URL: ${{ needs.build.outputs.jars-artifact-url }}
+        with:
+          script: |
+            const marker = '<!-- jars-artifact-link -->';
+            const body = [
+              marker,
+              `ビルドした jar: ${process.env.JARS_ARTIFACT_URL}`,
+              '',
+              `コミット: ${context.payload.pull_request.head.sha}`,
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
