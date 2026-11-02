@@ -16,6 +16,7 @@ interface RemoteActors :
     AutoCloseable {
     /**
      * アクター文書から、配信と記録に要る部分を取得する。取得できなければ null。
+     * 戻り値の actorId は取得した文書の id。id が無い、HTTPS でない、取得先とホストが違う場合は null。
      *
      * 1 回の呼び出しで全部返すのは、これらが同じ 1 つの文書から読めるため。
      * フォロワーとして記録するときに inbox と公開鍵を別々に取得すると、
@@ -28,7 +29,7 @@ interface RemoteActors :
 /**
  * 相手のアクター文書のうち、こちらが使う部分。
  *
- * @param actorId 取得したアクターの id。呼び出しに使った URL がそのまま入る
+ * @param actorId 取得した文書の id。取得先と同じホストの HTTPS URL
  * @param inbox 配信先。https で、[actorId] と同じホストのものに限る。
  *   ここを緩めると、相手が自分のアクター文書に他所の URL を書くだけで、
  *   こちらのサーバーから任意の宛先に POST させられる
