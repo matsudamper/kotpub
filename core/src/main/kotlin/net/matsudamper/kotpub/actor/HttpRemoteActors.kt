@@ -131,6 +131,8 @@ class HttpRemoteActors(
             ?.document
             ?: return null
 
+        val documentActorId = document.id?.takeIf { isDeliverable(it, url) } ?: return null
+
         // 宛先はこちらが POST しに行く先になる。アクターと同じホストに限ることで、
         // 相手が自分の文書に書いた URL でこちらから他所へ POST させる形を塞ぐ
         val inbox = document.inbox?.takeIf { isDeliverable(it, url) } ?: return null
@@ -138,7 +140,7 @@ class HttpRemoteActors(
         val publicKeyPem = document.publicKey?.publicKeyPem ?: return null
 
         return RemoteActor(
-            actorId = actorId,
+            actorId = documentActorId,
             inbox = inbox,
             // 無いのが普通なので、条件を満たさないものは落として先へ進む。
             // sharedInbox が無くても inbox に 1 通ずつ送れば配信自体はできる
