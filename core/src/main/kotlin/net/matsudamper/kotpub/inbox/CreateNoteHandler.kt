@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.ReceivedNote
+import net.matsudamper.kotpub.note.ReceivedNoteAttachment
 import net.matsudamper.kotpub.note.RemoteNoteStore
 
 class CreateNoteHandler(
@@ -52,9 +53,40 @@ class CreateNoteHandler(
                 summary = note["summary"].string(),
                 sensitive = (note["sensitive"] as? JsonPrimitive)?.booleanOrNull ?: false,
                 visibility = visibility,
+                attachments = note["attachment"].attachments(),
             ),
         )
     }
+
+    private fun JsonElement?.attachments(): List<ReceivedNoteAttachment> = when (this) {
+        is JsonArray -> mapNotNull { it.attachment() }
+        else -> listOfNotNull(attachment())
+    }
+
+    private fun JsonElement?.attachment(): ReceivedNoteAttachment? {
+        val attachment = this as? JsonObject ?: return null
+        val link = attachment["url"].link() ?: return null
+        return ReceivedNoteAttachment(
+            url = link.href,
+            mediaType = attachment["mediaType"].string() ?: link.mediaType,
+            name = attachment["name"].string(),
+        )
+    }
+
+    // url は文字列のほか、Link オブジェクトやその配列で来ることがある。配列は先頭の http(s) の URL を使う
+    private fun JsonElement?.link(): AttachmentLink? = when (this) {
+        is JsonArray -> firstNotNullOfOrNull { it.link() }
+
+        is JsonObject -> this["href"].string()
+            ?.takeIf { it.isHttpUrl() }
+            ?.let { AttachmentLink(href = it, mediaType = this["mediaType"].string()) }
+
+        else -> string()?.takeIf { it.isHttpUrl() }?.let { AttachmentLink(href = it, mediaType = null) }
+    }
+
+    private fun String.isHttpUrl(): Boolean = HttpUrl.parse(this)?.scheme in setOf("http", "https")
+
+    private class AttachmentLink(val href: String, val mediaType: String?)
 
     private fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 

@@ -18,6 +18,17 @@ data class ReceivedNote(
     val summary: String?,
     val sensitive: Boolean,
     val visibility: NoteVisibility,
+    val attachments: List<ReceivedNoteAttachment>,
+)
+
+/**
+ * @param mediaType 送り手が付けていなければ null
+ * @param name 画像の説明文など。無ければ null
+ */
+data class ReceivedNoteAttachment(
+    val url: String,
+    val mediaType: String?,
+    val name: String?,
 )
 
 enum class NoteVisibility {
