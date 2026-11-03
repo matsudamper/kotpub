@@ -26,7 +26,7 @@ import net.matsudamper.kotpub.json.AppJson
  * - https のみ。平文で取得した鍵は途中で差し替えられる
  * - 宛先が公開アドレスであることは [client] が接続の前に確かめる
  * - リダイレクトで別ホストに移ったら捨てる。移った先のサーバーが
- *   他人のアクターの鍵だと偽れてしまう
+ *   他人のアクターの鍵だと偽れてしまう。[findActorByUrl] だけは、移った先から取得し直す
  * - 文書に書かれた `owner` と `inbox` は、取得先と同じホストであること。
  *   他所のホストのものだと言い張るものを信じない
  * - 大きすぎる応答は読まない
@@ -59,6 +59,11 @@ class HttpRemoteActors(
      * 直前に相手のサーバーから取得したアクター。[refresh] の間隔を空けるのに使う
      */
     private val recentlyFetched: ExpiringCache<String, Unit> = createExpiringCache(MAX_CACHED_ACTORS)
+
+    /**
+     * 直前の取得で別のホストへ移った先。[recentlyFetched] の間隔の中で取得し直せないときに、移った先を答えるのに使う
+     */
+    private val recentOtherHostRedirects: ExpiringCache<String, String> = createExpiringCache(MAX_CACHED_ACTORS)
 
     override suspend fun find(keyId: String): PublicKeyLookup {
         val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable
@@ -98,7 +103,7 @@ class HttpRemoteActors(
                 // 落ちているだけの相手を消えた扱いにすると、後から生き返る
                 DocumentFetch.Gone -> return PublicKeyLookup.Gone
 
-                DocumentFetch.Unavailable -> return PublicKeyLookup.Unavailable
+                is DocumentFetch.RedirectedToOtherHost, DocumentFetch.Unavailable -> return PublicKeyLookup.Unavailable
             }
 
         val publicKey = document.publicKey ?: return PublicKeyLookup.Unavailable
@@ -131,6 +136,28 @@ class HttpRemoteActors(
             ?.document
             ?: return null
 
+        return toRemoteActor(document = document, url = url)
+    }
+
+    /**
+     * 移った先でもう一度別のホストへ移った場合は [findActor] が捨てる。辿るのは 1 回だけ
+     */
+    override suspend fun findActorByUrl(url: String): RemoteActor? {
+        val requestUrl = parseHttpsUrl(url) ?: return null
+        return when (val fetched = fetch(rawUrl = url, requestUrl = requestUrl, useCache = false)) {
+            is DocumentFetch.Found -> toRemoteActor(document = fetched.document, url = requestUrl)
+            is DocumentFetch.RedirectedToOtherHost -> findActor(fetched.finalUrl)
+            DocumentFetch.Gone, DocumentFetch.Unavailable -> null
+        }
+    }
+
+    /**
+     * @param url 取得先。文書に書かれた URL が、取得先と同じホストか確かめる
+     */
+    private fun toRemoteActor(
+        document: RemoteActorDocument,
+        url: HttpUrl,
+    ): RemoteActor? {
         val documentActorId = document.id?.takeIf { isDeliverable(it, url) } ?: return null
 
         // 宛先はこちらが POST しに行く先になる。アクターと同じホストに限ることで、
@@ -185,6 +212,7 @@ class HttpRemoteActors(
                     when (fetched) {
                         is DocumentFetch.Found -> "found"
                         DocumentFetch.Gone -> "gone"
+                        is DocumentFetch.RedirectedToOtherHost -> "redirected_to_other_host"
                         DocumentFetch.Unavailable -> "unavailable"
                     },
                 )
@@ -223,7 +251,9 @@ class HttpRemoteActors(
             // 直前に取得したばかりなら、覚えているものはそのとき読んだ文書で、
             // 取得し直しても同じものにしかならない
             RemoteActorSpan.outcome("throttled")
-            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Unavailable
+            documents.get(cacheKey)?.let { return DocumentFetch.Found(it) }
+            recentOtherHostRedirects.get(cacheKey)?.let { return DocumentFetch.RedirectedToOtherHost(it) }
+            return DocumentFetch.Unavailable
         }
 
         val response =
@@ -247,9 +277,14 @@ class HttpRemoteActors(
         // status を見る前に確かめるのは、消えたかどうかを答えてよいのは
         // そのアクターのホストだけだから
         val fetchedFrom = HttpUrl.parse(response.finalUrl)
-        if (fetchedFrom == null || !fetchedFrom.isSameHost(requestUrl)) {
+        if (fetchedFrom == null) {
             RemoteActorSpan.outcome("redirected_to_other_host")
             return DocumentFetch.Unavailable
+        }
+        if (!fetchedFrom.isSameHost(requestUrl)) {
+            recentOtherHostRedirects.put(key = cacheKey, value = response.finalUrl, ttlMillis = REFRESH_INTERVAL_MILLIS)
+            RemoteActorSpan.outcome("redirected_to_other_host")
+            return DocumentFetch.RedirectedToOtherHost(response.finalUrl)
         }
 
         // 消えたと見なすのは 410 だけ。Mastodon は削除済みのアカウントにこれを返す。
@@ -328,6 +363,13 @@ class HttpRemoteActors(
         ) : DocumentFetch
 
         data object Gone : DocumentFetch
+
+        /**
+         * 別のホストへ移った。移った先の文書は読んでいない
+         */
+        data class RedirectedToOtherHost(
+            val finalUrl: String,
+        ) : DocumentFetch
 
         data object Unavailable : DocumentFetch
     }
