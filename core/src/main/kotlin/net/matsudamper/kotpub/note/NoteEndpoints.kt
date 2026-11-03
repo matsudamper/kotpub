@@ -215,5 +215,6 @@ private fun noteDocument(
         cc = listOf(urls.followers),
         atomUri = noteUrls.noteUrl,
         url = webPages?.note(username = urls.username, publicId = note.publicId),
+        attachment = note.attachments.toNoteDocuments(),
     )
 }
