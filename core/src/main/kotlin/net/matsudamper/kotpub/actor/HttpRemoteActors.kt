@@ -61,7 +61,9 @@ class HttpRemoteActors(
     private val recentlyFetched: ExpiringCache<String, Unit> = createExpiringCache(MAX_CACHED_ACTORS)
 
     /**
-     * 直前の取得で別のホストへ移った先。[recentlyFetched] の間隔の中で取得し直せないときに、移った先を答えるのに使う
+     * 直前の取得で別のホストへ移った先。[recentlyFetched] の間隔の中で [findActorByUrl] が移った先を答えるのに使う。
+     * [documents] より先に見るのは、以前アクター文書を返していた URL がリダイレクトに変わったときに、
+     * 覚えている移る前の文書へ戻らないようにするため
      */
     private val recentOtherHostRedirects: ExpiringCache<String, String> = createExpiringCache(MAX_CACHED_ACTORS)
 
@@ -144,6 +146,7 @@ class HttpRemoteActors(
      */
     override suspend fun findActorByUrl(url: String): RemoteActor? {
         val requestUrl = parseHttpsUrl(url) ?: return null
+        recentOtherHostRedirects.get(url.substringBefore('#'))?.let { return findActor(it) }
         return when (val fetched = fetch(rawUrl = url, requestUrl = requestUrl, useCache = false)) {
             is DocumentFetch.Found -> toRemoteActor(document = fetched.document, url = requestUrl)
             is DocumentFetch.RedirectedToOtherHost -> findActor(fetched.finalUrl)
@@ -251,9 +254,7 @@ class HttpRemoteActors(
             // 直前に取得したばかりなら、覚えているものはそのとき読んだ文書で、
             // 取得し直しても同じものにしかならない
             RemoteActorSpan.outcome("throttled")
-            documents.get(cacheKey)?.let { return DocumentFetch.Found(it) }
-            recentOtherHostRedirects.get(cacheKey)?.let { return DocumentFetch.RedirectedToOtherHost(it) }
-            return DocumentFetch.Unavailable
+            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Unavailable
         }
 
         val response =
@@ -286,6 +287,7 @@ class HttpRemoteActors(
             RemoteActorSpan.outcome("redirected_to_other_host")
             return DocumentFetch.RedirectedToOtherHost(response.finalUrl)
         }
+        recentOtherHostRedirects.invalidate(cacheKey)
 
         // 消えたと見なすのは 410 だけ。Mastodon は削除済みのアカウントにこれを返す。
         // 404 は消したのか置き場所が変わったのかを区別できず、
