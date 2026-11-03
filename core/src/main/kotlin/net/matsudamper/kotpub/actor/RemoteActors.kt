@@ -24,6 +24,16 @@ interface RemoteActors :
      * 記録した鍵と inbox が別のバージョンのものになる。
      */
     suspend fun findActor(actorId: String): RemoteActor?
+
+    /**
+     * 人が入力した URL から、それが指すアクターを [findActor] と同じ形で取得する。
+     *
+     * Mastodon や Misskey は、他のサーバーのユーザーを表示するプロフィールの URL へのアクター文書の要求を、
+     * そのユーザーのホストのアクターへリダイレクトする。[findActor] は別のホストへ移った応答を捨てるので、
+     * 移った先の URL から [findActor] で取得し直す。
+     * 移った先の文書は移った先のホストを基準に確かめるので、リダイレクトしたホストが他所のアクターを名乗ることはできない
+     */
+    suspend fun findActorByUrl(url: String): RemoteActor? = findActor(url)
 }
 
 /**
