@@ -36,6 +36,7 @@ internal object CreateNoteActivityFactory {
                 cc = listOf(sender.followers),
                 url = webPages?.note(username = sender.username, publicId = note.publicId),
                 atomUri = urls.noteUrl,
+                attachment = note.attachments.map { it.toDocument() },
             ),
         )
     }

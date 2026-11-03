@@ -25,10 +25,12 @@ class NotePublisher(
      * 投稿の id と時刻を決めて、フォロワーに送る `Create{Note}` の JSON を組み立てる。
      *
      * @param contentHtml 本文。サニタイズ済みの HTML を渡すこと。ここでは中身を検査しない
+     * @param attachments 添える画像。置き終わった URL を渡すこと。相手は受け取ってすぐ取りに来る
      */
     fun prepare(
         sender: ActorUrls,
         contentHtml: String,
+        attachments: List<StoredNoteAttachment>,
     ): PreparedNote {
         val publishedAt = Instant.now()
         val note = StoredNote(
@@ -36,6 +38,7 @@ class NotePublisher(
             username = sender.username,
             contentHtml = contentHtml,
             publishedAt = publishedAt,
+            attachments = attachments,
         )
 
         return note.toPrepared(sender)

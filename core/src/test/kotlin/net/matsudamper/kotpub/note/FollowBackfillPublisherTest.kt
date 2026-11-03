@@ -41,6 +41,7 @@ class FollowBackfillPublisherTest {
                     username = TestLocalActor.USERNAME,
                     contentHtml = "<p>$index</p>",
                     publishedAt = Instant.parse("2026-08-10T00:00:00Z").plusSeconds(index.toLong()),
+                    attachments = listOf(),
                 ),
             )
         }
@@ -110,6 +111,7 @@ class FollowBackfillPublisherTest {
                     username = TestLocalActor.USERNAME,
                     contentHtml = "<p>フォローの後</p>",
                     publishedAt = followAcceptedAt.plusSeconds(60),
+                    attachments = listOf(),
                 ),
             )
         }
@@ -131,6 +133,7 @@ class FollowBackfillPublisherTest {
                         username = TestLocalActor.USERNAME,
                         contentHtml = "<p>フォローの後 $index</p>",
                         publishedAt = followAcceptedAt.plusSeconds(index + 1L),
+                        attachments = listOf(),
                     ),
                 )
             }

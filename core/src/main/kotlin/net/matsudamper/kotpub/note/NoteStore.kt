@@ -88,12 +88,14 @@ data class NotePosition(
  * @param username 投稿したこちらのアカウントの名前
  * @param contentHtml 配信した本文の HTML
  * @param publishedAt 相手に見せる公開日時
+ * @param attachments 添えた画像。並び順のまま相手に見せる
  */
 data class StoredNote(
     val publicId: PublicNoteId,
     val username: String,
     val contentHtml: String,
     val publishedAt: Instant,
+    val attachments: List<StoredNoteAttachment>,
 ) {
     /**
      * この投稿を「直前のページの最後」として指す位置

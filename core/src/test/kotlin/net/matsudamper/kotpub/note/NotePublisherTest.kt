@@ -23,7 +23,7 @@ class NotePublisherTest {
 
     @Test
     fun `Create に包んだ Note を組み立てる`() {
-        val prepared = publisher().prepare(sender, "<p>こんにちは</p>")
+        val prepared = publisher().prepare(sender, "<p>こんにちは</p>", listOf())
 
         val activity = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson)
         assertEquals("Create", activity.type)
@@ -43,7 +43,7 @@ class NotePublisherTest {
 
     @Test
     fun `id は UUID v7 で時刻と揃う`() {
-        val prepared = publisher().prepare(sender, "<p>本文</p>")
+        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf())
 
         assertEquals(7, UUID.fromString(prepared.publicId.value).version())
         assertEquals("<p>本文</p>", prepared.contentHtml)
@@ -56,7 +56,7 @@ class NotePublisherTest {
         val delivery = TestDelivery()
         val publisher = NotePublisher(notes, TestWebPageUrls)
 
-        publisher.prepare(sender, "<p>本文</p>")
+        publisher.prepare(sender, "<p>本文</p>", listOf())
 
         assertTrue(notes.added.isEmpty())
         assertTrue(delivery.delivered.isEmpty())
@@ -66,9 +66,38 @@ class NotePublisherTest {
     fun `呼ぶたびに別の id になる`() {
         val publisher = publisher()
 
-        val first = publisher.prepare(sender, "<p>1</p>")
-        val second = publisher.prepare(sender, "<p>2</p>")
+        val first = publisher.prepare(sender, "<p>1</p>", listOf())
+        val second = publisher.prepare(sender, "<p>2</p>", listOf())
 
         assertTrue(first.publicId != second.publicId)
+    }
+
+    @Test
+    fun `添えた画像を Document として載せる`() {
+        val attachment =
+            StoredNoteAttachment(
+                url = "https://example.com/media/a.png",
+                mediaType = "image/png",
+                description = "猫",
+                width = 640,
+                height = 480,
+            )
+
+        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(attachment))
+
+        val documents = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson).target.attachment
+        assertEquals(
+            listOf(
+                NoteDocument(
+                    mediaType = "image/png",
+                    url = "https://example.com/media/a.png",
+                    name = "猫",
+                    width = 640,
+                    height = 480,
+                ),
+            ),
+            documents,
+        )
+        assertEquals("Document", documents.single().type)
     }
 }

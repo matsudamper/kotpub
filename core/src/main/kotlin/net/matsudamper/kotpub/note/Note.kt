@@ -56,6 +56,8 @@ data class Note(
      */
     @SerialName("url")
     val url: String? = null,
+    @SerialName("attachment")
+    val attachment: List<NoteDocument> = listOf(),
 ) {
     /**
      * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
