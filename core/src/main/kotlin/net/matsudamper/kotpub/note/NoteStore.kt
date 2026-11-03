@@ -88,15 +88,30 @@ data class NotePosition(
  * @param username 投稿したこちらのアカウントの名前
  * @param contentHtml 配信した本文の HTML
  * @param publishedAt 相手に見せる公開日時
+ * @param attachments 付けた画像。付けた順
  */
 data class StoredNote(
     val publicId: PublicNoteId,
     val username: String,
     val contentHtml: String,
     val publishedAt: Instant,
+    val attachments: List<NoteAttachment>,
 ) {
     /**
      * この投稿を「直前のページの最後」として指す位置
      */
     val position: NotePosition get() = NotePosition(publishedAt = publishedAt, publicId = publicId)
 }
+
+/**
+ * 投稿に付けた画像 1 枚。
+ *
+ * @param url 相手が画像を取りに来る URL。相手は受け取った後に取りに来るので、期限付きの URL を渡さない
+ * @param mediaType `image/png` など。相手はこれを見て画像として表示するか決める
+ * @param description 画像の説明文。無ければ null
+ */
+data class NoteAttachment(
+    val url: String,
+    val mediaType: String,
+    val description: String?,
+)

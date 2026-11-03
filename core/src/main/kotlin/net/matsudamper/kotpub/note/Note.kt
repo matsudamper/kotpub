@@ -56,6 +56,8 @@ data class Note(
      */
     @SerialName("url")
     val url: String? = null,
+    @SerialName("attachment")
+    val attachment: List<NoteDocument>,
 ) {
     /**
      * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
@@ -63,3 +65,27 @@ data class Note(
     @SerialName("type")
     val type: String = "Note"
 }
+
+/**
+ * 投稿に付けた画像。Mastodon は `Document` の `mediaType` が画像なら画像として並べる
+ */
+@Serializable
+data class NoteDocument(
+    @SerialName("mediaType")
+    val mediaType: String,
+    @SerialName("url")
+    val url: String,
+    /**
+     * 画像の説明文。Mastodon は代替テキストとして出す
+     */
+    @SerialName("name")
+    val name: String? = null,
+) {
+    @SerialName("type")
+    val type: String = "Document"
+}
+
+internal fun List<NoteAttachment>.toNoteDocuments(): List<NoteDocument> =
+    map { attachment ->
+        NoteDocument(mediaType = attachment.mediaType, url = attachment.url, name = attachment.description)
+    }
