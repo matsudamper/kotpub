@@ -18,9 +18,12 @@ object LikeActivities {
 
     /**
      * 受け取る側は Undo に埋め込まれた Like の id で、取り消すいいねを見分ける。[like] には送ったときと同じ id を渡す
+     *
+     * @param id Like と同じ id にすると、id で重複を落とす相手に Undo を捨てられる
      */
     fun undo(id: String, like: OutgoingActivity): OutgoingActivity {
         require(like.type == ReactionHandler.LIKE_TYPE)
+        require(id != like.id)
         return OutgoingActivity(
             id = id,
             type = "Undo",

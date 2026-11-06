@@ -25,10 +25,12 @@ class LikeActivitiesTest {
         val undo = encode(LikeActivities.undo(id = UNDO_ID, like = like))
 
         assertEquals("Undo", undo.getValue("type").jsonPrimitive.content)
+        assertEquals(UNDO_ID, undo.getValue("id").jsonPrimitive.content)
         assertEquals(ACTOR, undo.getValue("actor").jsonPrimitive.content)
         val embedded = undo.getValue("object").jsonObject
         assertEquals("Like", embedded.getValue("type").jsonPrimitive.content)
         assertEquals(LIKE_ID, embedded.getValue("id").jsonPrimitive.content)
+        assertEquals(ACTOR, embedded.getValue("actor").jsonPrimitive.content)
         assertEquals(NOTE, embedded.getValue("object").jsonPrimitive.content)
     }
 
@@ -37,6 +39,13 @@ class LikeActivitiesTest {
         val follow = FollowActivities.follow(id = "$ACTOR/follows/1", actor = ACTOR, target = "https://remote.example/users/bob")
 
         assertFailsWith<IllegalArgumentException> { LikeActivities.undo(id = UNDO_ID, like = follow) }
+    }
+
+    @Test
+    fun undoRejectsTheSameIdAsTheLike() {
+        val like = LikeActivities.like(id = LIKE_ID, actor = ACTOR, objectUri = NOTE)
+
+        assertFailsWith<IllegalArgumentException> { LikeActivities.undo(id = LIKE_ID, like = like) }
     }
 
     private fun encode(activity: OutgoingActivity) =
