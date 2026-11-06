@@ -6,7 +6,7 @@ import kotlin.time.Duration.Companion.hours
 
 /**
  * `Like` より先に届いた `Undo` が `object` で指していた `Like` アクティビティの `id` の保存先。
- * `EmojiReact` の `id` も同じくここに置く。
+ * `EmojiReact` と `Announce` の `id` も同じくここに置く。
  *
  * 配送の順番は保証されず、取り消しが先に届くことがある。覚えておかないと、後から
  * 届いた `Like` だけが残り、相手が取り消したお気に入りやスタンプが数に入る。再起動をまたいで

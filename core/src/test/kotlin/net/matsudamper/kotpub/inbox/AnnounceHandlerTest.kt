@@ -1,11 +1,13 @@
 package net.matsudamper.kotpub.inbox
 
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.FakeBoostStore
+import net.matsudamper.kotpub.FakeEarlyUndoneLikes
 import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.activity.InboxActivity
@@ -41,6 +43,7 @@ class AnnounceHandlerTest {
         json: String,
         boosts: FakeBoostStore,
         notes: Map<String, ReceivedNote> = mapOf(),
+        earlyUndone: FakeEarlyUndoneLikes = FakeEarlyUndoneLikes(),
     ) {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
         AnnounceHandler(
@@ -48,6 +51,7 @@ class AnnounceHandlerTest {
             remoteActors = TestRemoteActor.remoteActors(),
             remoteNotes = RemoteNotes { notes[it] },
             boosts = boosts,
+            earlyUndone = earlyUndone,
         ).handle(
             recipient = InboxRecipient.Shared,
             verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
@@ -133,6 +137,18 @@ class AnnounceHandlerTest {
             """.trimIndent(),
             boosts,
         )
+
+        assertTrue(boosts.rows.isEmpty())
+    }
+
+    @Test
+    fun `先に取り消しが届いた Announce は記録しない`() = runBlocking {
+        val boosts = FakeBoostStore()
+        val earlyUndone = FakeEarlyUndoneLikes().apply {
+            remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = activityUri, expiresAt = Instant.now().plusSeconds(60))
+        }
+
+        handle(announce(activityUri, localNoteUrl, PUBLIC, ""), boosts, earlyUndone = earlyUndone)
 
         assertTrue(boosts.rows.isEmpty())
     }

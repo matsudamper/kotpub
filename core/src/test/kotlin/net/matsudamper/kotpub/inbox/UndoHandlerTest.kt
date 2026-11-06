@@ -101,7 +101,7 @@ class UndoHandlerTest {
                 stamps = stamps,
                 earlyUndoneLikes = earlyUndoneLikes,
             ),
-            boosts = UndoBoostHandler(boosts),
+            boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
             follows = UndoFollowHandler(directory = TestLocalActor.directory, followers = followers),
         ).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
@@ -366,5 +366,23 @@ class UndoHandlerTest {
         )
 
         assertEquals(1, boosts.rows.size)
+    }
+
+    @Test
+    fun `記録に無い Announce の取り消しは、後から届く同じ id の Announce に備える`() = runBlocking {
+        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+
+        handle(
+            """
+            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
+             "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
+                       "object":"$noteUrl"}}
+            """.trimIndent(),
+            followers = followers(),
+            favourites = favourites(),
+            earlyUndoneLikes = earlyUndoneLikes,
+        )
+
+        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
     }
 }

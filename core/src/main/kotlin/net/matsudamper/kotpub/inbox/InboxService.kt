@@ -270,6 +270,7 @@ class InboxService(
                         remoteActors = remoteActors,
                         remoteNotes = remoteNotes,
                         boosts = boosts,
+                        earlyUndone = earlyUndoneLikes,
                     ),
                     UndoHandler(
                         reactions = UndoReactionHandler(
@@ -278,7 +279,7 @@ class InboxService(
                             stamps = stamps,
                             earlyUndoneLikes = earlyUndoneLikes,
                         ),
-                        boosts = UndoBoostHandler(boosts),
+                        boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
                         follows = UndoFollowHandler(directory = directory, followers = followers),
                     ),
                     UpdateActorHandler(followers),

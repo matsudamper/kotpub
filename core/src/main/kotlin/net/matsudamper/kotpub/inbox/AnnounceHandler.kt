@@ -32,6 +32,7 @@ class AnnounceHandler(
     private val remoteActors: RemoteActors,
     private val remoteNotes: RemoteNotes,
     private val boosts: BoostStore,
+    private val earlyUndone: EarlyUndoneLikes,
 ) : InboxActivityHandler {
     override val type: String = TYPE
 
@@ -55,6 +56,12 @@ class AnnounceHandler(
         if (activityUri == null || actorUrl == null || activityUrl == null || !activityUrl.isSameHost(actorUrl)) {
             logger.info("Announce の id が無いかブーストした相手と別のホストなので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("announce.invalid_id")
+            return
+        }
+
+        if (earlyUndone.isRemembered(actorUri = verifiedSignerActorId, activityUri = activityUri, now = Instant.now())) {
+            logger.info("先に取り消しが届いた Announce なので記録しない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
+            InboxSpan.outcome("announce.undone_first")
             return
         }
 

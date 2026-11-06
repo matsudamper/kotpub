@@ -1,5 +1,7 @@
 package net.matsudamper.kotpub.inbox
 
+import java.time.Instant
+import kotlin.time.toJavaDuration
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.boost.BoostStore
@@ -11,6 +13,7 @@ import org.slf4j.LoggerFactory
  */
 class UndoBoostHandler(
     private val boosts: BoostStore,
+    private val earlyUndone: EarlyUndoneLikes,
 ) {
     private val logger = LoggerFactory.getLogger(UndoBoostHandler::class.java)
 
@@ -45,6 +48,12 @@ class UndoBoostHandler(
             return true
         }
         if (!remove(recipient, verifiedSignerActorId, activityUri)) {
+            // 配送の順番は保証されないので、後から届く同じ id の Announce に備える
+            earlyUndone.remember(
+                actorUri = verifiedSignerActorId,
+                activityUri = activityUri,
+                expiresAt = Instant.now() + EarlyUndoneLikes.TTL.toJavaDuration(),
+            )
             logger.info("取り消す Announce が記録に無い: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("undo_boost.not_recorded")
         }
