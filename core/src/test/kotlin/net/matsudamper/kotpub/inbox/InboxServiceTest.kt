@@ -10,6 +10,7 @@ import kotlin.test.fail
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeFavouriteStore
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.FakeInboxDomainBlocks
@@ -325,6 +326,7 @@ class InboxServiceTest {
                     followers = recordedFollower(),
                     favourites = FakeFavouriteStore(),
                     stamps = FakeStampStore(),
+                    boosts = FakeBoostStore(),
                 )
 
             val result =
@@ -357,6 +359,7 @@ class InboxServiceTest {
                     followers = FakeFollowerStore(),
                     favourites = recordedFavourite(),
                     stamps = FakeStampStore(),
+                    boosts = FakeBoostStore(),
                 )
 
             val result =

@@ -4,6 +4,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
+import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeFavouriteStore
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.FakeStampStore
@@ -49,7 +50,7 @@ class RecordedFallbackPublicKeysTest {
             val remote = TestRemoteActor.remoteActors()
 
             val lookup =
-                RecordedFallbackPublicKeys(remote = remote, followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+                RecordedFallbackPublicKeys(remote = remote, followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                     .find(TestRemoteActor.KEY_ID)
 
             assertEquals(1, remote.findCallCount)
@@ -63,7 +64,7 @@ class RecordedFallbackPublicKeysTest {
             // 相手が鍵を替えてから消えると、Follow のときの鍵では Delete を検証できない
             val followers = followers(publicKeyPem = "替える前の鍵")
 
-            RecordedFallbackPublicKeys(remote = TestRemoteActor.remoteActors(), followers = followers, favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+            RecordedFallbackPublicKeys(remote = TestRemoteActor.remoteActors(), followers = followers, favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                 .find(TestRemoteActor.KEY_ID)
 
             assertEquals(
@@ -79,7 +80,7 @@ class RecordedFallbackPublicKeysTest {
             // その相手が消えた後の Delete を検証できない
             val followers = followers(publicKeyPem = "替える前の鍵")
 
-            RecordedFallbackPublicKeys(remote = TestRemoteActor.remoteActors(), followers = followers, favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+            RecordedFallbackPublicKeys(remote = TestRemoteActor.remoteActors(), followers = followers, favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                 .refresh(TestRemoteActor.KEY_ID)
 
             assertEquals(
@@ -92,7 +93,7 @@ class RecordedFallbackPublicKeysTest {
     fun `消えた相手はフォローの記録から探す`() =
         runBlocking {
             val lookup =
-                RecordedFallbackPublicKeys(remote = gone(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+                RecordedFallbackPublicKeys(remote = gone(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                     .find(TestRemoteActor.KEY_ID)
 
             // 削除された相手の Delete を検証できるのはこの経路だけ
@@ -108,7 +109,7 @@ class RecordedFallbackPublicKeysTest {
         runBlocking {
             // 相手が鍵を替えた後にこの経路を通すと、失効した鍵で署名が通ってしまう
             val lookup =
-                RecordedFallbackPublicKeys(remote = TestRemoteActors(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+                RecordedFallbackPublicKeys(remote = TestRemoteActors(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                     .find(TestRemoteActor.KEY_ID)
 
             assertEquals(PublicKeyLookup.Unavailable, lookup)
@@ -133,6 +134,7 @@ class RecordedFallbackPublicKeysTest {
                     followers = FakeFollowerStore(),
                     favourites = favourites(),
                     stamps = FakeStampStore(),
+                    boosts = FakeBoostStore(),
                 ).find(TestRemoteActor.KEY_ID)
 
             val found = lookup as PublicKeyLookup.Found
@@ -161,6 +163,7 @@ class RecordedFallbackPublicKeysTest {
                     followers = FakeFollowerStore(),
                     favourites = FakeFavouriteStore(),
                     stamps = stamps,
+                    boosts = FakeBoostStore(),
                 ).find(TestRemoteActor.KEY_ID)
 
             val found = lookup as PublicKeyLookup.Found
@@ -172,7 +175,7 @@ class RecordedFallbackPublicKeysTest {
     fun `フォローもお気に入りもスタンプも記録が無ければ見つからない`() =
         runBlocking {
             val lookup =
-                RecordedFallbackPublicKeys(remote = gone(), followers = FakeFollowerStore(), favourites = FakeFavouriteStore(), stamps = FakeStampStore())
+                RecordedFallbackPublicKeys(remote = gone(), followers = FakeFollowerStore(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                     .find(TestRemoteActor.KEY_ID)
 
             assertEquals(PublicKeyLookup.Gone, lookup)
@@ -187,6 +190,7 @@ class RecordedFallbackPublicKeysTest {
                     followers = followers(publicKeyPem = "鍵ではない"),
                     favourites = FakeFavouriteStore(),
                     stamps = FakeStampStore(),
+                    boosts = FakeBoostStore(),
                 ).find(TestRemoteActor.KEY_ID)
 
             assertEquals(PublicKeyLookup.Gone, lookup)
