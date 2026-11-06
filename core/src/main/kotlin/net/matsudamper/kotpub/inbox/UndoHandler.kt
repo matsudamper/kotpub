@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.activitypub.LinkOrObject
  */
 class UndoHandler(
     private val reactions: UndoReactionHandler,
+    private val boosts: UndoBoostHandler,
     private val follows: UndoFollowHandler,
 ) : InboxActivityHandler {
     override val type: String = "Undo"
@@ -27,6 +28,13 @@ class UndoHandler(
             activity = activity,
         )
         if (undoneReaction) return
+
+        val undoneBoost = boosts.handle(
+            recipient = recipient,
+            verifiedSignerActorId = verifiedSignerActorId,
+            activity = activity,
+        )
+        if (undoneBoost) return
 
         val unfollowed = follows.handle(
             recipient = recipient,

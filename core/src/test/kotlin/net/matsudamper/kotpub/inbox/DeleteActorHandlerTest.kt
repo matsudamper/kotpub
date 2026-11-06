@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeFavouriteStore
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.FakeStampStore
@@ -72,9 +73,10 @@ class DeleteActorHandlerTest {
         json: String,
         favourites: FakeFavouriteStore = FakeFavouriteStore(),
         stamps: FakeStampStore = FakeStampStore(),
+        boosts: FakeBoostStore = FakeBoostStore(),
     ) {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
-        DeleteActorHandler(followers = store, favourites = favourites, stamps = stamps).handle(
+        DeleteActorHandler(followers = store, favourites = favourites, stamps = stamps, boosts = boosts).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
             verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
             activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),

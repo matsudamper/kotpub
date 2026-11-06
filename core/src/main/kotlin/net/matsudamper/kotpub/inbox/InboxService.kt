@@ -5,12 +5,14 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.RemoteActors
+import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.favourite.FavouriteStore
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.httpsignature.HttpSignatureResult
 import net.matsudamper.kotpub.httpsignature.HttpSignatureVerifier
 import net.matsudamper.kotpub.httpsignature.SignedRequest
 import net.matsudamper.kotpub.json.AppJson
+import net.matsudamper.kotpub.note.RemoteNotes
 import net.matsudamper.kotpub.stamp.StampStore
 import org.slf4j.LoggerFactory
 
@@ -214,6 +216,8 @@ class InboxService(
          * @param favourites お気に入りの記録。[followers] と同じく、
          *   消えた相手の公開鍵の参照先にもなる
          * @param stamps スタンプの記録。[favourites] と同じく、消えた相手の公開鍵の参照先にもなる
+         * @param boosts ブーストの記録。[favourites] と同じく、消えた相手の公開鍵の参照先にもなる
+         * @param remoteNotes 他のサーバーの投稿がブーストされたときの、投稿の取得元
          * @param domainBlocks 受信を止めるドメインと、署名付きのリクエストが届いたことの記録先
          */
         fun default(
@@ -222,6 +226,8 @@ class InboxService(
             followers: FollowerStore,
             favourites: FavouriteStore,
             stamps: StampStore,
+            boosts: BoostStore,
+            remoteNotes: RemoteNotes,
             earlyUndoneLikes: EarlyUndoneLikes,
             domainBlocks: InboxDomainBlocks,
             domain: String,
@@ -233,6 +239,7 @@ class InboxService(
                         followers = followers,
                         favourites = favourites,
                         stamps = stamps,
+                        boosts = boosts,
                     ),
                 ),
                 domainBlocks = domainBlocks,
@@ -258,6 +265,13 @@ class InboxService(
                         stamps = stamps,
                         earlyUndoneLikes = earlyUndoneLikes,
                     ),
+                    AnnounceHandler(
+                        domain = domain,
+                        remoteActors = remoteActors,
+                        remoteNotes = remoteNotes,
+                        boosts = boosts,
+                        earlyUndone = earlyUndoneLikes,
+                    ),
                     UndoHandler(
                         reactions = UndoReactionHandler(
                             domain = domain,
@@ -265,10 +279,11 @@ class InboxService(
                             stamps = stamps,
                             earlyUndoneLikes = earlyUndoneLikes,
                         ),
+                        boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
                         follows = UndoFollowHandler(directory = directory, followers = followers),
                     ),
                     UpdateActorHandler(followers),
-                    DeleteActorHandler(followers = followers, favourites = favourites, stamps = stamps),
+                    DeleteActorHandler(followers = followers, favourites = favourites, stamps = stamps, boosts = boosts),
                 ),
             )
     }

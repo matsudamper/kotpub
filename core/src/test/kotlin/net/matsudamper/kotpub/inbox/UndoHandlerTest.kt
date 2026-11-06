@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeEarlyUndoneLikes
 import net.matsudamper.kotpub.FakeFavouriteStore
 import net.matsudamper.kotpub.FakeFollowerStore
@@ -15,6 +16,7 @@ import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.actor.RemoteActor
+import net.matsudamper.kotpub.boost.BoostStore.ReceivedBoost
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.favourite.FavouriteStore.ReceivedFavourite
 import net.matsudamper.kotpub.json.AppJson
@@ -30,6 +32,19 @@ class UndoHandlerTest {
     private val followUri = "https://remote.example/activities/1"
 
     private val likeUri = "https://remote.example/likes/1"
+
+    private val announceUri = "https://remote.example/announces/1"
+
+    private fun boosts(): FakeBoostStore = FakeBoostStore().apply {
+        add(
+            ReceivedBoost(
+                notePublicId = notePublicId,
+                actor = TestRemoteActor.actor,
+                activityUri = announceUri,
+                receivedAt = now,
+            ),
+        )
+    }
 
     private fun followers(): FakeFollowerStore = FakeFollowerStore().apply {
         record(
@@ -76,6 +91,7 @@ class UndoHandlerTest {
         favourites: FakeFavouriteStore,
         stamps: FakeStampStore = FakeStampStore(),
         earlyUndoneLikes: FakeEarlyUndoneLikes = FakeEarlyUndoneLikes(),
+        boosts: FakeBoostStore = FakeBoostStore(),
     ) {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
         UndoHandler(
@@ -85,6 +101,7 @@ class UndoHandlerTest {
                 stamps = stamps,
                 earlyUndoneLikes = earlyUndoneLikes,
             ),
+            boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
             follows = UndoFollowHandler(directory = TestLocalActor.directory, followers = followers),
         ).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
@@ -281,5 +298,91 @@ class UndoHandlerTest {
 
         assertTrue(followers.rows.isEmpty())
         assertEquals(1, favourites.rows.size)
+    }
+
+    @Test
+    fun `object に Announce が埋まっていればブーストを取り消す`() = runBlocking {
+        val followers = followers()
+        val boosts = boosts()
+
+        handle(
+            """
+            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
+             "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
+                       "object":"$noteUrl"}}
+            """.trimIndent(),
+            followers = followers,
+            favourites = favourites(),
+            boosts = boosts,
+        )
+
+        assertTrue(boosts.rows.isEmpty())
+        assertEquals(1, followers.rows.size)
+    }
+
+    @Test
+    fun `id だけの Undo でも Announce の id ならブーストを取り消す`() = runBlocking {
+        val followers = followers()
+        val boosts = boosts()
+        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+
+        handle(
+            """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
+            """.trimIndent(),
+            followers = followers,
+            favourites = favourites(),
+            earlyUndoneLikes = earlyUndoneLikes,
+            boosts = boosts,
+        )
+
+        assertTrue(boosts.rows.isEmpty())
+        assertEquals(1, followers.rows.size)
+        assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
+    }
+
+    @Test
+    fun `他人のブーストは取り消さない`() = runBlocking {
+        val boosts = FakeBoostStore().apply {
+            add(
+                ReceivedBoost(
+                    notePublicId = notePublicId,
+                    actor = TestRemoteActor.actor.copy(actorId = "https://remote.example/users/mallory"),
+                    activityUri = announceUri,
+                    receivedAt = now,
+                ),
+            )
+        }
+
+        handle(
+            """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
+            """.trimIndent(),
+            followers = followers(),
+            favourites = favourites(),
+            boosts = boosts,
+        )
+
+        assertEquals(1, boosts.rows.size)
+    }
+
+    @Test
+    fun `記録に無い Announce の取り消しは、後から届く同じ id の Announce に備える`() = runBlocking {
+        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+
+        handle(
+            """
+            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
+             "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
+                       "object":"$noteUrl"}}
+            """.trimIndent(),
+            followers = followers(),
+            favourites = favourites(),
+            earlyUndoneLikes = earlyUndoneLikes,
+        )
+
+        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
     }
 }

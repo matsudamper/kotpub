@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.inbox
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
+import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.favourite.FavouriteStore
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.stamp.StampStore
@@ -18,7 +19,7 @@ import org.slf4j.LoggerFactory
  * 掃除しないと、消えたアカウントの inbox に投稿を送り続けることになる。
  *
  * ここに届くのは署名を検証できたものだけ。相手が既に消えていてアクター文書を
- * 取得できなくても、フォローとお気に入りとスタンプのどれを受けたときも相手の公開鍵を記録しているので
+ * 取得できなくても、フォローとお気に入りとスタンプとブーストのどれを受けたときも相手の公開鍵を記録しているので
  * 検証は通る。
  * 記録の無い相手からの `Delete` は [InboxService] が検証の手前で落とすが、
  * 記録が無い以上、掃除するものも無い。
@@ -27,6 +28,7 @@ class DeleteActorHandler(
     private val followers: FollowerStore,
     private val favourites: FavouriteStore,
     private val stamps: StampStore,
+    private val boosts: BoostStore,
 ) : InboxActivityHandler {
     override val type: String = "Delete"
 
@@ -49,10 +51,11 @@ class DeleteActorHandler(
             return
         }
 
-        // お気に入りとスタンプを先に消す。フォローの解除は相手のアクターの記録ごと消すので、
+        // お気に入りとスタンプとブーストを先に消す。フォローの解除は相手のアクターの記録ごと消すので、
         // 順番を入れ替えると道連れで消えて、件数だけが 0 になる
         val removedFavourites = favourites.removeActor(deleteObjectId)
         val removedStamps = stamps.removeActor(deleteObjectId)
+        val removedBoosts = boosts.removeActor(deleteObjectId)
 
         // こちらのどのアカウントをフォローしていたかに関わらず全部消える。
         // 宛先のアカウントだけを消すと、同じ相手が他のアカウントをフォローしていた分が
@@ -61,7 +64,7 @@ class DeleteActorHandler(
 
         logger.info(
             "アクターが削除されたので記録から外した: $deleteObjectId " +
-                "解除したフォロー=$removed 件 取り消したお気に入り=$removedFavourites 件 取り消したスタンプ=$removedStamps 件",
+                "解除したフォロー=$removed 件 取り消したお気に入り=$removedFavourites 件 取り消したスタンプ=$removedStamps 件 取り消したブースト=$removedBoosts 件",
         )
     }
 }

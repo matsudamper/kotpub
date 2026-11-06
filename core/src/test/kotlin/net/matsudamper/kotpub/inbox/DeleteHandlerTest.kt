@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeFavouriteStore
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.FakeStampStore
@@ -23,7 +24,7 @@ class DeleteHandlerTest {
                 deleted.add(objectId)
             }
         }
-        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore()), notes)
+        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes)
         listOf(ACTOR, "https://other.example/note", "https://remote.example/notes/1").forEach { id ->
             handler.handle(InboxRecipient.Shared, ACTOR, InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(id)), JsonObject(mapOf()))
         }

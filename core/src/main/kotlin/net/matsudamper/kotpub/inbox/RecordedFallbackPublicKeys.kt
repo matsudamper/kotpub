@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.inbox
 
+import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.crypto.RsaKeys
 import net.matsudamper.kotpub.favourite.FavouriteStore
 import net.matsudamper.kotpub.follower.FollowerStore
@@ -14,10 +15,10 @@ import org.slf4j.LoggerFactory
  *
  * ActivityPub で鍵を配る手段はアクター文書しかないので、相手が消えると鍵は
  * どこからも取得できなくなる。アカウント削除の `Delete` は本人が消えた後に届くため、
- * 取得するだけでは署名を検証できない。フォローとお気に入りとスタンプのどれを受けたときも
+ * 取得するだけでは署名を検証できない。フォローとお気に入りとスタンプとブーストのどれを受けたときも
  * 相手のアクターを記録し、公開鍵も一緒に持っているので、
  * 記録のある相手ならそれで検証できる。
- * フォロワーだけを見ると、お気に入りやスタンプしか押していない相手の `Delete` を検証できず、
+ * フォロワーだけを見ると、お気に入りやスタンプやブーストしかしていない相手の `Delete` を検証できず、
  * 消えた相手のお気に入りやスタンプを消せないまま残すことになる。
  *
  * 記録した鍵を使うのは、相手のサーバーが「もう無い」と答えたときだけにする。
@@ -33,6 +34,7 @@ class RecordedFallbackPublicKeys(
     private val followers: FollowerStore,
     private val favourites: FavouriteStore,
     private val stamps: StampStore,
+    private val boosts: BoostStore,
 ) : PublicKeys {
     private val logger = LoggerFactory.getLogger(RecordedFallbackPublicKeys::class.java)
 
@@ -74,6 +76,7 @@ class RecordedFallbackPublicKeys(
                 followers.findPublicKeyPem(actorUri)
                     ?: favourites.findPublicKeyPem(actorUri)
                     ?: stamps.findPublicKeyPem(actorUri)
+                    ?: boosts.findPublicKeyPem(actorUri)
                 )
                 ?.let { runCatching { RsaKeys.decodePublicKeyPem(it) }.getOrNull() }
                 ?: return null
