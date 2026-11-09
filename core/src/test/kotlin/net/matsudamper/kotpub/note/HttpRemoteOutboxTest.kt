@@ -86,6 +86,18 @@ class HttpRemoteOutboxTest {
         assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).map { it.id })
     }
 
+    @Test
+    fun returnsAttachmentsAndContentWarning() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"orderedItems":[{"type":"Note","id":"$actorId/media","attributedTo":"$actorId","content":"<p>画像</p>",
+            "published":"2026-11-01T00:00:00Z","to":["https://www.w3.org/ns/activitystreams#Public"],"summary":"注意","sensitive":true,
+            "attachment":[{"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png","name":"説明"}]}]}"""
+        val note = outbox.recent(actorId, 20).single()
+        assertEquals("注意", note.summary)
+        assertEquals(true, note.sensitive)
+        assertEquals(listOf(ReceivedNoteAttachment(url = "https://remote.example/a.png", mediaType = "image/png", name = "説明")), note.attachments)
+    }
+
     private fun note(id: String, author: String, public: Boolean): String =
         """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"2026-11-01T00:00:00Z","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
 }

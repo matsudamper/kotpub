@@ -86,7 +86,15 @@ class HttpRemoteOutbox(
         val content = note.text("content") ?: return null
         val publishedAt = note.text("published") ?: return null
         if (runCatching { Instant.parse(publishedAt) }.isFailure) return null
-        return RemoteOutboxNote(id, content, publishedAt)
+        val received = ReceivedNoteJson.read(note) ?: return null
+        return RemoteOutboxNote(
+            id = id,
+            contentHtml = content,
+            publishedAt = publishedAt,
+            summary = received.summary,
+            sensitive = received.sensitive,
+            attachments = received.attachments,
+        )
     }
 
     private suspend fun document(value: JsonElement?, actorUrl: HttpUrl): JsonObject? = when (value) {
@@ -129,8 +137,15 @@ class HttpRemoteOutbox(
     }
 }
 
+/**
+ * @param summary 閲覧注意の注意書き。無ければ null
+ * @param attachments 添付。付いた順
+ */
 data class RemoteOutboxNote(
     val id: String,
     val contentHtml: String,
     val publishedAt: String,
+    val summary: String?,
+    val sensitive: Boolean,
+    val attachments: List<ReceivedNoteAttachment>,
 )
