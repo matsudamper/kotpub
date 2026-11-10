@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpUrl
 
@@ -94,6 +95,7 @@ class HttpRemoteOutbox(
             summary = received.summary,
             sensitive = received.sensitive,
             attachments = received.attachments,
+            emojis = received.emojis,
         )
     }
 
@@ -140,6 +142,7 @@ class HttpRemoteOutbox(
 /**
  * @param summary 閲覧注意の注意書き。無ければ null
  * @param attachments 添付。付いた順
+ * @param emojis 本文と注意書きに `:name:` で入るカスタム絵文字
  */
 data class RemoteOutboxNote(
     val id: String,
@@ -148,4 +151,5 @@ data class RemoteOutboxNote(
     val summary: String?,
     val sensitive: Boolean,
     val attachments: List<ReceivedNoteAttachment>,
+    val emojis: List<CustomEmoji>,
 )
