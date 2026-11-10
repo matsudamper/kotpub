@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
+import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
@@ -96,6 +97,16 @@ class HttpRemoteOutboxTest {
         assertEquals("注意", note.summary)
         assertEquals(true, note.sensitive)
         assertEquals(listOf(ReceivedNoteAttachment(url = "https://remote.example/a.png", mediaType = "image/png", name = "説明")), note.attachments)
+    }
+
+    @Test
+    fun returnsCustomEmojis() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"orderedItems":[{"type":"Note","id":"$actorId/emoji","attributedTo":"$actorId","content":"<p>:blob:</p>",
+            "published":"2026-11-01T00:00:00Z","to":["https://www.w3.org/ns/activitystreams#Public"],
+            "tag":[{"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://remote.example/blob.png"}}]}]}"""
+        val note = outbox.recent(actorId, 20).single()
+        assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")), note.emojis)
     }
 
     private fun note(id: String, author: String, public: Boolean): String =
