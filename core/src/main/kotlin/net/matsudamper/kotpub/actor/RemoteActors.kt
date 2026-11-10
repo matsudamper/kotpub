@@ -68,6 +68,7 @@ data class RemoteActor(
  *   アクター文書の URL から決まるので持たない
  * @param profileUrl 人が開くプロフィールの URL。アクター文書の URL とは別物
  * @param iconUrl アイコンの取得元。別ドメインの CDN を指すことがある
+ * @param headerUrl ヘッダー画像の取得元。ActivityStreams の `image`。別ドメインの CDN を指すことがある
  * @param emojis 表示名や自己紹介に `:name:` で入るカスタム絵文字
  */
 data class RemoteActorProfile(
@@ -75,6 +76,7 @@ data class RemoteActorProfile(
     val displayName: String?,
     val profileUrl: String?,
     val iconUrl: String?,
+    val headerUrl: String?,
     val summary: String? = null,
     val emojis: List<CustomEmoji>,
 )
