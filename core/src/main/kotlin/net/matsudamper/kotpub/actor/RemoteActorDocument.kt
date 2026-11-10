@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.matsudamper.kotpub.emoji.CustomEmojiTags
 import net.matsudamper.kotpub.http.HttpUrl
 
 /**
@@ -56,6 +57,8 @@ internal data class RemoteActorDocument(
     val icon: JsonElement? = null,
     @SerialName("summary")
     val summary: JsonElement? = null,
+    @SerialName("tag")
+    val tag: JsonElement? = null,
 ) {
     /**
      * 一覧に出すためだけの部分。
@@ -74,6 +77,7 @@ internal data class RemoteActorDocument(
             // 他所のホストでも送信先として使われる危険は無い
             iconUrl = icon.firstHttpsUrl(),
             summary = summary.firstText(),
+            emojis = CustomEmojiTags.read(tag),
         )
 }
 

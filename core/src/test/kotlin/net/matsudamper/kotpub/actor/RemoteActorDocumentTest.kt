@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.actor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.json.AppJson
 
 // 相手のアクター文書から、一覧に出すための部分を読む。
@@ -70,5 +71,17 @@ class RemoteActorDocumentTest {
 
         assertNull(profile.profileUrl)
         assertNull(profile.iconUrl)
+    }
+
+    @Test
+    fun `表示名に使うカスタム絵文字を tag から読む`() {
+        val profile = profile(
+            """
+            {"id":"https://remote.example/users/alice","name":"アリス :blob:",
+             "tag":{"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://files.remote.example/blob.png"}}}
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://files.remote.example/blob.png")), profile.emojis)
     }
 }

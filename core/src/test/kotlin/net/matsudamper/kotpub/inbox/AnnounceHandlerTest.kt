@@ -37,6 +37,7 @@ class AnnounceHandlerTest {
             sensitive = false,
             visibility = visibility,
             attachments = listOf(),
+            emojis = listOf(),
         )
 
     private suspend fun handle(

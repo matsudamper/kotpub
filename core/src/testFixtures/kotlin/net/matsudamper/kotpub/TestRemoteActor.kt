@@ -27,6 +27,7 @@ object TestRemoteActor {
             displayName = null,
             profileUrl = null,
             iconUrl = null,
+            emojis = listOf(),
         )
 
     val actor: RemoteActor by lazy {
