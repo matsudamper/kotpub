@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import net.matsudamper.kotpub.emoji.CustomEmojiTags
 import net.matsudamper.kotpub.http.HttpUrl
 
 /**
@@ -32,6 +33,7 @@ internal object ReceivedNoteJson {
             sensitive = (note["sensitive"] as? JsonPrimitive)?.booleanOrNull ?: false,
             visibility = visibilityOf(actorId = attributedTo, to = to, cc = cc),
             attachments = note["attachment"].attachments(),
+            emojis = CustomEmojiTags.read(note["tag"]),
         )
     }
 

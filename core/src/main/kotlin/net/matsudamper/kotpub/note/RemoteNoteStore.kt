@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import net.matsudamper.kotpub.emoji.CustomEmoji
 
 interface RemoteNoteStore {
     suspend fun save(note: ReceivedNote)
@@ -19,6 +20,7 @@ data class ReceivedNote(
     val sensitive: Boolean,
     val visibility: NoteVisibility,
     val attachments: List<ReceivedNoteAttachment>,
+    val emojis: List<CustomEmoji>,
 )
 
 /**

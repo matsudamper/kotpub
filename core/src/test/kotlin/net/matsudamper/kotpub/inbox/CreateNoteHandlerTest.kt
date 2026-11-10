@@ -6,6 +6,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import net.matsudamper.kotpub.activity.InboxActivity
+import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.ReceivedNote
@@ -66,6 +67,24 @@ class CreateNoteHandlerTest {
         val attachment = """{"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"}"""
         receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "", attachment = attachment))
         assertEquals(listOf("https://remote.example/a.png"), store.saved.single().attachments.map { it.url })
+    }
+
+    @Test
+    fun customEmojisAreReadFromTagAndSkipNonHttpIcons() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        val tag = """[
+            {"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://remote.example/blob.png"}},
+            {"type":"Hashtag","name":"#kotlin"},
+            {"type":"Emoji","name":":bad:","icon":{"type":"Image","url":"javascript:alert(1)"}}
+        ]"""
+        val target =
+            """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>:blob:</p>","to":["$PUBLIC"],"tag":$tag}"""
+        receive(handler, target)
+        assertEquals(
+            listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")),
+            store.saved.single().emojis,
+        )
     }
 
     private suspend fun receive(handler: CreateNoteHandler, target: String) {

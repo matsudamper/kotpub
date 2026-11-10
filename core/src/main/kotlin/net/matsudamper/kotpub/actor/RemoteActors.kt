@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.actor
 
+import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.httpsignature.PublicKeys
 
 /**
@@ -67,6 +68,7 @@ data class RemoteActor(
  *   アクター文書の URL から決まるので持たない
  * @param profileUrl 人が開くプロフィールの URL。アクター文書の URL とは別物
  * @param iconUrl アイコンの取得元。別ドメインの CDN を指すことがある
+ * @param emojis 表示名や自己紹介に `:name:` で入るカスタム絵文字
  */
 data class RemoteActorProfile(
     val preferredUsername: String?,
@@ -74,4 +76,5 @@ data class RemoteActorProfile(
     val profileUrl: String?,
     val iconUrl: String?,
     val summary: String? = null,
+    val emojis: List<CustomEmoji>,
 )
