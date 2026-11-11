@@ -30,6 +30,26 @@ class HttpRemoteOutboxTest {
     private val outbox = HttpRemoteOutbox(client)
 
     @Test
+    fun featuredKeepsTheOrderTheActorPinned() = runBlocking {
+        val featuredUrl = "$actorId/collections/featured"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","featured":"$featuredUrl"}"""
+        documents[featuredUrl] = """{"id":"$featuredUrl","orderedItems":[
+            ${note("older", actorId, true, "2026-01-01T00:00:00Z")},
+            ${note("private", actorId, false)},
+            ${note("newer", actorId, true, "2026-02-01T00:00:00Z")}
+        ]}"""
+        assertEquals(listOf("$actorId/older", "$actorId/newer"), outbox.featured(actorId, 20).map { it.id })
+        assertEquals(listOf(actorId, featuredUrl), requests)
+    }
+
+    @Test
+    fun featuredIsEmptyWhenActorHasNoFeaturedCollection() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        assertEquals(listOf(), outbox.featured(actorId, 20))
+        assertEquals(listOf(actorId), requests)
+    }
+
+    @Test
     fun followsFirstPageAndOnlyReturnsPublicNotesFromRequestedActor() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","first":"$outboxUrl?page=1"}"""
@@ -109,6 +129,8 @@ class HttpRemoteOutboxTest {
         assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")), note.emojis)
     }
 
-    private fun note(id: String, author: String, public: Boolean): String =
-        """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"2026-11-01T00:00:00Z","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
+    private fun note(id: String, author: String, public: Boolean): String = note(id, author, public, "2026-11-01T00:00:00Z")
+
+    private fun note(id: String, author: String, public: Boolean, published: String): String =
+        """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"$published","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
 }
