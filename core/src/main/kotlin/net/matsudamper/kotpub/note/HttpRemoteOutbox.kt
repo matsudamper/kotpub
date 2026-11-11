@@ -29,18 +29,63 @@ class HttpRemoteOutbox(
         notesOf(actorId = actorId, collectionName = "featured", limit = limit)
 
     /**
+     * outbox を新しい方から 1 ページずつ読む。続きは [RemoteOutboxPage.nextPageId] を [pageId] に渡して読む。
+     * 相手が区切ったページのまま返すので、件数は相手次第。読める投稿が無いページは、続けて次のページも読む
+     *
+     * @param pageId 読むページの id。null なら最初のページ
+     */
+    suspend fun recentPage(actorId: String, pageId: String?): RemoteOutboxPage {
+        val actorUrl = HttpUrl.parseHttps(actorId) ?: return RemoteOutboxPage(notes = listOf(), nextPageId = null)
+        val page = if (pageId == null) {
+            firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = "outbox")
+        } else {
+            fetch(pageId, actorUrl) ?: error("outbox のページを取得できませんでした")
+        }
+        if (page == null) return RemoteOutboxPage(notes = listOf(), nextPageId = null)
+        return wholePages(page, actorId, actorUrl, MAX_PAGES, setOf())
+    }
+
+    /**
      * @param collectionName Actor のうち、投稿を並べたコレクションを指す項目の名前
      */
     private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): List<RemoteOutboxNote> {
         require(limit in 1..MAX_NOTES)
         val actorUrl = HttpUrl.parseHttps(actorId) ?: return listOf()
+        val firstPage = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = collectionName) ?: return listOf()
+        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
+    }
+
+    /**
+     * @return コレクションが無いか、最初のページが無ければ null
+     */
+    private suspend fun firstPage(actorId: String, actorUrl: HttpUrl, collectionName: String): JsonObject? {
         val actor = fetch(actorId, actorUrl) ?: error("アクターを取得できませんでした")
         check(actor.text("id") == actorId) { "アクターの ID が一致しません" }
-        val collectionRef = actor[collectionName] ?: return listOf()
+        val collectionRef = actor[collectionName] ?: return null
         val collection = document(collectionRef, actorUrl) ?: error("$collectionName を取得できませんでした")
-        val firstPage = if (collection.items() == null) document(collection["first"], actorUrl) else collection
-        if (firstPage == null) return listOf()
-        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
+        return if (collection.items() == null) document(collection["first"], actorUrl) else collection
+    }
+
+    private suspend fun wholePages(
+        page: JsonObject,
+        actorId: String,
+        actorUrl: HttpUrl,
+        remainingPages: Int,
+        visitedPageIds: Set<String>,
+    ): RemoteOutboxPage {
+        val pageId = page.text("id")
+        val pageItems = page.items().orEmpty().take(MAX_ITEMS_PER_PAGE)
+        val notes = collectUniqueNotes(pageItems, 0, actorId, actorUrl, MAX_ITEMS_PER_PAGE, listOf())
+            .sortedByDescending { Instant.parse(it.publishedAt) }
+        val nextPageRef = page["next"]
+        val nextPageId = when (nextPageRef) {
+            is JsonPrimitive -> nextPageRef.content
+            is JsonObject -> nextPageRef.text("id")
+            else -> null
+        }?.takeIf { it != pageId && it !in visitedPageIds }
+        if (notes.isNotEmpty() || nextPageId == null || remainingPages <= 1) return RemoteOutboxPage(notes = notes, nextPageId = nextPageId)
+        val nextPage = document(nextPageRef, actorUrl) ?: error("outbox のページを取得できませんでした")
+        return wholePages(nextPage, actorId, actorUrl, remainingPages - 1, visitedPageIds + listOfNotNull(pageId))
     }
 
     private suspend fun pages(
@@ -151,6 +196,15 @@ class HttpRemoteOutbox(
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }
 }
+
+/**
+ * @param notes 新しい順
+ * @param nextPageId 続きのページの id。[HttpRemoteOutbox.recentPage] に渡す。続きが無ければ null
+ */
+data class RemoteOutboxPage(
+    val notes: List<RemoteOutboxNote>,
+    val nextPageId: String?,
+)
 
 /**
  * @param summary 閲覧注意の注意書き。無ければ null

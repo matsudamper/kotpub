@@ -129,6 +129,45 @@ class HttpRemoteOutboxTest {
         assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")), note.emojis)
     }
 
+    @Test
+    fun recentPageReturnsWholePageAndNextPageId() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","first":"$outboxUrl?page=1"}"""
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[
+            ${note("older", actorId, true, "2026-01-01T00:00:00Z")},
+            ${note("newer", actorId, true, "2026-02-01T00:00:00Z")}
+        ],"next":"$outboxUrl?page=2"}"""
+        val page = outbox.recentPage(actorId, null)
+        assertEquals(listOf("$actorId/newer", "$actorId/older"), page.notes.map { it.id })
+        assertEquals("$outboxUrl?page=2", page.nextPageId)
+        assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1"), requests)
+    }
+
+    @Test
+    fun recentPageReadsGivenPageWithoutActor() = runBlocking {
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}]}"""
+        val page = outbox.recentPage(actorId, "$outboxUrl?page=2")
+        assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
+        assertEquals(null, page.nextPageId)
+        assertEquals(listOf("$outboxUrl?page=2"), requests)
+    }
+
+    @Test
+    fun recentPageSkipsPagesWithoutReadableNotes() = runBlocking {
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[${note("private", actorId, false)}],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}],"next":"$outboxUrl?page=3"}"""
+        val page = outbox.recentPage(actorId, "$outboxUrl?page=1")
+        assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
+        assertEquals("$outboxUrl?page=3", page.nextPageId)
+    }
+
+    @Test
+    fun recentPageDoesNotReadPageOnAnotherHost() = runBlocking {
+        documents["https://other.example/outbox?page=2"] = """{"orderedItems":[${note("other", actorId, true)}]}"""
+        assertFailsWith<IllegalStateException> { outbox.recentPage(actorId, "https://other.example/outbox?page=2") }
+        assertEquals(listOf(), requests)
+    }
+
     private fun note(id: String, author: String, public: Boolean): String = note(id, author, public, "2026-11-01T00:00:00Z")
 
     private fun note(id: String, author: String, public: Boolean, published: String): String =
