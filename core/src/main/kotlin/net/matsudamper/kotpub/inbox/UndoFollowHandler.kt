@@ -95,11 +95,10 @@ class UndoFollowHandler(
         embeddedObjectJson: JsonObject,
     ): UndoneFollow? {
         val embeddedFollowActivity =
-            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), embeddedObjectJson) }.getOrNull()
-        if (embeddedFollowActivity == null) {
-            logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId")
-            return null
-        }
+            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), embeddedObjectJson) }.getOrElse { failure ->
+                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId", failure)
+                return null
+            }
 
         // Undo{Like} などをフォロー解除として扱わない
         if (embeddedFollowActivity.type != FOLLOW_TYPE) {

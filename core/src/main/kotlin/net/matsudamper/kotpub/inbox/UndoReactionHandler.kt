@@ -47,12 +47,11 @@ class UndoReactionHandler(
         undoObject: LinkOrObject.Embedded,
     ): Boolean {
         val undoneActivity =
-            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), undoObject.json) }.getOrNull()
-        if (undoneActivity == null) {
-            logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId")
-            InboxSpan.outcome("undo_reaction.unreadable_object")
-            return false
-        }
+            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), undoObject.json) }.getOrElse { failure ->
+                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId", failure)
+                InboxSpan.outcome("undo_reaction.unreadable_object")
+                return false
+            }
 
         val undoneType = undoneActivity.type
         if (undoneType != ReactionHandler.LIKE_TYPE && undoneType != ReactionHandler.EMOJI_REACT_TYPE) return false

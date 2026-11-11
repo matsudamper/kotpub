@@ -53,11 +53,10 @@ class UpdateActorHandler(
         }
 
         val document = runCatching { AppJson.decodeFromJsonElement(RemoteActorDocument.serializer(), embedded) }
-            .getOrNull()
-        if (document == null) {
-            logger.warn("Update のアクターを読めなかった: $verifiedSignerActorId")
-            return
-        }
+            .getOrElse { failure ->
+                logger.warn("Update のアクターを読めなかった: $verifiedSignerActorId", failure)
+                return
+            }
 
         followers.rememberProfile(actorUri = verifiedSignerActorId, profile = document.profile())
     }

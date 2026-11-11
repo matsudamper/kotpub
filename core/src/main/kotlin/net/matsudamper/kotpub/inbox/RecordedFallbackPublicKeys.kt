@@ -71,15 +71,17 @@ class RecordedFallbackPublicKeys(
         // `keyId` はアクター id にフラグメントを付けたもの。記録はアクター id で探す
         val actorUri = keyId.substringBefore('#')
 
-        val publicKey =
-            (
-                followers.findPublicKeyPem(actorUri)
-                    ?: favourites.findPublicKeyPem(actorUri)
-                    ?: stamps.findPublicKeyPem(actorUri)
-                    ?: boosts.findPublicKeyPem(actorUri)
-                )
-                ?.let { runCatching { RsaKeys.decodePublicKeyPem(it) }.getOrNull() }
+        val publicKeyPem =
+            followers.findPublicKeyPem(actorUri)
+                ?: favourites.findPublicKeyPem(actorUri)
+                ?: stamps.findPublicKeyPem(actorUri)
+                ?: boosts.findPublicKeyPem(actorUri)
                 ?: return null
+        val publicKey =
+            runCatching { RsaKeys.decodePublicKeyPem(publicKeyPem) }.getOrElse { failure ->
+                logger.warn("記録した公開鍵を読めなかった: $actorUri", failure)
+                return null
+            }
 
         // 持ち主はこちらの記録で決める。相手の文書を取得できていない以上、
         // keyId に書かれた値を裏付けるものは記録した行しか無い
