@@ -11,11 +11,12 @@ import net.matsudamper.kotpub.json.AppJson
  */
 object BoostActivities {
     /**
-     * 公開でブーストする。投稿者とブーストする側のフォロワーを cc に入れる
+     * ブーストする。投稿者には [audience] によらず届くよう cc に入れる
      *
      * @param objectUri ブーストする投稿の id
      * @param objectAuthor ブーストする投稿の投稿者のアクター id
      * @param followers ブーストする側のフォロワーのコレクションの id
+     * @param audience ブーストを誰に見せるか。ブーストする投稿の公開範囲に合わせる
      */
     fun announce(
         id: String,
@@ -24,12 +25,19 @@ object BoostActivities {
         objectAuthor: String,
         followers: String,
         published: Instant,
+        audience: BoostAudience,
     ): AnnounceActivity = AnnounceActivity(
         id = id,
         actor = actor,
         published = published.toString(),
-        to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-        cc = listOf(objectAuthor, followers).distinct(),
+        to = when (audience) {
+            BoostAudience.PUBLIC -> listOf(ActivityStreamsIri.PUBLIC_AUDIENCE)
+            BoostAudience.UNLISTED -> listOf(followers)
+        },
+        cc = when (audience) {
+            BoostAudience.PUBLIC -> listOf(objectAuthor, followers).distinct()
+            BoostAudience.UNLISTED -> listOf(ActivityStreamsIri.PUBLIC_AUDIENCE, objectAuthor)
+        },
         target = objectUri,
     )
 

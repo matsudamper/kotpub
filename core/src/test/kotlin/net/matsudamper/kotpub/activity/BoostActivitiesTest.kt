@@ -25,6 +25,22 @@ class BoostActivitiesTest {
     }
 
     @Test
+    fun unlistedAnnounceKeepsPublicOutOfTo() {
+        val unlisted = BoostActivities.announce(
+            id = ANNOUNCE_ID,
+            actor = ACTOR,
+            objectUri = NOTE,
+            objectAuthor = AUTHOR,
+            followers = FOLLOWERS,
+            published = Instant.parse("2026-11-10T00:00:00Z"),
+            audience = BoostAudience.UNLISTED,
+        )
+
+        assertEquals(listOf(FOLLOWERS), unlisted.to)
+        assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE, AUTHOR), unlisted.cc)
+    }
+
+    @Test
     fun undoEmbedsTheAnnounceSoTheReceiverCanFindIt() {
         val undo = Json.parseToJsonElement(
             AppJson.encodeToString(OutgoingActivity.serializer(), BoostActivities.undo(id = UNDO_ID, announce = announce())),
@@ -51,6 +67,7 @@ class BoostActivitiesTest {
         objectAuthor = AUTHOR,
         followers = FOLLOWERS,
         published = Instant.parse("2026-11-10T00:00:00Z"),
+        audience = BoostAudience.PUBLIC,
     )
 
     private companion object {
