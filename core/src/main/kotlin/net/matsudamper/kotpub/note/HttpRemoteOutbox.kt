@@ -16,18 +16,31 @@ class HttpRemoteOutbox(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun recent(actorId: String, limit: Int): List<RemoteOutboxNote> {
+    suspend fun recent(actorId: String, limit: Int): List<RemoteOutboxNote> =
+        notesOf(actorId = actorId, collectionName = "outbox", limit = limit)
+            .sortedByDescending { Instant.parse(it.publishedAt) }
+            .take(limit)
+
+    /**
+     * 相手がプロフィールの先頭に固定した投稿。Actor の `featured` が指すコレクションを、相手が並べた順のまま返す。
+     * `featured` が無ければ空
+     */
+    suspend fun featured(actorId: String, limit: Int): List<RemoteOutboxNote> =
+        notesOf(actorId = actorId, collectionName = "featured", limit = limit)
+
+    /**
+     * @param collectionName Actor のうち、投稿を並べたコレクションを指す項目の名前
+     */
+    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): List<RemoteOutboxNote> {
         require(limit in 1..MAX_NOTES)
         val actorUrl = HttpUrl.parseHttps(actorId) ?: return listOf()
         val actor = fetch(actorId, actorUrl) ?: error("アクターを取得できませんでした")
         check(actor.text("id") == actorId) { "アクターの ID が一致しません" }
-        val outbox = actor["outbox"] ?: return listOf()
-        val collection = document(outbox, actorUrl) ?: error("outbox を取得できませんでした")
+        val collectionRef = actor[collectionName] ?: return listOf()
+        val collection = document(collectionRef, actorUrl) ?: error("$collectionName を取得できませんでした")
         val firstPage = if (collection.items() == null) document(collection["first"], actorUrl) else collection
         if (firstPage == null) return listOf()
         return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
-            .sortedByDescending { Instant.parse(it.publishedAt) }
-            .take(limit)
     }
 
     private suspend fun pages(
