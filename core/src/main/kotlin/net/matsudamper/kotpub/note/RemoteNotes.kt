@@ -6,6 +6,7 @@ import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.json.AppJson
+import org.slf4j.LoggerFactory
 
 /**
  * 他のサーバーの投稿を id から取得する。
@@ -32,33 +33,67 @@ fun interface RemoteNotes {
 class HttpRemoteNotes(
     private val client: ActivityPubHttpClient,
 ) : RemoteNotes {
+    private val logger = LoggerFactory.getLogger(HttpRemoteNotes::class.java)
+
     override suspend fun find(noteId: String): ReceivedNote? {
         val noteUrl = HttpUrl.parseHttps(noteId) ?: return null
         val json = fetch(noteId, noteUrl) ?: return null
-        val note = ReceivedNoteJson.read(json) ?: return null
-        if (note.id != noteId) return null
-        val authorUrl = HttpUrl.parseHttps(note.attributedTo) ?: return null
-        if (!authorUrl.isSameHost(noteUrl)) return null
+        val note = ReceivedNoteJson.read(json)
+        if (note == null) {
+            logger.warn("投稿として読めなかった: $noteId")
+            return null
+        }
+        if (note.id != noteId) {
+            logger.warn("取得した投稿の id が取得先と違う: $noteId id=${note.id}")
+            return null
+        }
+        val authorUrl = HttpUrl.parseHttps(note.attributedTo)
+        if (authorUrl == null || !authorUrl.isSameHost(noteUrl)) {
+            logger.warn("投稿者が投稿と別のホストなので捨てる: $noteId 投稿者=${note.attributedTo}")
+            return null
+        }
         return note
     }
 
     private suspend fun fetch(url: String, noteUrl: HttpUrl): JsonObject? {
-        return try {
-            val response = client.get(
+        val response = try {
+            client.get(
                 url = url,
                 headers = mapOf("Accept" to ActivityPubContentTypes.ActivityJson.toString()),
                 maxBodyBytes = MAX_BODY_BYTES,
                 readsBody = { status, finalUrl -> status == 200 && HttpUrl.parseHttps(finalUrl)?.isSameHost(noteUrl) == true },
             )
-            if (response.status != 200 || HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) return null
-            val body = response.body?.getOrNull() ?: return null
-            if (body.size > MAX_BODY_BYTES) return null
-            AppJson.parseToJsonElement(body.decodeToString()) as? JsonObject
         } catch (exception: CancellationException) {
             throw exception
-        } catch (_: Exception) {
-            null
+        } catch (exception: Exception) {
+            logger.warn("投稿の取得に失敗した: $url", exception)
+            return null
         }
+        if (response.status != 200) {
+            logger.warn("投稿を取得できなかった: $url status=${response.status}")
+            return null
+        }
+        if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) {
+            logger.warn("投稿の取得で別のホストに移ったので捨てる: $url → ${response.finalUrl}")
+            return null
+        }
+        val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $url" }.getOrElse { failure ->
+            logger.warn("投稿の本文を読めなかった: $url", failure)
+            return null
+        }
+        if (body.size > MAX_BODY_BYTES) {
+            logger.warn("投稿の本文が大きすぎるので捨てる: $url")
+            return null
+        }
+        val document = runCatching { AppJson.parseToJsonElement(body.decodeToString()) }.getOrElse { failure ->
+            logger.warn("投稿を JSON として読めなかった: $url", failure)
+            return null
+        }
+        if (document !is JsonObject) {
+            logger.warn("投稿が JSON のオブジェクトではないので捨てる: $url")
+            return null
+        }
+        return document
     }
 
     private companion object {

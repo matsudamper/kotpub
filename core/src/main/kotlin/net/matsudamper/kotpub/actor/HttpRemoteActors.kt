@@ -14,6 +14,7 @@ import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
 import net.matsudamper.kotpub.json.AppJson
+import org.slf4j.LoggerFactory
 
 /**
  * 相手のアクター文書を実際に GET して、公開鍵と inbox を取得する。
@@ -48,6 +49,7 @@ class HttpRemoteActors(
     openTelemetry: OpenTelemetry?,
 ) : RemoteActors,
     Closeable {
+    private val logger = LoggerFactory.getLogger(HttpRemoteActors::class.java)
     private val tracer = (openTelemetry ?: OpenTelemetry.noop()).getTracer("activitypub-remote-actor")
 
     /**
@@ -116,7 +118,10 @@ class HttpRemoteActors(
 
         val decodedPublicKey =
             runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }
-                .getOrNull() ?: return PublicKeyLookup.Unavailable
+                .getOrElse { failure ->
+                    logger.warn("アクター文書の公開鍵を読めなかった: $keyId", failure)
+                    return PublicKeyLookup.Unavailable
+                }
 
         return PublicKeyLookup.Found(
             SignatureKey(keyId = keyId, owner = keyOwnerActorId, publicKey = decodedPublicKey),
@@ -321,11 +326,11 @@ class HttpRemoteActors(
         val document =
             runCatching {
                 AppJson.decodeFromString(RemoteActorDocument.serializer(), body.toString(Charsets.UTF_8))
-            }.getOrNull()
-        if (document == null) {
-            RemoteActorSpan.outcome("undecodable_document")
-            return DocumentFetch.Unavailable
-        }
+            }.getOrElse { failure ->
+                RemoteActorSpan.failed(failure)
+                RemoteActorSpan.outcome("undecodable_document")
+                return DocumentFetch.Unavailable
+            }
 
         // 使えると分かった文書だけを覚える。中身を見ずに入れ替えると、相手が 200 で
         // 空の JSON や他所のアクターの鍵を返した瞬間に、それまでの正しい文書を失う。
