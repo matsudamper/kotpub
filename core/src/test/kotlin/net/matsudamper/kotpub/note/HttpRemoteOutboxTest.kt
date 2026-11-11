@@ -182,7 +182,8 @@ class HttpRemoteOutboxTest {
 
     @Test
     fun recentPageResumesInsideLargePageWithoutDroppingItems() = runBlocking {
-        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        (1..150).forEach { documents["$actorId/n$it"] = note("n$it", actorId, true) }
+        val items = (1..150).joinToString(",") { "\"$actorId/n$it\"" }
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[$items],"next":"$outboxUrl?page=2"}"""
         val first = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))
         assertEquals(100, first.notes.size)
@@ -191,6 +192,16 @@ class HttpRemoteOutboxTest {
         val rest = outbox.recentPage(actorId, first.next)
         assertEquals((101..150).map { "$actorId/n$it" }.toSet(), rest.notes.map { it.id }.toSet())
         assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), rest.next)
+    }
+
+    @Test
+    fun recentPageDoesNotCountEmbeddedItemsTowardFetchLimit() = runBlocking {
+        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[$items]}"""
+        val page = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))
+        assertEquals(150, page.notes.size)
+        assertEquals(null, page.next)
+        assertEquals(listOf("$outboxUrl?page=1"), requests)
     }
 
     @Test

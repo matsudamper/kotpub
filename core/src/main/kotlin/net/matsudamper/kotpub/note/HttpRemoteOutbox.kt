@@ -10,10 +10,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpUrl
+import org.slf4j.LoggerFactory
 
 class HttpRemoteOutbox(
     private val client: ActivityPubHttpClient,
 ) {
+    private val logger = LoggerFactory.getLogger(HttpRemoteOutbox::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun recent(actorId: String, limit: Int): List<RemoteOutboxNote> =
@@ -31,9 +33,10 @@ class HttpRemoteOutbox(
     /**
      * outbox を新しい方から少しずつ読む。続きは [RemoteOutboxPage.next] を [from] に渡して読む。
      *
-     * 1 回に読む項目はページごとに [MAX_ITEMS_PER_PAGE] 件までにする。項目が投稿の参照なら 1 件ずつ取りに行くので、
-     * 相手のページが大きくてもリクエストの数を抑えるため。ページの途中で止めたときは、同じページの続きを [RemoteOutboxPage.next] で指す。
-     * id の無いページは後から指せないので、項目の数によらず今読み切る。読める投稿が無ければ、続けて先も読む
+     * 項目が投稿の参照なら 1 件ずつ取りに行くので、1 回に取りに行く数を [MAX_ITEM_FETCHES] 回までにする。
+     * 埋め込まれた項目は取りに行かないので数えない。上限に達してページの途中で止めたときは、
+     * 同じページの続きを [RemoteOutboxPage.next] で指す。id の無いページは後から指せないので、
+     * 上限に達したら残りを捨てて理由をログに残す。読める投稿が無ければ、続けて先も読む
      *
      * @param from 読み始める位置。null なら最初のページの先頭
      */
@@ -45,7 +48,7 @@ class HttpRemoteOutbox(
             fetch(from.pageId, actorUrl) ?: error("outbox のページを取得できませんでした")
         }
         if (page == null) return RemoteOutboxPage(notes = listOf(), next = null)
-        return readFrom(page, from?.itemOffset ?: 0, actorId, actorUrl, MAX_PAGES, setOf(), listOf())
+        return readFrom(page, from?.itemOffset ?: 0, actorId, actorUrl, MAX_PAGES, ItemFetchBudget(MAX_ITEM_FETCHES), setOf(), listOf())
     }
 
     /**
@@ -55,7 +58,7 @@ class HttpRemoteOutbox(
         require(limit in 1..MAX_NOTES)
         val actorUrl = HttpUrl.parseHttps(actorId) ?: return listOf()
         val firstPage = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = collectionName) ?: return listOf()
-        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
+        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, ItemFetchBudget(MAX_ITEM_FETCHES), setOf(), listOf())
     }
 
     /**
@@ -78,25 +81,27 @@ class HttpRemoteOutbox(
         actorId: String,
         actorUrl: HttpUrl,
         remainingSteps: Int,
+        budget: ItemFetchBudget,
         visitedPageIds: Set<String>,
         collectedNotes: List<RemoteOutboxNote>,
     ): RemoteOutboxPage {
         val pageId = page.text("id")
         val items = page.items().orEmpty()
-        val remainingItems = items.drop(itemOffset)
-        val chunk = if (pageId == null) remainingItems else remainingItems.take(MAX_ITEMS_PER_PAGE)
-        val notes = collectUniqueNotes(chunk, 0, actorId, actorUrl, Int.MAX_VALUE, collectedNotes)
-        val nextItemOffset = itemOffset + chunk.size
+        val collected = collectUniqueNotes(items, itemOffset, actorId, actorUrl, Int.MAX_VALUE, budget, collectedNotes)
+        val notes = collected.notes
+        val nextItemOffset = collected.nextIndex
+        if (pageId == null && nextItemOffset < items.size) {
+            logger.warn(
+                "取りに行く回数の上限に達したが、id の無いページは続きを指せないので ${items.size - nextItemOffset} 件を読まずに捨てる: actor=$actorId",
+            )
+        }
         if (pageId != null && nextItemOffset < items.size) {
-            if (notes.isNotEmpty() || remainingSteps <= 1) {
-                return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset))
-            }
-            return readFrom(page, nextItemOffset, actorId, actorUrl, remainingSteps - 1, visitedPageIds, notes)
+            return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset))
         }
         val visited = visitedPageIds + listOfNotNull(pageId)
         val nextPageRef = page["next"]
         if (nextPageRef is JsonObject && nextPageRef.text("id") == null) {
-            return readFrom(nextPageRef, 0, actorId, actorUrl, remainingSteps, visited, notes)
+            return readFrom(nextPageRef, 0, actorId, actorUrl, remainingSteps, budget, visited, notes)
         }
         val nextPageId = when (nextPageRef) {
             is JsonPrimitive -> nextPageRef.takeIf { it.isString }?.content
@@ -108,7 +113,7 @@ class HttpRemoteOutbox(
             return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0))
         }
         val nextPage = document(nextPageRef, actorUrl) ?: error("outbox のページを取得できませんでした")
-        return readFrom(nextPage, 0, actorId, actorUrl, remainingSteps - 1, visited, notes)
+        return readFrom(nextPage, 0, actorId, actorUrl, remainingSteps - 1, budget, visited, notes)
     }
 
     private fun List<RemoteOutboxNote>.newestFirst(): List<RemoteOutboxNote> = sortedByDescending { Instant.parse(it.publishedAt) }
@@ -119,40 +124,53 @@ class HttpRemoteOutbox(
         actorUrl: HttpUrl,
         limit: Int,
         remainingPages: Int,
+        budget: ItemFetchBudget,
         visitedPageIds: Set<String>,
         collectedNotes: List<RemoteOutboxNote>,
     ): List<RemoteOutboxNote> {
         val pageId = page.text("id")
         if (pageId != null && pageId in visitedPageIds) return collectedNotes
-        val pageItems = page.items().orEmpty().take(MAX_ITEMS_PER_PAGE)
-        val notes = collectUniqueNotes(pageItems, 0, actorId, actorUrl, limit, collectedNotes)
+        val pageItems = page.items().orEmpty()
+        val collected = collectUniqueNotes(pageItems, 0, actorId, actorUrl, limit, budget, collectedNotes)
+        val notes = collected.notes
         if (notes.size >= limit) return notes
+        if (collected.nextIndex < pageItems.size) {
+            logger.warn(
+                "取りに行く回数の上限に達したので ${pageItems.size - collected.nextIndex} 件を読まずに終える: actor=$actorId page=$pageId 集まった投稿=${notes.size}",
+            )
+            return notes
+        }
         if (remainingPages <= 1) return notes
         val nextPage = document(page["next"], actorUrl) ?: return notes
-        return pages(nextPage, actorId, actorUrl, limit, remainingPages - 1, visitedPageIds + listOfNotNull(pageId), notes)
+        return pages(nextPage, actorId, actorUrl, limit, remainingPages - 1, budget, visitedPageIds + listOfNotNull(pageId), notes)
     }
 
+    /**
+     * 件数が [limit] に達するか、次の項目を取りに行く余裕が [budget] に無くなるまで読む
+     */
     private tailrec suspend fun collectUniqueNotes(
         items: List<JsonElement>,
         index: Int,
         actorId: String,
         actorUrl: HttpUrl,
         limit: Int,
+        budget: ItemFetchBudget,
         collectedNotes: List<RemoteOutboxNote>,
-    ): List<RemoteOutboxNote> {
-        if (collectedNotes.size >= limit) return collectedNotes
-        val item = items.getOrNull(index) ?: return collectedNotes
-        val note = readItem(item, actorId, actorUrl)
+    ): CollectedNotes {
+        if (collectedNotes.size >= limit) return CollectedNotes(collectedNotes, index)
+        val item = items.getOrNull(index) ?: return CollectedNotes(collectedNotes, index)
+        if (!budget.covers(item)) return CollectedNotes(collectedNotes, index)
+        val note = readItem(item, actorId, actorUrl, budget)
         val notes = if (note == null || collectedNotes.any { it.id == note.id }) collectedNotes else collectedNotes + note
-        return collectUniqueNotes(items, index + 1, actorId, actorUrl, limit, notes)
+        return collectUniqueNotes(items, index + 1, actorId, actorUrl, limit, budget, notes)
     }
 
-    private suspend fun readItem(item: JsonElement, actorId: String, actorUrl: HttpUrl): RemoteOutboxNote? {
-        val activity = document(item, actorUrl) ?: return null
+    private suspend fun readItem(item: JsonElement, actorId: String, actorUrl: HttpUrl, budget: ItemFetchBudget): RemoteOutboxNote? {
+        val activity = itemDocument(item, actorUrl, budget) ?: return null
         val note = when (activity.text("type")) {
             "Create" -> {
                 if (activity.text("actor") != actorId) return null
-                document(activity["object"], actorUrl)
+                itemDocument(activity["object"], actorUrl, budget)
             }
 
             "Note" -> activity
@@ -187,6 +205,11 @@ class HttpRemoteOutbox(
     private fun JsonElement?.audience(): List<String> =
         (if (this is JsonArray) this else listOfNotNull(this)).mapNotNull { (it as? JsonPrimitive)?.content }
 
+    private suspend fun itemDocument(value: JsonElement?, actorUrl: HttpUrl, budget: ItemFetchBudget): JsonObject? {
+        if (value is JsonPrimitive) budget.spend()
+        return document(value, actorUrl)
+    }
+
     private suspend fun document(value: JsonElement?, actorUrl: HttpUrl): JsonObject? = when (value) {
         is JsonObject -> value
         is JsonPrimitive -> fetch(value.content, actorUrl)
@@ -218,10 +241,37 @@ class HttpRemoteOutbox(
 
     private fun JsonObject.items(): JsonArray? = (this["orderedItems"] ?: this["items"]) as? JsonArray
 
+    private class CollectedNotes(
+        val notes: List<RemoteOutboxNote>,
+        val nextIndex: Int,
+    )
+
+    /**
+     * 1 回の読み込みで、項目を取りに行ってよい残りの回数。ページとコレクションの取得は [MAX_PAGES] で抑えるので数えない
+     */
+    private class ItemFetchBudget(private var remaining: Int) {
+        /**
+         * 参照の項目は、取りに行った Create が投稿をまた参照で持っていることがある。
+         * それは取りに行くまで分からないので、上限を 1 回超えることがある
+         */
+        fun covers(item: JsonElement): Boolean {
+            val fetchesBeforeReading = when {
+                item is JsonPrimitive -> 1
+                item is JsonObject && item["object"] is JsonPrimitive -> 1
+                else -> 0
+            }
+            return remaining >= fetchesBeforeReading
+        }
+
+        fun spend() {
+            remaining -= 1
+        }
+    }
+
     private companion object {
         const val MAX_NOTES = 20
         const val MAX_PAGES = 3
-        const val MAX_ITEMS_PER_PAGE = 100
+        const val MAX_ITEM_FETCHES = 100
         const val MAX_BODY_BYTES = 1024 * 1024
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }
