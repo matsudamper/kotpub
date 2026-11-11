@@ -29,20 +29,23 @@ class HttpRemoteOutbox(
         notesOf(actorId = actorId, collectionName = "featured", limit = limit)
 
     /**
-     * outbox を新しい方から 1 ページずつ読む。続きは [RemoteOutboxPage.nextPageId] を [pageId] に渡して読む。
-     * 相手が区切ったページのまま返すので、件数は相手次第。読める投稿が無いページは、続けて次のページも読む
+     * outbox を新しい方から少しずつ読む。続きは [RemoteOutboxPage.next] を [from] に渡して読む。
      *
-     * @param pageId 読むページの id。null なら最初のページ
+     * 1 回に読む項目はページごとに [MAX_ITEMS_PER_PAGE] 件までにする。項目が投稿の参照なら 1 件ずつ取りに行くので、
+     * 相手のページが大きくてもリクエストの数を抑えるため。ページの途中で止めたときは、同じページの続きを [RemoteOutboxPage.next] で指す。
+     * id の無いページは後から指せないので、項目の数によらず今読み切る。読める投稿が無ければ、続けて先も読む
+     *
+     * @param from 読み始める位置。null なら最初のページの先頭
      */
-    suspend fun recentPage(actorId: String, pageId: String?): RemoteOutboxPage {
-        val actorUrl = HttpUrl.parseHttps(actorId) ?: return RemoteOutboxPage(notes = listOf(), nextPageId = null)
-        val page = if (pageId == null) {
+    suspend fun recentPage(actorId: String, from: RemoteOutboxCursor?): RemoteOutboxPage {
+        val actorUrl = HttpUrl.parseHttps(actorId) ?: return RemoteOutboxPage(notes = listOf(), next = null)
+        val page = if (from == null) {
             firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = "outbox")
         } else {
-            fetch(pageId, actorUrl) ?: error("outbox のページを取得できませんでした")
+            fetch(from.pageId, actorUrl) ?: error("outbox のページを取得できませんでした")
         }
-        if (page == null) return RemoteOutboxPage(notes = listOf(), nextPageId = null)
-        return wholePages(page, actorId, actorUrl, MAX_PAGES, setOf())
+        if (page == null) return RemoteOutboxPage(notes = listOf(), next = null)
+        return readFrom(page, from?.itemOffset ?: 0, actorId, actorUrl, MAX_PAGES, setOf(), listOf())
     }
 
     /**
@@ -66,29 +69,49 @@ class HttpRemoteOutbox(
         return if (collection.items() == null) document(collection["first"], actorUrl) else collection
     }
 
-    private suspend fun wholePages(
+    /**
+     * @param remainingSteps 読める投稿が無いときに、続けて読んでよい回数
+     */
+    private suspend fun readFrom(
         page: JsonObject,
+        itemOffset: Int,
         actorId: String,
         actorUrl: HttpUrl,
-        remainingPages: Int,
+        remainingSteps: Int,
         visitedPageIds: Set<String>,
+        collectedNotes: List<RemoteOutboxNote>,
     ): RemoteOutboxPage {
         val pageId = page.text("id")
-        val pageItems = page.items().orEmpty().take(MAX_ITEMS_PER_PAGE)
-        val notes = collectUniqueNotes(pageItems, 0, actorId, actorUrl, MAX_ITEMS_PER_PAGE, listOf())
-            .sortedByDescending { Instant.parse(it.publishedAt) }
+        val items = page.items().orEmpty()
+        val remainingItems = items.drop(itemOffset)
+        val chunk = if (pageId == null) remainingItems else remainingItems.take(MAX_ITEMS_PER_PAGE)
+        val notes = collectUniqueNotes(chunk, 0, actorId, actorUrl, Int.MAX_VALUE, collectedNotes)
+        val nextItemOffset = itemOffset + chunk.size
+        if (pageId != null && nextItemOffset < items.size) {
+            if (notes.isNotEmpty() || remainingSteps <= 1) {
+                return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset))
+            }
+            return readFrom(page, nextItemOffset, actorId, actorUrl, remainingSteps - 1, visitedPageIds, notes)
+        }
+        val visited = visitedPageIds + listOfNotNull(pageId)
         val nextPageRef = page["next"]
+        if (nextPageRef is JsonObject && nextPageRef.text("id") == null) {
+            return readFrom(nextPageRef, 0, actorId, actorUrl, remainingSteps, visited, notes)
+        }
         val nextPageId = when (nextPageRef) {
-            is JsonPrimitive -> nextPageRef.content
+            is JsonPrimitive -> nextPageRef.takeIf { it.isString }?.content
             is JsonObject -> nextPageRef.text("id")
             else -> null
-        }?.takeIf { it != pageId && it !in visitedPageIds }
-        // 埋め込まれた次のページは id が無くても読める。続きとしては返せないので、読み飛ばすときだけ辿る
-        val nextPageReadable = nextPageId != null || nextPageRef is JsonObject
-        if (notes.isNotEmpty() || !nextPageReadable || remainingPages <= 1) return RemoteOutboxPage(notes = notes, nextPageId = nextPageId)
+        }?.takeIf { it !in visited }
+        if (nextPageId == null) return RemoteOutboxPage(notes = notes.newestFirst(), next = null)
+        if (notes.isNotEmpty() || remainingSteps <= 1) {
+            return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0))
+        }
         val nextPage = document(nextPageRef, actorUrl) ?: error("outbox のページを取得できませんでした")
-        return wholePages(nextPage, actorId, actorUrl, remainingPages - 1, visitedPageIds + listOfNotNull(pageId))
+        return readFrom(nextPage, 0, actorId, actorUrl, remainingSteps - 1, visited, notes)
     }
+
+    private fun List<RemoteOutboxNote>.newestFirst(): List<RemoteOutboxNote> = sortedByDescending { Instant.parse(it.publishedAt) }
 
     private suspend fun pages(
         page: JsonObject,
@@ -206,11 +229,22 @@ class HttpRemoteOutbox(
 
 /**
  * @param notes 新しい順
- * @param nextPageId 続きのページの id。[HttpRemoteOutbox.recentPage] に渡す。続きが無ければ null
+ * @param next 続きを読むときに [HttpRemoteOutbox.recentPage] に渡す位置。続きが無ければ null
  */
 data class RemoteOutboxPage(
     val notes: List<RemoteOutboxNote>,
-    val nextPageId: String?,
+    val next: RemoteOutboxCursor?,
+)
+
+/**
+ * outbox のどこまで読んだか
+ *
+ * @param pageId 次に読むページの id
+ * @param itemOffset そのページの何件目から読むか
+ */
+data class RemoteOutboxCursor(
+    val pageId: String,
+    val itemOffset: Int,
 )
 
 /**

@@ -150,16 +150,16 @@ class HttpRemoteOutboxTest {
         ],"next":"$outboxUrl?page=2"}"""
         val page = outbox.recentPage(actorId, null)
         assertEquals(listOf("$actorId/newer", "$actorId/older"), page.notes.map { it.id })
-        assertEquals("$outboxUrl?page=2", page.nextPageId)
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), page.next)
         assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1"), requests)
     }
 
     @Test
     fun recentPageReadsGivenPageWithoutActor() = runBlocking {
         documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}]}"""
-        val page = outbox.recentPage(actorId, "$outboxUrl?page=2")
+        val page = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=2", 0))
         assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
-        assertEquals(null, page.nextPageId)
+        assertEquals(null, page.next)
         assertEquals(listOf("$outboxUrl?page=2"), requests)
     }
 
@@ -167,23 +167,46 @@ class HttpRemoteOutboxTest {
     fun recentPageSkipsPagesWithoutReadableNotes() = runBlocking {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[${note("private", actorId, false)}],"next":"$outboxUrl?page=2"}"""
         documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}],"next":"$outboxUrl?page=3"}"""
-        val page = outbox.recentPage(actorId, "$outboxUrl?page=1")
+        val page = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))
         assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
-        assertEquals("$outboxUrl?page=3", page.nextPageId)
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=3", 0), page.next)
     }
 
     @Test
     fun recentPageSkipsIntoEmbeddedNextPageWithoutId() = runBlocking {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":{"orderedItems":[${note("embedded", actorId, true)}]}}"""
-        val page = outbox.recentPage(actorId, "$outboxUrl?page=1")
+        val page = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))
         assertEquals(listOf("$actorId/embedded"), page.notes.map { it.id })
-        assertEquals(null, page.nextPageId)
+        assertEquals(null, page.next)
+    }
+
+    @Test
+    fun recentPageResumesInsideLargePageWithoutDroppingItems() = runBlocking {
+        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[$items],"next":"$outboxUrl?page=2"}"""
+        val first = outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))
+        assertEquals(100, first.notes.size)
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=1", 100), first.next)
+
+        val rest = outbox.recentPage(actorId, first.next)
+        assertEquals((101..150).map { "$actorId/n$it" }.toSet(), rest.notes.map { it.id }.toSet())
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), rest.next)
+    }
+
+    @Test
+    fun recentPageReadsWholePageWithoutIdBecauseItCannotBeResumed() = runBlocking {
+        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"first":{"orderedItems":[$items]}}"""
+        val page = outbox.recentPage(actorId, null)
+        assertEquals(150, page.notes.size)
+        assertEquals(null, page.next)
     }
 
     @Test
     fun recentPageDoesNotReadPageOnAnotherHost() = runBlocking {
         documents["https://other.example/outbox?page=2"] = """{"orderedItems":[${note("other", actorId, true)}]}"""
-        assertFailsWith<IllegalStateException> { outbox.recentPage(actorId, "https://other.example/outbox?page=2") }
+        assertFailsWith<IllegalStateException> { outbox.recentPage(actorId, RemoteOutboxCursor("https://other.example/outbox?page=2", 0)) }
         assertEquals(listOf(), requests)
     }
 
