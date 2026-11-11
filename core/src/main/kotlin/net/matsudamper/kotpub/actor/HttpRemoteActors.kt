@@ -276,6 +276,7 @@ class HttpRemoteActors(
                 )
             }.getOrElse { failure ->
                 if (failure is CancellationException) throw failure
+                logger.warn("アクター文書の取得に失敗した: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("request_failed")
                 return DocumentFetch.Unavailable
@@ -314,6 +315,7 @@ class HttpRemoteActors(
         // 本文は status を見た後で読む。読めなかった理由は例外として span に残す
         val body =
             checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $rawUrl" }.getOrElse { failure ->
+                logger.warn("アクター文書の本文を読めなかった: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("request_failed")
                 return DocumentFetch.Unavailable
@@ -327,6 +329,7 @@ class HttpRemoteActors(
             runCatching {
                 AppJson.decodeFromString(RemoteActorDocument.serializer(), body.toString(Charsets.UTF_8))
             }.getOrElse { failure ->
+                logger.warn("アクター文書を読めなかった: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("undecodable_document")
                 return DocumentFetch.Unavailable
