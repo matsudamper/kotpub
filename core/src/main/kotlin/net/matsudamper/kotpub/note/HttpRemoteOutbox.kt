@@ -51,11 +51,20 @@ class HttpRemoteOutbox(
         }
         // 項目が無いのは相手が並べていないだけなので、空として返す
         val collectionRef = actor[collectionName] ?: return RemoteOutboxResult.Found(listOf())
-        val collection = document(collectionRef, actorUrl) ?: return RemoteOutboxResult.Unavailable
+        val collection = document(collectionRef, actorUrl)
+        if (collection == null) {
+            logger.warn("$collectionName を読めなかった: actor=$actorId")
+            return RemoteOutboxResult.Unavailable
+        }
         val firstPage = if (collection.items() == null) {
             // first も無ければ空のコレクション。指しているのに取れなければ失敗
             val firstRef = collection["first"] ?: return RemoteOutboxResult.Found(listOf())
-            document(firstRef, actorUrl) ?: return RemoteOutboxResult.Unavailable
+            val first = document(firstRef, actorUrl)
+            if (first == null) {
+                logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
+                return RemoteOutboxResult.Unavailable
+            }
+            first
         } else {
             collection
         }
