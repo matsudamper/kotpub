@@ -35,7 +35,7 @@ class FollowResponseHandler(
         }
         if (target is LinkOrObject.Embedded) {
             val follow = runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), target.json) }.getOrElse { failure ->
-                logger.warn("$type の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId", failure)
+                logger.warn("$type の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return
             }
             if (follow.type != "Follow" || follow.target?.id != verifiedSignerActorId) {
