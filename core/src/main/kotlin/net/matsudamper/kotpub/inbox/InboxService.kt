@@ -103,17 +103,19 @@ class InboxService(
         recordSignedRequest(verifiedSignerActorId)
 
         val rawActivityJson =
-            runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) as? JsonObject }
-                .getOrNull()
-        val activity =
-            rawActivityJson?.let {
-                runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), it) }.getOrNull()
+            runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) }.getOrElse { failure ->
+                logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId", failure)
+                return InboxResult.BadRequest
             }
-
-        if (rawActivityJson == null || activity == null) {
-            logger.warn("inbox のボディを読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
+        if (rawActivityJson !is JsonObject) {
+            logger.warn("inbox のボディが JSON のオブジェクトではない: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
             return InboxResult.BadRequest
         }
+        val activity =
+            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson) }.getOrElse { failure ->
+                logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId", failure)
+                return InboxResult.BadRequest
+            }
 
         // 署名した鍵の持ち主と、アクティビティの実行者が別なら、なりすまし。
         // 署名だけ通る形は作れるので、ここを見ないと他人の Undo を送り込める
