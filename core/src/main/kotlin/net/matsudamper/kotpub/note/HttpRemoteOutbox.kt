@@ -83,7 +83,9 @@ class HttpRemoteOutbox(
             is JsonObject -> nextPageRef.text("id")
             else -> null
         }?.takeIf { it != pageId && it !in visitedPageIds }
-        if (notes.isNotEmpty() || nextPageId == null || remainingPages <= 1) return RemoteOutboxPage(notes = notes, nextPageId = nextPageId)
+        // 埋め込まれた次のページは id が無くても読める。続きとしては返せないので、読み飛ばすときだけ辿る
+        val nextPageReadable = nextPageId != null || nextPageRef is JsonObject
+        if (notes.isNotEmpty() || !nextPageReadable || remainingPages <= 1) return RemoteOutboxPage(notes = notes, nextPageId = nextPageId)
         val nextPage = document(nextPageRef, actorUrl) ?: error("outbox のページを取得できませんでした")
         return wholePages(nextPage, actorId, actorUrl, remainingPages - 1, visitedPageIds + listOfNotNull(pageId))
     }

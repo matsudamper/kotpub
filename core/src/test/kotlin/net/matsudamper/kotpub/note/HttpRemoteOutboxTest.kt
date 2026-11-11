@@ -162,6 +162,14 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun recentPageSkipsIntoEmbeddedNextPageWithoutId() = runBlocking {
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":{"orderedItems":[${note("embedded", actorId, true)}]}}"""
+        val page = outbox.recentPage(actorId, "$outboxUrl?page=1")
+        assertEquals(listOf("$actorId/embedded"), page.notes.map { it.id })
+        assertEquals(null, page.nextPageId)
+    }
+
+    @Test
     fun recentPageDoesNotReadPageOnAnotherHost() = runBlocking {
         documents["https://other.example/outbox?page=2"] = """{"orderedItems":[${note("other", actorId, true)}]}"""
         assertFailsWith<IllegalStateException> { outbox.recentPage(actorId, "https://other.example/outbox?page=2") }
