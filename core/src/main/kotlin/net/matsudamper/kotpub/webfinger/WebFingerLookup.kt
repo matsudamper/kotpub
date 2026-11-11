@@ -8,6 +8,7 @@ import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.MediaType
 import net.matsudamper.kotpub.json.AppJson
+import org.slf4j.LoggerFactory
 
 /**
  * `@alice@example.com` のような acct から、相手のアクターの id を引く。
@@ -43,6 +44,8 @@ interface WebFingerLookup {
 class HttpWebFingerLookup(
     private val client: ActivityPubHttpClient,
 ) : WebFingerLookup {
+    private val logger = LoggerFactory.getLogger(HttpWebFingerLookup::class.java)
+
     override suspend fun findActorId(acct: String): String? {
         val account = Acct.parse(acct) ?: return null
 
@@ -58,20 +61,36 @@ class HttpWebFingerLookup(
                 )
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logger.warn("WebFinger の取得に失敗した: $acct", e)
                 return null
             }
 
-        if (!HttpStatusCodes.isSuccess(response.status)) return null
-        if (HttpUrl.parseHttps(response.finalUrl) == null) return null
+        if (!HttpStatusCodes.isSuccess(response.status)) {
+            logger.info("WebFinger でアカウントが見つからなかった: $acct status=${response.status}")
+            return null
+        }
+        if (HttpUrl.parseHttps(response.finalUrl) == null) {
+            logger.warn("WebFinger が https ではない URL に移ったので捨てる: $acct → ${response.finalUrl}")
+            return null
+        }
 
-        val body = response.body?.getOrNull() ?: return null
-        if (body.size > MAX_BODY_BYTES) return null
+        val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $acct" }.getOrElse { failure ->
+            logger.warn("WebFinger の本文を読めなかった: $acct", failure)
+            return null
+        }
+        if (body.size > MAX_BODY_BYTES) {
+            logger.warn("WebFinger の本文が大きすぎるので捨てる: $acct")
+            return null
+        }
 
         val document =
             runCatching {
                 AppJson.decodeFromString(WebFingerResponse.serializer(), body.toString(Charsets.UTF_8))
-            }.getOrNull() ?: return null
+            }.getOrElse { failure ->
+                logger.warn("WebFinger の応答を読めなかった: $acct", failure)
+                return null
+            }
 
         return document.links
             .filter { it.rel == WebFingerLink.REL_SELF }
