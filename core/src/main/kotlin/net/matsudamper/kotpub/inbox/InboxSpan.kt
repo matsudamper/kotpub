@@ -5,7 +5,7 @@ import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
 
 /**
- * inbox は処理の成否に関わらず 202 を返すので、届いたものがどう扱われたかは応答からは分からない。
+ * inbox は受け付けられない中身も捨てて 202 を返すので、届いたものがどう扱われたかは応答からは分からない。
  * 追えるよう、リクエストの span に載せる。
  */
 internal object InboxSpan {
