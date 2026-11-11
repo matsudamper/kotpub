@@ -8,6 +8,7 @@ import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.collection.COLLECTION_CURSOR_PARAM
 import net.matsudamper.kotpub.collection.COLLECTION_PAGE_SIZE
+import net.matsudamper.kotpub.collection.FEATURED_COLLECTION_SIZE
 import net.matsudamper.kotpub.collection.OrderedCollection
 import net.matsudamper.kotpub.collection.OrderedCollectionPage
 import net.matsudamper.kotpub.collection.OrderedCollectionWithItems
@@ -130,10 +131,12 @@ class OutboxEndpoint(
 /**
  * プロフィールに載せる投稿の一覧。Actor の `featured` が指している先。
  *
- * いまは空を返す。投稿を自動でピン留めしない。載せる処理は将来ここに足す。
+ * Mastodon はここに並んだ投稿をプロフィールの先頭に固定して出す
  */
 class FeaturedEndpoint(
     private val directory: ActorDirectory,
+    private val featuredNotes: FeaturedNoteStore,
+    private val webPages: WebPageUrls?,
 ) {
     /**
      * `/users/{username}/collections/featured`
@@ -145,12 +148,13 @@ class FeaturedEndpoint(
         val urls = directory.resolve(username)
             ?: return notFound("アカウントが見つからない: $username")
 
+        val notes = featuredNotes.featured(username = urls.username, limit = FEATURED_COLLECTION_SIZE)
         return EndpointResponse.json(
             serializer = OrderedCollectionWithItems.serializer(Note.serializer()),
             value = OrderedCollectionWithItems(
                 id = urls.featured,
-                totalItems = 0,
-                orderedItems = emptyList(),
+                totalItems = notes.size.toLong(),
+                orderedItems = notes.map { note -> noteDocument(urls = urls, note = note, embedded = true, webPages = webPages) },
             ),
             contentType = ActivityPubContentTypes.negotiate(accept),
         )
