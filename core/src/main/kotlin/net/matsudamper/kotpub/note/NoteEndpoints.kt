@@ -1,7 +1,10 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import kotlinx.serialization.json.JsonElement
 import net.matsudamper.kotpub.activity.ActivityStreamsIri
+import net.matsudamper.kotpub.activity.AnnounceActivity
+import net.matsudamper.kotpub.activity.BoostActivities
 import net.matsudamper.kotpub.activity.CreateNoteActivity
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.actor.ActorDirectory
@@ -16,6 +19,7 @@ import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.http.EndpointResponse
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.QueryParameter
+import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.url.WebPageUrls
 
 /**
@@ -62,6 +66,7 @@ class NoteEndpoint(
 class OutboxEndpoint(
     private val directory: ActorDirectory,
     private val notes: NoteStore,
+    private val boosts: OutboxBoostStore,
     private val webPages: WebPageUrls?,
 ) {
     /**
@@ -78,7 +83,7 @@ class OutboxEndpoint(
             ?: return notFound("アカウントが見つからない: $username")
 
         val contentType = ActivityPubContentTypes.negotiate(accept)
-        val total = notes.count(urls.username)
+        val total = notes.count(urls.username) + boosts.count(urls.username)
 
         // パラメータが無ければ集合そのもの。空文字でも付いていれば先頭のページ
         if (cursor == null) {
@@ -93,39 +98,69 @@ class OutboxEndpoint(
             )
         }
 
-        val page = notes.list(
+        // 読めない cursor は先頭のページとして扱う。相手が辿るだけの値なので、
+        // 壊れていることを教えても直しようが無い
+        val after = cursor.ifEmpty { null }?.let { decodeCursor(it) }
+        // 投稿とブーストをそれぞれ 1 ページ分取って新しい順に混ぜ、1 ページ分だけ返す。残りは次のページで取り直す
+        val noteItems = notes.list(
             username = urls.username,
-            // 読めない cursor は先頭のページとして扱う。相手が辿るだけの値なので、
-            // 壊れていることを教えても直しようが無い
-            after = cursor.ifEmpty { null }?.let { decodeCursor(it) },
+            after = after?.let { NotePosition(publishedAt = it.at, publicId = PublicNoteId(it.key)) },
             limit = COLLECTION_PAGE_SIZE,
-        )
-
-        val items = page
-            .map { note ->
-                CreateNoteActivity(
-                    id = NoteUrls(domain = urls.domain, publicId = note.publicId).createId,
-                    actor = urls.actorId,
-                    published = note.publishedAt.toActivityPubPublished(),
-                    to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-                    cc = listOf(urls.followers),
-                    target = noteDocument(urls = urls, note = note, embedded = true, webPages = webPages),
-                )
-            }
+        ).map { note ->
+            OutboxItem(
+                position = OutboxPosition(at = note.publishedAt, key = note.publicId.value),
+                activity = AppJson.encodeToJsonElement(
+                    CreateNoteActivity.serializer(),
+                    CreateNoteActivity(
+                        id = NoteUrls(domain = urls.domain, publicId = note.publicId).createId,
+                        actor = urls.actorId,
+                        published = note.publishedAt.toActivityPubPublished(),
+                        to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
+                        cc = listOf(urls.followers),
+                        target = noteDocument(urls = urls, note = note, embedded = true, webPages = webPages),
+                    ),
+                ),
+            )
+        }
+        val boostItems = boosts.list(username = urls.username, after = after, limit = COLLECTION_PAGE_SIZE).map { boost ->
+            OutboxItem(
+                position = boost.position,
+                activity = AppJson.encodeToJsonElement(
+                    AnnounceActivity.serializer(),
+                    BoostActivities.announce(
+                        id = boost.announceId,
+                        actor = urls.actorId,
+                        objectUri = boost.objectUri,
+                        objectAuthor = boost.objectAuthor,
+                        followers = urls.followers,
+                        published = boost.boostedAt,
+                        audience = boost.audience,
+                    ),
+                ),
+            )
+        }
+        val page = (noteItems + boostItems)
+            .sortedWith(compareByDescending<OutboxItem> { it.position.at }.thenByDescending { it.position.key })
+            .take(COLLECTION_PAGE_SIZE)
 
         return EndpointResponse.json(
-            serializer = OrderedCollectionPage.serializer(CreateNoteActivity.serializer()),
+            serializer = OrderedCollectionPage.serializer(JsonElement.serializer()),
             value = OrderedCollectionPage(
-                id = pageUrl(urls, cursor.ifEmpty { null }?.let { decodeCursor(it) }),
+                id = pageUrl(urls, after),
                 totalItems = total,
                 partOf = urls.outbox,
-                orderedItems = items,
+                orderedItems = page.map { it.activity },
                 // 総数ではなく取得できた件数で判断する。読んでいる間に増えていることがある
                 next = if (page.size < COLLECTION_PAGE_SIZE) null else pageUrl(urls, page.last().position),
             ),
             contentType = contentType,
         )
     }
+
+    private class OutboxItem(
+        val position: OutboxPosition,
+        val activity: JsonElement,
+    )
 }
 
 /**
@@ -169,20 +204,20 @@ private fun notFound(text: String): EndpointResponse =
  */
 private fun pageUrl(
     urls: ActorUrls,
-    after: NotePosition?,
+    after: OutboxPosition?,
 ): String = "${urls.outbox}?$COLLECTION_CURSOR_PARAM=${after?.let { QueryParameter.encode(it.encodeCursor()) }.orEmpty()}"
 
 /**
  * 相手が辿るだけの値なので、読める形にしておく必要は無い。
- * 区切りは `_`。`publicId` は UUID なので混ざらない
+ * 区切りは `_`。key は最後に置くので、key に `_` が入っていても読める
  */
-private fun NotePosition.encodeCursor(): String = "${publishedAt.epochSecond}_${publishedAt.nano}_${publicId.value}"
+private fun OutboxPosition.encodeCursor(): String = "${at.epochSecond}_${at.nano}_$key"
 
 /**
  * 読めない形なら null。壊れた cursor は先頭のページとして扱う。
  * 相手に教えても直しようが無いので、拒否はしない
  */
-private fun decodeCursor(raw: String): NotePosition? {
+private fun decodeCursor(raw: String): OutboxPosition? {
     val parts = raw.split('_', limit = 3)
     if (parts.size != 3) return null
 
@@ -191,7 +226,7 @@ private fun decodeCursor(raw: String): NotePosition? {
     if (parts[2].isEmpty()) return null
 
     return runCatching {
-        NotePosition(publishedAt = Instant.ofEpochSecond(epochSecond, nano), publicId = PublicNoteId(parts[2]))
+        OutboxPosition(at = Instant.ofEpochSecond(epochSecond, nano), key = parts[2])
     }.getOrNull()
 }
 
