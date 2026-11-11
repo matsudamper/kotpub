@@ -66,6 +66,17 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun noteWithPublicOnlyInCcIsUnlisted() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[
+            {"type":"Note","id":"$actorId/unlisted","attributedTo":"$actorId","content":"<p>投稿</p>","published":"2026-11-02T00:00:00Z",
+                "to":["$actorId/followers"],"cc":["https://www.w3.org/ns/activitystreams#Public"]},
+            ${note("public", actorId, true)}
+        ]}"""
+        assertEquals(listOf("$actorId/unlisted" to true, "$actorId/public" to false), outbox.recent(actorId, 20).map { it.id to it.unlisted })
+    }
+
+    @Test
     fun doesNotFollowOutboxOnAnotherHost() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"https://other.example/outbox"}"""
         assertFailsWith<IllegalStateException> { outbox.recent(actorId, 20) }

@@ -94,8 +94,9 @@ class HttpRemoteOutbox(
 
     private fun readNote(note: JsonObject, actorId: String): RemoteOutboxNote? {
         if (note.text("type") != "Note" || note.text("attributedTo") != actorId) return null
-        val recipients = listOf(note["to"], note["cc"]).flatMap { value -> if (value is JsonArray) value else listOfNotNull(value) }
-        if (recipients.none { (it as? JsonPrimitive)?.content == PUBLIC }) return null
+        val to = note["to"].audience()
+        val cc = note["cc"].audience()
+        if (PUBLIC !in to && PUBLIC !in cc) return null
         val id = note.text("id") ?: return null
         val content = note.text("content") ?: return null
         val publishedAt = note.text("published") ?: return null
@@ -109,8 +110,12 @@ class HttpRemoteOutbox(
             sensitive = received.sensitive,
             attachments = received.attachments,
             emojis = received.emojis,
+            unlisted = PUBLIC !in to,
         )
     }
+
+    private fun JsonElement?.audience(): List<String> =
+        (if (this is JsonArray) this else listOfNotNull(this)).mapNotNull { (it as? JsonPrimitive)?.content }
 
     private suspend fun document(value: JsonElement?, actorUrl: HttpUrl): JsonObject? = when (value) {
         is JsonObject -> value
@@ -156,6 +161,7 @@ class HttpRemoteOutbox(
  * @param summary 閲覧注意の注意書き。無ければ null
  * @param attachments 添付。付いた順
  * @param emojis 本文と注意書きに `:name:` で入るカスタム絵文字
+ * @param unlisted 公開タイムラインに載せない公開の投稿か。Public が `to` に無く `cc` にだけある
  */
 data class RemoteOutboxNote(
     val id: String,
@@ -165,4 +171,5 @@ data class RemoteOutboxNote(
     val sensitive: Boolean,
     val attachments: List<ReceivedNoteAttachment>,
     val emojis: List<CustomEmoji>,
+    val unlisted: Boolean,
 )
