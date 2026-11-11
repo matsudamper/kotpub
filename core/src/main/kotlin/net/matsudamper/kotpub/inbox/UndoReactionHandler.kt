@@ -48,7 +48,7 @@ class UndoReactionHandler(
     ): Boolean {
         val undoneActivity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), undoObject.json) }.getOrElse { failure ->
-                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId", failure)
+                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 InboxSpan.outcome("undo_reaction.unreadable_object")
                 return false
             }

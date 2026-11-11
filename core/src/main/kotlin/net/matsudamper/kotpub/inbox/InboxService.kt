@@ -104,7 +104,7 @@ class InboxService(
 
         val rawActivityJson =
             runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) }.getOrElse { failure ->
-                logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId", failure)
+                logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return InboxResult.BadRequest
             }
         if (rawActivityJson !is JsonObject) {
@@ -113,7 +113,7 @@ class InboxService(
         }
         val activity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson) }.getOrElse { failure ->
-                logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId", failure)
+                logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return InboxResult.BadRequest
             }
 

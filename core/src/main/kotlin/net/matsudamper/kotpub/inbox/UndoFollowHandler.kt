@@ -96,7 +96,7 @@ class UndoFollowHandler(
     ): UndoneFollow? {
         val embeddedFollowActivity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), embeddedObjectJson) }.getOrElse { failure ->
-                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId", failure)
+                logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return null
             }
 

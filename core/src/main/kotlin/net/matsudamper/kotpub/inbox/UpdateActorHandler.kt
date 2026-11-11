@@ -54,7 +54,7 @@ class UpdateActorHandler(
 
         val document = runCatching { AppJson.decodeFromJsonElement(RemoteActorDocument.serializer(), embedded) }
             .getOrElse { failure ->
-                logger.warn("Update のアクターを読めなかった: $verifiedSignerActorId", failure)
+                logger.warn("Update のアクターを読めなかった: $verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return
             }
 
