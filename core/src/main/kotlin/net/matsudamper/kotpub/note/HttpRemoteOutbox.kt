@@ -260,7 +260,8 @@ class HttpRemoteOutbox(
                 item is JsonObject && item["object"] is JsonPrimitive -> 1
                 else -> 0
             }
-            return remaining >= fetchesBeforeReading
+            // 上限を超えて負になっていても、取りに行かない項目は読む
+            return fetchesBeforeReading == 0 || remaining >= fetchesBeforeReading
         }
 
         fun spend() {
