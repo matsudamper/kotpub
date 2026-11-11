@@ -78,6 +78,7 @@ class HttpRemoteNotes(
             return null
         }
         val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $url" }.getOrElse { failure ->
+            if (failure is CancellationException) throw failure
             logger.warn("投稿の本文を読めなかった: $url", failure)
             return null
         }
