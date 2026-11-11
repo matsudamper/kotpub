@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.actor
 
 import java.io.Closeable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.context.Context
@@ -269,6 +270,7 @@ class HttpRemoteActors(
                     },
                 )
             }.getOrElse { failure ->
+                if (failure is CancellationException) throw failure
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("request_failed")
                 return DocumentFetch.Unavailable
