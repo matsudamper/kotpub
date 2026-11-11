@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpUrl
+import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.json.AppJson
 import org.slf4j.LoggerFactory
 
@@ -77,10 +78,15 @@ class HttpRemoteNotes(
             logger.warn("投稿の取得で別のホストに移ったので捨てる: $url → ${response.finalUrl}")
             return null
         }
-        val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $url" }.getOrElse { failure ->
-            if (failure is CancellationException) throw failure
-            logger.warn("投稿の本文を読めなかった: $url", failure)
-            return null
+        val body = when (val responseBody = response.body) {
+            is ResponseBody.Read -> responseBody.bytes
+
+            is ResponseBody.Unreadable -> {
+                logger.warn("投稿の本文を読めなかった: $url", responseBody.failure)
+                return null
+            }
+
+            ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $url")
         }
         if (body.size > MAX_BODY_BYTES) {
             logger.warn("投稿の本文が大きすぎるので捨てる: $url")

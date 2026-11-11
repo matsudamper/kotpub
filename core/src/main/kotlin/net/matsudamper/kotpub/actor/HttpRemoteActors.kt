@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.crypto.RsaKeys
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
+import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
 import net.matsudamper.kotpub.json.AppJson
@@ -314,12 +315,17 @@ class HttpRemoteActors(
 
         // 本文は status を見た後で読む。読めなかった理由は例外として span に残す
         val body =
-            checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $rawUrl" }.getOrElse { failure ->
-                if (failure is CancellationException) throw failure
-                logger.warn("アクター文書の本文を読めなかった: $rawUrl", failure)
-                RemoteActorSpan.failed(failure)
-                RemoteActorSpan.outcome("request_failed")
-                return DocumentFetch.Unavailable
+            when (val responseBody = response.body) {
+                is ResponseBody.Read -> responseBody.bytes
+
+                is ResponseBody.Unreadable -> {
+                    logger.warn("アクター文書の本文を読めなかった: $rawUrl", responseBody.failure)
+                    RemoteActorSpan.failed(responseBody.failure)
+                    RemoteActorSpan.outcome("request_failed")
+                    return DocumentFetch.Unavailable
+                }
+
+                ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $rawUrl")
             }
         if (body.size > MAX_BODY_BYTES) {
             RemoteActorSpan.outcome("body_too_large")
