@@ -76,6 +76,7 @@ class HttpWebFingerLookup(
         }
 
         val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $acct" }.getOrElse { failure ->
+            if (failure is CancellationException) throw failure
             logger.warn("WebFinger の本文を読めなかった: $acct", failure)
             return null
         }
