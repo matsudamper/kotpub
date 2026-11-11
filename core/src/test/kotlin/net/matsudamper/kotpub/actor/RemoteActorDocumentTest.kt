@@ -36,6 +36,22 @@ class RemoteActorDocumentTest {
     }
 
     @Test
+    fun `ヘッダー画像を image から読む`() {
+        val profile = profile(
+            """{"id":"https://remote.example/users/alice","image":{"type":"Image","url":"https://files.remote.example/header.png"}}""",
+        )
+
+        assertEquals("https://files.remote.example/header.png", profile.headerUrl)
+    }
+
+    @Test
+    fun `ヘッダー画像が https でなければ未設定の扱い`() {
+        val profile = profile("""{"id":"https://remote.example/users/alice","image":"http://files.remote.example/header.png"}""")
+
+        assertNull(profile.headerUrl)
+    }
+
+    @Test
     fun `名前が配列でも文書ごと落とさず先頭を読む`() {
         val profile = profile("""{"id":"https://remote.example/users/alice","name":["アリス","Alice"]}""")
 

@@ -55,6 +55,11 @@ internal data class RemoteActorDocument(
      */
     @SerialName("icon")
     val icon: JsonElement? = null,
+    /**
+     * プロフィールのヘッダー画像。形は [icon] と同じく決まっていない
+     */
+    @SerialName("image")
+    val image: JsonElement? = null,
     @SerialName("summary")
     val summary: JsonElement? = null,
     @SerialName("tag")
@@ -76,6 +81,8 @@ internal data class RemoteActorDocument(
             // そこのアイコンが軒並み出なくなる。ここから POST することはないので、
             // 他所のホストでも送信先として使われる危険は無い
             iconUrl = icon.firstHttpsUrl(),
+            // アイコンと同じく別ドメインの CDN に置かれることがあるので、ホストは問わない
+            headerUrl = image.firstHttpsUrl(),
             summary = summary.firstText(),
             emojis = CustomEmojiTags.read(tag),
         )

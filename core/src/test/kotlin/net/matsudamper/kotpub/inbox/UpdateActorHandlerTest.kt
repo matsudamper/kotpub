@@ -31,6 +31,7 @@ class UpdateActorHandlerTest {
                     displayName = "アリス",
                     profileUrl = "https://remote.example/@alice",
                     iconUrl = "https://files.remote.example/old.png",
+                    headerUrl = null,
                     emojis = listOf(),
                 ),
             ),

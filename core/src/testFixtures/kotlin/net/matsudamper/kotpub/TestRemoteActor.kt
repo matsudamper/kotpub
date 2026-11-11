@@ -27,6 +27,7 @@ object TestRemoteActor {
             displayName = null,
             profileUrl = null,
             iconUrl = null,
+            headerUrl = null,
             emojis = listOf(),
         )
 
