@@ -90,6 +90,8 @@ class OutboxEndpointTest {
         contentHtml = "<p>$publicId</p>",
         publishedAt = Instant.parse(publishedAt),
         attachments = listOf(),
+        inReplyTo = null,
+        mentions = listOf(),
     )
 
     private fun boost(key: String, boostedAt: String, audience: BoostAudience) = StoredBoost(
