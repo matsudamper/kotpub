@@ -116,7 +116,7 @@ class OutboxEndpoint(
                         actor = urls.actorId,
                         published = note.publishedAt.toActivityPubPublished(),
                         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-                        cc = listOf(urls.followers),
+                        cc = note.ccWith(urls.followers),
                         target = noteDocument(urls = urls, note = note, embedded = true, webPages = webPages),
                     ),
                 ),
