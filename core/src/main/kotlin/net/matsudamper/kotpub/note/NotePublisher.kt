@@ -26,11 +26,15 @@ class NotePublisher(
      *
      * @param contentHtml 本文。サニタイズ済みの HTML を渡すこと。ここでは中身を検査しない
      * @param attachments 付ける画像。付けた順に並ぶ
+     * @param inReplyTo 返信先の投稿の id。返信でなければ null
+     * @param mentions 宛てるアカウント。宛てた相手の inbox へ積むのは呼び出し側
      */
     fun prepare(
         sender: ActorUrls,
         contentHtml: String,
         attachments: List<NoteAttachment>,
+        inReplyTo: String?,
+        mentions: List<NoteMention>,
     ): PreparedNote {
         val publishedAt = Instant.now()
         val note = StoredNote(
@@ -39,6 +43,8 @@ class NotePublisher(
             contentHtml = contentHtml,
             publishedAt = publishedAt,
             attachments = attachments,
+            inReplyTo = inReplyTo,
+            mentions = mentions,
         )
 
         return note.toPrepared(sender)
