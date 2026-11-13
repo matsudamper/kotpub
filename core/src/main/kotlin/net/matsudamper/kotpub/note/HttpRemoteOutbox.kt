@@ -44,14 +44,24 @@ class HttpRemoteOutbox(
      *
      * @param from 読み始める位置。null なら最初のページの先頭
      */
-    suspend fun recentPage(actorId: String, from: RemoteOutboxCursor?): RemoteOutboxPage {
-        val actorUrl = HttpUrl.parseHttps(actorId) ?: return RemoteOutboxPage(notes = listOf(), next = null)
-        val page = if (from == null) {
-            firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = "outbox")
-        } else {
-            fetch(from.pageId, actorUrl) ?: error("outbox のページを取得できませんでした")
+    suspend fun recentPage(actorId: String, from: RemoteOutboxCursor?): RemoteOutboxPageResult {
+        val actorUrl = HttpUrl.parseHttps(actorId)
+        if (actorUrl == null) {
+            logger.warn("https のアクターではないので outbox を読まない: $actorId")
+            return RemoteOutboxPageResult.Unavailable
         }
-        if (page == null) return RemoteOutboxPage(notes = listOf(), next = null)
+        val page = if (from == null) {
+            when (val first = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = "outbox")) {
+                is FirstPage.Found -> first.page
+                FirstPage.Empty -> return RemoteOutboxPageResult.Found(RemoteOutboxPage(notes = listOf(), next = null))
+                FirstPage.Unavailable -> return RemoteOutboxPageResult.Unavailable
+            }
+        } else {
+            fetch(from.pageId, actorUrl) ?: run {
+                logger.warn("outbox のページを読めなかった: actor=$actorId page=${from.pageId}")
+                return RemoteOutboxPageResult.Unavailable
+            }
+        }
         return readFrom(page, from?.itemOffset ?: 0, actorId, actorUrl, MAX_PAGES, setOf(), listOf())
     }
 
@@ -65,42 +75,36 @@ class HttpRemoteOutbox(
             logger.warn("https のアクターではないので $collectionName を読まない: $actorId")
             return RemoteOutboxResult.Unavailable
         }
-        val actor = fetch(actorId, actorUrl) ?: return RemoteOutboxResult.Unavailable
-        if (actor.text("id") != actorId) {
-            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
-            return RemoteOutboxResult.Unavailable
-        }
-        // 項目が無いのは相手が並べていないだけなので、空として返す
-        val collectionRef = actor[collectionName] ?: return RemoteOutboxResult.Found(listOf())
-        val collection = document(collectionRef, actorUrl)
-        if (collection == null) {
-            logger.warn("$collectionName を読めなかった: actor=$actorId")
-            return RemoteOutboxResult.Unavailable
-        }
-        val firstPage = if (collection.items() == null) {
-            // first も無ければ空のコレクション。指しているのに取れなければ失敗
-            val firstRef = collection["first"] ?: return RemoteOutboxResult.Found(listOf())
-            val first = document(firstRef, actorUrl)
-            if (first == null) {
-                logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
-                return RemoteOutboxResult.Unavailable
-            }
-            first
-        } else {
-            collection
+        val firstPage = when (val first = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = collectionName)) {
+            is FirstPage.Found -> first.page
+            FirstPage.Empty -> return RemoteOutboxResult.Found(listOf())
+            FirstPage.Unavailable -> return RemoteOutboxResult.Unavailable
         }
         return RemoteOutboxResult.Found(pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf()))
     }
 
-    /**
-     * @return コレクションが無いか、最初のページが無ければ null
-     */
-    private suspend fun firstPage(actorId: String, actorUrl: HttpUrl, collectionName: String): JsonObject? {
-        val actor = fetch(actorId, actorUrl) ?: error("アクターを取得できませんでした")
-        check(actor.text("id") == actorId) { "アクターの ID が一致しません" }
-        val collectionRef = actor[collectionName] ?: return null
-        val collection = document(collectionRef, actorUrl) ?: error("$collectionName を取得できませんでした")
-        return if (collection.items() == null) document(collection["first"], actorUrl) else collection
+    private suspend fun firstPage(actorId: String, actorUrl: HttpUrl, collectionName: String): FirstPage {
+        val actor = fetch(actorId, actorUrl) ?: return FirstPage.Unavailable
+        if (actor.text("id") != actorId) {
+            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
+            return FirstPage.Unavailable
+        }
+        // 項目が無いのは相手が並べていないだけなので、空として返す
+        val collectionRef = actor[collectionName] ?: return FirstPage.Empty
+        val collection = document(collectionRef, actorUrl)
+        if (collection == null) {
+            logger.warn("$collectionName を読めなかった: actor=$actorId")
+            return FirstPage.Unavailable
+        }
+        if (collection.items() != null) return FirstPage.Found(collection)
+        // first も無ければ空のコレクション。指しているのに取れなければ失敗
+        val firstRef = collection["first"] ?: return FirstPage.Empty
+        val first = document(firstRef, actorUrl)
+        if (first == null) {
+            logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
+            return FirstPage.Unavailable
+        }
+        return FirstPage.Found(first)
     }
 
     /**
@@ -114,7 +118,7 @@ class HttpRemoteOutbox(
         remainingSteps: Int,
         visitedPageIds: Set<String>,
         collectedNotes: List<RemoteOutboxNote>,
-    ): RemoteOutboxPage {
+    ): RemoteOutboxPageResult {
         val pageId = page.text("id")
         val items = page.items().orEmpty()
         val remainingItems = items.drop(itemOffset)
@@ -123,7 +127,7 @@ class HttpRemoteOutbox(
         val nextItemOffset = itemOffset + chunk.size
         if (pageId != null && nextItemOffset < items.size) {
             if (notes.isNotEmpty() || remainingSteps <= 1) {
-                return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset))
+                return found(notes = notes, next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset))
             }
             return readFrom(page, nextItemOffset, actorId, actorUrl, remainingSteps - 1, visitedPageIds, notes)
         }
@@ -137,15 +141,27 @@ class HttpRemoteOutbox(
             is JsonObject -> nextPageRef.text("id")
             else -> null
         }?.takeIf { it !in visited }
-        if (nextPageId == null) return RemoteOutboxPage(notes = notes.newestFirst(), next = null)
-        if (notes.isNotEmpty() || remainingSteps <= 1) {
-            return RemoteOutboxPage(notes = notes.newestFirst(), next = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0))
+        if (nextPageId == null) return found(notes = notes, next = null)
+        if (notes.isNotEmpty() || remainingSteps <= 1) return found(notes = notes, next = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0))
+        val nextPage = document(nextPageRef, actorUrl)
+        if (nextPage == null) {
+            logger.warn("outbox の続きのページを読めなかった: actor=$actorId page=$nextPageId")
+            return RemoteOutboxPageResult.Unavailable
         }
-        val nextPage = document(nextPageRef, actorUrl) ?: error("outbox のページを取得できませんでした")
         return readFrom(nextPage, 0, actorId, actorUrl, remainingSteps - 1, visited, notes)
     }
 
-    private fun List<RemoteOutboxNote>.newestFirst(): List<RemoteOutboxNote> = sortedByDescending { Instant.parse(it.publishedAt) }
+    private fun found(notes: List<RemoteOutboxNote>, next: RemoteOutboxCursor?): RemoteOutboxPageResult =
+        RemoteOutboxPageResult.Found(RemoteOutboxPage(notes = notes.sortedByDescending { Instant.parse(it.publishedAt) }, next = next))
+
+    private sealed interface FirstPage {
+        data class Found(val page: JsonObject) : FirstPage
+
+        /** 相手が並べていないか、空のコレクション */
+        data object Empty : FirstPage
+
+        data object Unavailable : FirstPage
+    }
 
     private suspend fun pages(
         page: JsonObject,
@@ -324,6 +340,16 @@ sealed interface RemoteOutboxResult {
 
     /** アクターやコレクションを取得できない、または中身が条件を満たさない。理由はログに残す */
     data object Unavailable : RemoteOutboxResult
+}
+
+/**
+ * [HttpRemoteOutbox.recentPage] の結果。[RemoteOutboxResult] と同じく、読めなかったことを投稿が無いことと分ける
+ */
+sealed interface RemoteOutboxPageResult {
+    data class Found(val page: RemoteOutboxPage) : RemoteOutboxPageResult
+
+    /** アクター・コレクション・ページを取得できない、または中身が条件を満たさない。理由はログに残す */
+    data object Unavailable : RemoteOutboxPageResult
 }
 
 /**
