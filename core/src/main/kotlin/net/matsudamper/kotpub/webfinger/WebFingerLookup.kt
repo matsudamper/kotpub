@@ -7,6 +7,7 @@ import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.MediaType
+import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.json.AppJson
 import org.slf4j.LoggerFactory
 
@@ -94,10 +95,15 @@ class HttpWebFingerLookup(
             return WebFingerResult.NotFound
         }
 
-        val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $acct" }.getOrElse { failure ->
-            if (failure is CancellationException) throw failure
-            logger.warn("WebFinger の本文を読めなかった: $acct", failure)
-            return WebFingerResult.Unavailable
+        val body = when (val responseBody = response.body) {
+            is ResponseBody.Read -> responseBody.bytes
+
+            is ResponseBody.Unreadable -> {
+                logger.warn("WebFinger の本文を読めなかった: $acct", responseBody.failure)
+                return WebFingerResult.Unavailable
+            }
+
+            ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $acct")
         }
         if (body.size > MAX_BODY_BYTES) {
             logger.warn("WebFinger の本文が大きすぎるので捨てる: $acct")
