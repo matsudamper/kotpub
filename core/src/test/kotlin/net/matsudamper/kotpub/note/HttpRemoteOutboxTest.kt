@@ -205,6 +205,17 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun embeddedActivityThatIsNotFetchedDoesNotStopReadingAfterFetchLimit() = runBlocking {
+        (1..100).forEach { documents["$actorId/n$it"] = note("n$it", actorId, true) }
+        val references = (1..100).joinToString(",") { "\"$actorId/n$it\"" }
+        val announce = """{"type":"Announce","actor":"$actorId","object":"https://other.example/notes/1"}"""
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"first":{"orderedItems":[$references,$announce,${note("embedded", actorId, true)}]}}"""
+        val page = outbox.recentPage(actorId, null)
+        assertEquals(true, page.notes.any { it.id == "$actorId/embedded" })
+    }
+
+    @Test
     fun recentPageReadsWholePageWithoutIdBecauseItCannotBeResumed() = runBlocking {
         val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""

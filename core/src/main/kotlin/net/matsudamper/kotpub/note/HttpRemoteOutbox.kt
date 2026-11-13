@@ -159,7 +159,7 @@ class HttpRemoteOutbox(
     ): CollectedNotes {
         if (collectedNotes.size >= limit) return CollectedNotes(collectedNotes, index)
         val item = items.getOrNull(index) ?: return CollectedNotes(collectedNotes, index)
-        if (!budget.covers(item)) return CollectedNotes(collectedNotes, index)
+        if (!budget.covers(item, actorId)) return CollectedNotes(collectedNotes, index)
         val note = readItem(item, actorId, actorUrl, budget)
         val notes = if (note == null || collectedNotes.any { it.id == note.id }) collectedNotes else collectedNotes + note
         return collectUniqueNotes(items, index + 1, actorId, actorUrl, limit, budget, notes)
@@ -254,15 +254,21 @@ class HttpRemoteOutbox(
          * 参照の項目は、取りに行った Create が投稿をまた参照で持っていることがある。
          * それは取りに行くまで分からないので、上限を 1 回超えることがある
          */
-        fun covers(item: JsonElement): Boolean {
+        fun covers(item: JsonElement, actorId: String): Boolean {
             val fetchesBeforeReading = when {
                 item is JsonPrimitive -> 1
-                item is JsonObject && item["object"] is JsonPrimitive -> 1
+                item is JsonObject && isCreateReferringNote(item, actorId) -> 1
                 else -> 0
             }
             // 上限を超えて負になっていても、取りに行かない項目は読む
             return fetchesBeforeReading == 0 || remaining >= fetchesBeforeReading
         }
+
+        /** readItem が object を取りに行くのは、その actor の Create だけ */
+        private fun isCreateReferringNote(activity: JsonObject, actorId: String): Boolean =
+            (activity["type"] as? JsonPrimitive)?.content == "Create" &&
+                (activity["actor"] as? JsonPrimitive)?.content == actorId &&
+                activity["object"] is JsonPrimitive
 
         fun spend() {
             remaining -= 1
