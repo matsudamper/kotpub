@@ -79,6 +79,29 @@ class OutboxEndpointTest {
         assertEquals(2L, collection.totalItems)
     }
 
+    @Test
+    fun `宛てたアクターは Create と Note の両方の cc に入る`() = runBlocking {
+        val mentioned = "https://remote.example/users/alice"
+        val endpoint = OutboxEndpoint(
+            directory = directory,
+            notes = ListNoteStore(
+                listOf(
+                    note("reply", "2026-11-01T00:00:00Z").copy(
+                        inReplyTo = "https://remote.example/notes/1",
+                        mentions = listOf(NoteMention(actorId = mentioned, acct = "alice@remote.example")),
+                    ),
+                ),
+            ),
+            boosts = ListBoostStore(listOf()),
+            webPages = null,
+        )
+
+        val create = page(endpoint, cursor = "").orderedItems.single().jsonObject
+        val expectedCc = listOf(directory.resolve(TestLocalActor.USERNAME)?.followers, mentioned)
+        assertEquals(expectedCc, create.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(expectedCc, create.getValue("object").jsonObject.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+    }
+
     private suspend fun page(endpoint: OutboxEndpoint, cursor: String): OrderedCollectionPage<JsonElement> = AppJson.decodeFromString(
         OrderedCollectionPage.serializer(JsonElement.serializer()),
         endpoint.get(username = TestLocalActor.USERNAME, accept = null, cursor = cursor).body.decodeToString(),
@@ -90,6 +113,8 @@ class OutboxEndpointTest {
         contentHtml = "<p>$publicId</p>",
         publishedAt = Instant.parse(publishedAt),
         attachments = listOf(),
+        inReplyTo = null,
+        mentions = listOf(),
     )
 
     private fun boost(key: String, boostedAt: String, audience: BoostAudience) = StoredBoost(
