@@ -76,6 +76,7 @@ class InboxEndpoint(
             is InboxResult.Unauthorized -> text(HttpStatusCodes.UNAUTHORIZED, "署名を検証できなかった")
             is InboxResult.BadRequest -> text(HttpStatusCodes.BAD_REQUEST, "ボディを読めなかった")
             is InboxResult.Accepted -> text(HttpStatusCodes.ACCEPTED, "")
+            is InboxResult.TemporarilyUnavailable -> text(HttpStatusCodes.SERVICE_UNAVAILABLE, "")
         }
     }
 

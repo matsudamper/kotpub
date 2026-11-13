@@ -14,6 +14,7 @@ object HttpStatusCodes {
     const val PAYLOAD_TOO_LARGE = 413
     const val TOO_MANY_REQUESTS = 429
     const val NOT_IMPLEMENTED = 501
+    const val SERVICE_UNAVAILABLE = 503
 
     fun isSuccess(status: Int): Boolean = status in 200..299
 }

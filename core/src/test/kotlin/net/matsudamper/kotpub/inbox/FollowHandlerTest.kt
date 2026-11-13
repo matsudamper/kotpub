@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.inbox
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -100,10 +101,10 @@ class FollowHandlerTest {
     }
 
     @Test
-    fun `記録できなければ Accept も配信キューに登録しない`() = runBlocking {
+    fun `記録できなければ Accept も配信キューに登録せず、送り直してもらうために投げる`() = runBlocking {
         val followers = FakeFollowerStore(failOnRecord = true)
 
-        handle(followHandler(followers), followJson())
+        assertFailsWith<IllegalStateException> { handle(followHandler(followers), followJson()) }
 
         // 送り先が残らないのに相手だけがフォローできたつもりになる状態を作らない
         assertEquals(emptyList(), followers.rows)
