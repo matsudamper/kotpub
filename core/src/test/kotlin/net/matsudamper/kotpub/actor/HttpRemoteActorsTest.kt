@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.crypto.RsaKeys
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteActorsTest {
     @Test
@@ -73,11 +74,11 @@ class HttpRemoteActorsTest {
 
         override suspend fun get(url: String, headers: Map<String, String>, maxBodyBytes: Int, readsBody: (Int, String) -> Boolean): ActivityPubClientResponse {
             requestedUrls += url
-            if (url == PROFILE_URL) return ActivityPubClientResponse(200, ACTOR_ID, null)
+            if (url == PROFILE_URL) return ActivityPubClientResponse(200, ACTOR_ID, ResponseBody.NotRead)
             return ActivityPubClientResponse(
                 200,
                 url,
-                Result.success(actorDocument),
+                ResponseBody.Read(actorDocument),
             )
         }
 
@@ -97,7 +98,7 @@ class HttpRemoteActorsTest {
                 ActivityPubClientResponse(
                     200,
                     url,
-                    Result.success(
+                    ResponseBody.Read(
                         """{"id":$documentId,"inbox":"https://remote.example/inbox","publicKey":{"publicKeyPem":"key"}}""".encodeToByteArray(),
                     ),
                 )
