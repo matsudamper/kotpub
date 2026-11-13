@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
+import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.boost.BoostStore.ReceivedBoost
@@ -96,11 +97,14 @@ class AnnounceHandler(
     ) {
         // 相手の公開鍵を記録できないと、相手が消えた後の `Delete` を検証できず、
         // 居ない相手のブーストが残り続ける
-        val actor = remoteActors.findActor(actorUri)
-        if (actor == null) {
-            logger.warn("Announce の相手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $actorUri")
-            InboxSpan.outcome("announce.actor_unavailable")
-            return
+        val actor = when (val lookup = remoteActors.findActor(actorUri)) {
+            is RemoteActorLookup.Found -> lookup.actor
+
+            RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                logger.warn("Announce の相手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $actorUri 理由=$lookup")
+                InboxSpan.outcome("announce.actor_unavailable")
+                return
+            }
         }
 
         val recorded = boosts.add(

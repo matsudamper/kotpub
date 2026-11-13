@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.inbox
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.FakeBoostStore
 import net.matsudamper.kotpub.FakeFavouriteStore
@@ -112,7 +113,7 @@ class RecordedFallbackPublicKeysTest {
                 RecordedFallbackPublicKeys(remote = TestRemoteActors(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
                     .find(TestRemoteActor.KEY_ID)
 
-            assertEquals(PublicKeyLookup.Unavailable, lookup)
+            assertIs<PublicKeyLookup.Unavailable>(lookup)
         }
 
     private fun favourites(): FakeFavouriteStore = FakeFavouriteStore().apply {

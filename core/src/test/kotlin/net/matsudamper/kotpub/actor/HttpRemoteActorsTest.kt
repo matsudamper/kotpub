@@ -2,7 +2,7 @@ package net.matsudamper.kotpub.actor
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -11,24 +11,25 @@ import net.matsudamper.kotpub.crypto.RsaKeys
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteActorsTest {
     @Test
     fun profileUrlReturnsDocumentActorId() = runBlocking {
-        assertEquals("https://remote.example/users/alice", findActor("\"https://remote.example/users/alice\"")?.actorId)
+        assertEquals("https://remote.example/users/alice", assertIs<RemoteActorLookup.Found>(findActor("\"https://remote.example/users/alice\"")).actor.actorId)
     }
 
     @Test
     fun rejectsDocumentIdOnAnotherHost() = runBlocking {
-        assertNull(findActor("\"https://other.example/users/alice\""))
+        assertInvalidDocument(findActor("\"https://other.example/users/alice\""))
     }
 
     @Test
     fun rejectsMissingOrNonHttpsDocumentId() = runBlocking {
-        assertNull(findActor("null"))
-        assertNull(findActor("\"http://remote.example/users/alice\""))
-        assertNull(findActor("\"invalid\""))
+        assertInvalidDocument(findActor("null"))
+        assertInvalidDocument(findActor("\"http://remote.example/users/alice\""))
+        assertInvalidDocument(findActor("\"invalid\""))
     }
 
     @Test
@@ -37,7 +38,7 @@ class HttpRemoteActorsTest {
 
         val actor = HttpRemoteActors(client, null).use { it.findActorByUrl(RedirectingClient.PROFILE_URL) }
 
-        assertEquals(RedirectingClient.ACTOR_ID, actor?.actorId)
+        assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(actor).actor.actorId)
         assertEquals(listOf(RedirectingClient.PROFILE_URL, RedirectingClient.ACTOR_ID), client.requestedUrls)
     }
 
@@ -46,14 +47,15 @@ class HttpRemoteActorsTest {
         val actors = HttpRemoteActors(RedirectingClient(), null)
 
         actors.use {
-            assertEquals(RedirectingClient.ACTOR_ID, it.findActorByUrl(RedirectingClient.PROFILE_URL)?.actorId)
-            assertEquals(RedirectingClient.ACTOR_ID, it.findActorByUrl(RedirectingClient.PROFILE_URL)?.actorId)
+            assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
+            assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
         }
     }
 
     @Test
     fun findActorDoesNotFollowOtherHostRedirect() = runBlocking {
-        assertNull(HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) })
+        val lookup = HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) }
+        assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
     }
 
     private class RedirectingClient : ActivityPubHttpClient {
@@ -92,7 +94,11 @@ class HttpRemoteActorsTest {
         }
     }
 
-    private suspend fun findActor(documentId: String): RemoteActor? {
+    private fun assertInvalidDocument(lookup: RemoteActorLookup) {
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
+    }
+
+    private suspend fun findActor(documentId: String): RemoteActorLookup {
         val client = object : ActivityPubHttpClient {
             override suspend fun get(url: String, headers: Map<String, String>, maxBodyBytes: Int, readsBody: (Int, String) -> Boolean): ActivityPubClientResponse =
                 ActivityPubClientResponse(

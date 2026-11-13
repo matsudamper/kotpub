@@ -2,8 +2,11 @@ package net.matsudamper.kotpub
 
 import java.security.PublicKey
 import net.matsudamper.kotpub.actor.RemoteActor
+import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.crypto.RsaKeys
+import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
 
@@ -13,13 +16,13 @@ import net.matsudamper.kotpub.httpsignature.SignatureKey
  * 本番は相手のサーバーに GET しに行くので、テストからは必ずこちらを通す。
  * 何も渡さなければ「どの keyId も取得できず、どの inbox も分からない」サーバーになる。
  *
- * @param missing 取得できない keyId をどう答えるか。既定は一時的に取得できなかった扱い。
+ * @param missing 取得できない keyId をどう答えるか。null なら一時的に取得できなかった扱い。
  *   アカウントが消えた相手を作るときは [PublicKeyLookup.Gone] を渡す
  */
 class TestRemoteActors(
     private val keys: Map<String, SignatureKey> = emptyMap(),
     private val actors: Map<String, RemoteActor> = emptyMap(),
-    private val missing: PublicKeyLookup = PublicKeyLookup.Unavailable,
+    private val missing: PublicKeyLookup? = null,
 ) : RemoteActors {
     var findCallCount: Int = 0
         private set
@@ -29,7 +32,7 @@ class TestRemoteActors(
 
     override suspend fun find(keyId: String): PublicKeyLookup {
         findCallCount++
-        return keys[keyId]?.let { PublicKeyLookup.Found(it) } ?: missing
+        return keys[keyId]?.let { PublicKeyLookup.Found(it) } ?: missing(keyId)
     }
 
     /**
@@ -39,10 +42,15 @@ class TestRemoteActors(
      */
     override suspend fun refresh(keyId: String): PublicKeyLookup {
         refreshCallCount++
-        return keys[keyId]?.let { PublicKeyLookup.Found(it) } ?: missing
+        return keys[keyId]?.let { PublicKeyLookup.Found(it) } ?: missing(keyId)
     }
 
-    override suspend fun findActor(actorId: String): RemoteActor? = actors[actorId]
+    private fun missing(keyId: String): PublicKeyLookup =
+        missing ?: PublicKeyLookup.Unavailable(RemoteFetchFailure.UnsuccessfulStatus(keyId, HttpStatusCodes.SERVICE_UNAVAILABLE))
+
+    override suspend fun findActor(actorId: String): RemoteActorLookup =
+        actors[actorId]?.let { RemoteActorLookup.Found(it) }
+            ?: RemoteActorLookup.Unavailable(RemoteFetchFailure.UnsuccessfulStatus(actorId, HttpStatusCodes.SERVICE_UNAVAILABLE))
 
     override fun close() {
     }

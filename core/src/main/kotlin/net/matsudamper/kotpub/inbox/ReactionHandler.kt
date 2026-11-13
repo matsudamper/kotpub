@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.RemoteActor
+import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.favourite.FavouriteStore
@@ -80,11 +81,14 @@ class ReactionHandler(
 
         // 相手の公開鍵を記録できないと、相手が消えた後の `Delete` を検証できず、
         // 居ない相手のお気に入りやスタンプが公開画面に出たままになる
-        val actor = remoteActors.findActor(verifiedSignerActorId)
-        if (actor == null) {
-            logger.warn("$type の押し手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId")
-            InboxSpan.outcome("reaction.actor_unavailable")
-            return
+        val actor = when (val lookup = remoteActors.findActor(verifiedSignerActorId)) {
+            is RemoteActorLookup.Found -> lookup.actor
+
+            RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                logger.warn("$type の押し手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId 理由=$lookup")
+                InboxSpan.outcome("reaction.actor_unavailable")
+                return
+            }
         }
 
         if (emoji == null) {

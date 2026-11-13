@@ -9,6 +9,7 @@ import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.ActorUrls
+import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.json.AppJson
@@ -68,10 +69,13 @@ class FollowHandler(
             return
         }
 
-        val follower = remoteActors.findActor(verifiedSignerActorId)
-        if (follower == null) {
-            logger.warn("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを取得できない")
-            return
+        val follower = when (val lookup = remoteActors.findActor(verifiedSignerActorId)) {
+            is RemoteActorLookup.Found -> lookup.actor
+
+            RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                logger.warn("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを取得できない 理由=$lookup")
+                return
+            }
         }
 
         val accept =

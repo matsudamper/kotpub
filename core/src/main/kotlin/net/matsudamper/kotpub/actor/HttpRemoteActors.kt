@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.crypto.RsaKeys
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
@@ -72,7 +73,7 @@ class HttpRemoteActors(
     private val recentOtherHostRedirects: ExpiringCache<String, String> = createExpiringCache(MAX_CACHED_ACTORS)
 
     override suspend fun find(keyId: String): PublicKeyLookup {
-        val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable
+        val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
         return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = true))
     }
@@ -86,7 +87,7 @@ class HttpRemoteActors(
      * 覚えている文書がそのまま返り、[find] と同じ結果になる。
      */
     override suspend fun refresh(keyId: String): PublicKeyLookup {
-        val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable
+        val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
         return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = false))
     }
@@ -109,19 +110,25 @@ class HttpRemoteActors(
                 // 落ちているだけの相手を消えた扱いにすると、後から生き返る
                 DocumentFetch.Gone -> return PublicKeyLookup.Gone
 
-                is DocumentFetch.RedirectedToOtherHost, DocumentFetch.Unavailable -> return PublicKeyLookup.Unavailable
+                is DocumentFetch.RedirectedToOtherHost -> return PublicKeyLookup.Unavailable(fetched.failure)
+
+                is DocumentFetch.Unavailable -> return PublicKeyLookup.Unavailable(fetched.failure)
             }
 
-        val publicKey = document.publicKey ?: return PublicKeyLookup.Unavailable
+        val publicKey = document.publicKey
+            ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵が無い"))
 
-        val keyOwnerActorId = publicKey.owner ?: document.id ?: return PublicKeyLookup.Unavailable
-        if (!isSameHost(keyOwnerActorId, requestUrl)) return PublicKeyLookup.Unavailable
+        val keyOwnerActorId = publicKey.owner ?: document.id
+            ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵の持ち主が無い"))
+        if (!isSameHost(keyOwnerActorId, requestUrl)) {
+            return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵の持ち主が取得先と別のホスト: $keyOwnerActorId"))
+        }
 
         val decodedPublicKey =
             runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }
                 .getOrElse { failure ->
                     logger.warn("アクター文書の公開鍵を読めなかった: $keyId", failure)
-                    return PublicKeyLookup.Unavailable
+                    return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵を読めない", failure))
                 }
 
         return PublicKeyLookup.Found(
@@ -139,25 +146,27 @@ class HttpRemoteActors(
      * 実際には署名の検証が直前に同じ文書を取得しているので、取得する回数は増えない。
      * その場合に使うのはそのとき読んだ文書で、古くても再取得の間隔のぶんだけ
      */
-    override suspend fun findActor(actorId: String): RemoteActor? {
-        val url = parseHttpsUrl(actorId) ?: return null
-        val document = (fetch(rawUrl = actorId, requestUrl = url, useCache = false) as? DocumentFetch.Found)
-            ?.document
-            ?: return null
-
-        return toRemoteActor(document = document, url = url)
+    override suspend fun findActor(actorId: String): RemoteActorLookup {
+        val url = parseHttpsUrl(actorId) ?: return RemoteActorLookup.Unavailable(RemoteFetchFailure.NotHttps(actorId))
+        return when (val fetched = fetch(rawUrl = actorId, requestUrl = url, useCache = false)) {
+            is DocumentFetch.Found -> toRemoteActor(document = fetched.document, rawUrl = actorId, url = url)
+            DocumentFetch.Gone -> RemoteActorLookup.Gone
+            is DocumentFetch.RedirectedToOtherHost -> RemoteActorLookup.Unavailable(fetched.failure)
+            is DocumentFetch.Unavailable -> RemoteActorLookup.Unavailable(fetched.failure)
+        }
     }
 
     /**
      * 移った先でもう一度別のホストへ移った場合は [findActor] が捨てる。辿るのは 1 回だけ
      */
-    override suspend fun findActorByUrl(url: String): RemoteActor? {
-        val requestUrl = parseHttpsUrl(url) ?: return null
+    override suspend fun findActorByUrl(url: String): RemoteActorLookup {
+        val requestUrl = parseHttpsUrl(url) ?: return RemoteActorLookup.Unavailable(RemoteFetchFailure.NotHttps(url))
         recentOtherHostRedirects.get(url.substringBefore('#'))?.let { return findActor(it) }
         return when (val fetched = fetch(rawUrl = url, requestUrl = requestUrl, useCache = false)) {
-            is DocumentFetch.Found -> toRemoteActor(document = fetched.document, url = requestUrl)
+            is DocumentFetch.Found -> toRemoteActor(document = fetched.document, rawUrl = url, url = requestUrl)
             is DocumentFetch.RedirectedToOtherHost -> findActor(fetched.finalUrl)
-            DocumentFetch.Gone, DocumentFetch.Unavailable -> null
+            DocumentFetch.Gone -> RemoteActorLookup.Gone
+            is DocumentFetch.Unavailable -> RemoteActorLookup.Unavailable(fetched.failure)
         }
     }
 
@@ -166,24 +175,31 @@ class HttpRemoteActors(
      */
     private fun toRemoteActor(
         document: RemoteActorDocument,
+        rawUrl: String,
         url: HttpUrl,
-    ): RemoteActor? {
-        val documentActorId = document.id?.takeIf { isDeliverable(it, url) } ?: return null
+    ): RemoteActorLookup {
+        fun invalid(detail: String) = RemoteActorLookup.Unavailable(RemoteFetchFailure.InvalidDocument(rawUrl, detail))
+
+        val documentActorId = document.id?.takeIf { isDeliverable(it, url) }
+            ?: return invalid("id が無いか、https で取得先と同じホストではない: ${document.id}")
 
         // 宛先はこちらが POST しに行く先になる。アクターと同じホストに限ることで、
         // 相手が自分の文書に書いた URL でこちらから他所へ POST させる形を塞ぐ
-        val inbox = document.inbox?.takeIf { isDeliverable(it, url) } ?: return null
+        val inbox = document.inbox?.takeIf { isDeliverable(it, url) }
+            ?: return invalid("inbox が無いか、https で取得先と同じホストではない: ${document.inbox}")
 
-        val publicKeyPem = document.publicKey?.publicKeyPem ?: return null
+        val publicKeyPem = document.publicKey?.publicKeyPem ?: return invalid("公開鍵が無い")
 
-        return RemoteActor(
-            actorId = documentActorId,
-            inbox = inbox,
-            // 無いのが普通なので、条件を満たさないものは落として先へ進む。
-            // sharedInbox が無くても inbox に 1 通ずつ送れば配信自体はできる
-            sharedInbox = document.endpoints?.sharedInbox?.takeIf { isDeliverable(it, url) },
-            publicKeyPem = publicKeyPem,
-            profile = document.profile(),
+        return RemoteActorLookup.Found(
+            RemoteActor(
+                actorId = documentActorId,
+                inbox = inbox,
+                // 無いのが普通なので、条件を満たさないものは落として先へ進む。
+                // sharedInbox が無くても inbox に 1 通ずつ送れば配信自体はできる
+                sharedInbox = document.endpoints?.sharedInbox?.takeIf { isDeliverable(it, url) },
+                publicKeyPem = publicKeyPem,
+                profile = document.profile(),
+            ),
         )
     }
 
@@ -223,7 +239,7 @@ class HttpRemoteActors(
                         is DocumentFetch.Found -> "found"
                         DocumentFetch.Gone -> "gone"
                         is DocumentFetch.RedirectedToOtherHost -> "redirected_to_other_host"
-                        DocumentFetch.Unavailable -> "unavailable"
+                        is DocumentFetch.Unavailable -> "unavailable"
                     },
                 )
             }
@@ -261,7 +277,8 @@ class HttpRemoteActors(
             // 直前に取得したばかりなら、覚えているものはそのとき読んだ文書で、
             // 取得し直しても同じものにしかならない
             RemoteActorSpan.outcome("throttled")
-            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Unavailable
+            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) }
+                ?: DocumentFetch.Unavailable(RemoteFetchFailure.Throttled(rawUrl))
         }
 
         val response =
@@ -280,7 +297,7 @@ class HttpRemoteActors(
                 logger.warn("アクター文書の取得に失敗した: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("request_failed")
-                return DocumentFetch.Unavailable
+                return DocumentFetch.Unavailable(RemoteFetchFailure.RequestFailed(rawUrl, failure))
             }
 
         // リダイレクトを追った結果、別のホストに移っていたら信用しない。
@@ -289,12 +306,12 @@ class HttpRemoteActors(
         val fetchedFrom = HttpUrl.parse(response.finalUrl)
         if (fetchedFrom == null) {
             RemoteActorSpan.outcome("redirected_to_other_host")
-            return DocumentFetch.Unavailable
+            return DocumentFetch.Unavailable(RemoteFetchFailure.RedirectedToDisallowedUrl(rawUrl, response.finalUrl))
         }
         if (!fetchedFrom.isSameHost(requestUrl)) {
             recentOtherHostRedirects.put(key = cacheKey, value = response.finalUrl, ttlMillis = REFRESH_INTERVAL_MILLIS)
             RemoteActorSpan.outcome("redirected_to_other_host")
-            return DocumentFetch.RedirectedToOtherHost(response.finalUrl)
+            return DocumentFetch.RedirectedToOtherHost(rawUrl = rawUrl, finalUrl = response.finalUrl)
         }
         recentOtherHostRedirects.invalidate(cacheKey)
 
@@ -310,7 +327,7 @@ class HttpRemoteActors(
         }
         if (!HttpStatusCodes.isSuccess(response.status)) {
             RemoteActorSpan.outcome("unsuccessful_status")
-            return DocumentFetch.Unavailable
+            return DocumentFetch.Unavailable(RemoteFetchFailure.UnsuccessfulStatus(rawUrl, response.status))
         }
 
         // 本文は status を見た後で読む。読めなかった理由は例外として span に残す
@@ -322,14 +339,14 @@ class HttpRemoteActors(
                     logger.warn("アクター文書の本文を読めなかった: $rawUrl", responseBody.failure)
                     RemoteActorSpan.failed(responseBody.failure)
                     RemoteActorSpan.outcome("request_failed")
-                    return DocumentFetch.Unavailable
+                    return DocumentFetch.Unavailable(RemoteFetchFailure.BodyUnreadable(rawUrl, responseBody.failure))
                 }
 
                 ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $rawUrl")
             }
         if (body.size > MAX_BODY_BYTES) {
             RemoteActorSpan.outcome("body_too_large")
-            return DocumentFetch.Unavailable
+            return DocumentFetch.Unavailable(RemoteFetchFailure.BodyTooLarge(rawUrl, MAX_BODY_BYTES))
         }
 
         val document =
@@ -339,7 +356,7 @@ class HttpRemoteActors(
                 logger.warn("アクター文書を読めなかった: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("undecodable_document")
-                return DocumentFetch.Unavailable
+                return DocumentFetch.Unavailable(RemoteFetchFailure.InvalidDocument(rawUrl, "アクター文書として読めない", failure))
             }
 
         // 使えると分かった文書だけを覚える。中身を見ずに入れ替えると、相手が 200 で
@@ -387,10 +404,15 @@ class HttpRemoteActors(
          * 別のホストへ移った。移った先の文書は読んでいない
          */
         data class RedirectedToOtherHost(
+            val rawUrl: String,
             val finalUrl: String,
-        ) : DocumentFetch
+        ) : DocumentFetch {
+            val failure: RemoteFetchFailure get() = RemoteFetchFailure.RedirectedToDisallowedUrl(rawUrl, finalUrl)
+        }
 
-        data object Unavailable : DocumentFetch
+        data class Unavailable(
+            val failure: RemoteFetchFailure,
+        ) : DocumentFetch
     }
 
     private fun parseHttpsUrl(raw: String): HttpUrl? = HttpUrl.parseHttps(raw)
