@@ -89,6 +89,8 @@ data class NotePosition(
  * @param contentHtml 配信した本文の HTML
  * @param publishedAt 相手に見せる公開日時
  * @param attachments 付けた画像。付けた順
+ * @param inReplyTo 返信先の投稿の id。返信でなければ null
+ * @param mentions 宛てたアカウント。配り直しでも同じ宛先にするため、投稿と一緒に記録する
  */
 data class StoredNote(
     val publicId: PublicNoteId,
@@ -96,12 +98,25 @@ data class StoredNote(
     val contentHtml: String,
     val publishedAt: Instant,
     val attachments: List<NoteAttachment>,
+    val inReplyTo: String?,
+    val mentions: List<NoteMention>,
 ) {
     /**
      * この投稿を「直前のページの最後」として指す位置
      */
     val position: NotePosition get() = NotePosition(publishedAt = publishedAt, publicId = publicId)
 }
+
+/**
+ * 投稿で宛てたアカウント 1 件。
+ *
+ * @param actorId 宛てたアクターの id
+ * @param acct `user@example.com` の形。先頭の `@` は付けない
+ */
+data class NoteMention(
+    val actorId: String,
+    val acct: String,
+)
 
 /**
  * 投稿に付けた画像 1 枚。
