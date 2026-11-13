@@ -15,6 +15,7 @@ import net.matsudamper.kotpub.note.NoteUrls
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.ReceivedNoteJson.strings
+import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNotes
 import org.slf4j.LoggerFactory
 
@@ -121,11 +122,20 @@ class AnnounceHandler(
         targetUrl: String,
         rawActivityJson: JsonObject,
     ) {
-        val note = remoteNotes.find(targetUrl)
-        if (note == null) {
-            logger.info("ブーストされた投稿を取得できないので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
-            InboxSpan.outcome("announce.note_unavailable")
-            return
+        val note = when (val lookup = remoteNotes.find(targetUrl)) {
+            is RemoteNoteLookup.Found -> lookup.note
+
+            RemoteNoteLookup.NotFound -> {
+                logger.info("ブーストされた投稿が無いか読めないので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
+                InboxSpan.outcome("announce.note_not_found")
+                return
+            }
+
+            // 捨てると相手は送り直さないので、投げて inbox から送り直してもらう
+            RemoteNoteLookup.Unavailable -> {
+                InboxSpan.outcome("announce.note_unavailable")
+                throw IllegalStateException("ブーストされた投稿を今は取得できない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
+            }
         }
 
         // 取得できる時点で公開されているはずだが、宛先を限った投稿を名乗る文書は広めない
