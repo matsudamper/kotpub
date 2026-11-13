@@ -21,21 +21,62 @@ class HttpRemoteOutbox(
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
+     * 相手のアクター文書を取得し、outbox と featured を読む入口にする。
+     * 同じ相手の outbox と featured を続けて読むときは、これを 1 回だけ呼んで各メソッドに渡すと、アクター文書を取り直さずに済む
+     *
+     * @return アクターが https でない、取得できない、取得したアクターの id が [actorId] と違うときは [RemoteActorCollectionsLookup.Unavailable]
+     */
+    suspend fun collectionsOf(actorId: String): RemoteActorCollectionsLookup {
+        val actorUrl = HttpUrl.parseHttps(actorId)
+        if (actorUrl == null) {
+            logger.warn("https のアクターではないので outbox も featured も読まない: $actorId")
+            return RemoteActorCollectionsLookup.Unavailable(RemoteFetchFailure.NotHttps(actorId))
+        }
+        val actor = when (val fetched = fetch(actorId, actorUrl)) {
+            is DocumentFetch.Found -> fetched.document
+            is DocumentFetch.Failed -> return RemoteActorCollectionsLookup.Unavailable(fetched.failure)
+        }
+        if (actor.text("id") != actorId) {
+            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
+            return RemoteActorCollectionsLookup.Unavailable(RemoteFetchFailure.InvalidDocument(actorId, "アクターの id が取得先と違う: ${actor.text("id")}"))
+        }
+        return RemoteActorCollectionsLookup.Found(
+            RemoteActorCollections(actorId = actorId, actorUrl = actorUrl, outbox = actor["outbox"], featured = actor["featured"]),
+        )
+    }
+
+    /**
      * 相手の新しい投稿を [limit] 件まで。ページの途中を飛ばさずに先頭から読み進めるので、返す投稿の間に抜けは無い。
      * 読む量の上限に届いたら、そこまでに読めた分を返す
      */
-    suspend fun recent(actorId: String, limit: Int): RemoteOutboxResult =
-        when (val result = notesOf(actorId = actorId, collectionName = "outbox", limit = limit)) {
+    suspend fun recent(actorId: String, limit: Int): RemoteOutboxResult {
+        val actor = when (val lookup = collectionsOf(actorId)) {
+            is RemoteActorCollectionsLookup.Found -> lookup.collections
+            is RemoteActorCollectionsLookup.Unavailable -> return RemoteOutboxResult.Unavailable(lookup.failure)
+        }
+        return when (val result = notesOf(actor = actor, collectionName = "outbox", collectionRef = actor.outbox, limit = limit)) {
             is RemoteOutboxResult.Found -> result.copy(notes = result.notes.newestFirst().take(limit))
             is RemoteOutboxResult.Unavailable -> result
         }
+    }
 
     /**
      * 相手がプロフィールの先頭に固定した投稿。Actor の `featured` が指すコレクションを、相手が並べた順のまま返す。
      * `featured` が無ければ空
      */
-    suspend fun featured(actorId: String, limit: Int): RemoteOutboxResult =
-        notesOf(actorId = actorId, collectionName = "featured", limit = limit)
+    suspend fun featured(actorId: String, limit: Int): RemoteOutboxResult {
+        val actor = when (val lookup = collectionsOf(actorId)) {
+            is RemoteActorCollectionsLookup.Found -> lookup.collections
+            is RemoteActorCollectionsLookup.Unavailable -> return RemoteOutboxResult.Unavailable(lookup.failure)
+        }
+        return featured(actor, limit)
+    }
+
+    /**
+     * [featured] を、[collectionsOf] で取得済みのアクターから読む。アクター文書は取り直さない
+     */
+    suspend fun featured(actor: RemoteActorCollections, limit: Int): RemoteOutboxResult =
+        notesOf(actor = actor, collectionName = "featured", collectionRef = actor.featured, limit = limit)
 
     /**
      * outbox を新しい方から少しずつ読む。続きは [RemoteOutboxPage.next] を [from] に渡して読む。
@@ -47,50 +88,66 @@ class HttpRemoteOutbox(
      * @param from 読み始める位置。null なら最初のページの先頭
      */
     suspend fun recentPage(actorId: String, from: RemoteOutboxCursor?): RemoteOutboxPageResult {
+        if (from == null) {
+            return when (val lookup = collectionsOf(actorId)) {
+                is RemoteActorCollectionsLookup.Found -> recentPage(lookup.collections, null)
+                is RemoteActorCollectionsLookup.Unavailable -> RemoteOutboxPageResult.Unavailable(lookup.failure)
+            }
+        }
         val actorUrl = HttpUrl.parseHttps(actorId)
         if (actorUrl == null) {
             logger.warn("https のアクターではないので outbox を読まない: $actorId")
             return RemoteOutboxPageResult.Unavailable(RemoteFetchFailure.NotHttps(actorId))
         }
-        val page = if (from == null) {
-            when (val first = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = "outbox")) {
-                is FirstPage.Found -> first.page
-                FirstPage.Empty -> return RemoteOutboxPageResult.Found(RemoteOutboxPage(notes = listOf(), next = null))
-                is FirstPage.Unavailable -> return RemoteOutboxPageResult.Unavailable(first.failure)
-            }
-        } else {
-            when (val fetched = fetch(from.pageId, actorUrl)) {
-                is DocumentFetch.Found -> fetched.document
+        return continuedPage(actorId = actorId, actorUrl = actorUrl, from = from)
+    }
 
-                is DocumentFetch.Failed -> {
-                    logger.warn("outbox のページを読めなかった: actor=$actorId page=${from.pageId}")
-                    return RemoteOutboxPageResult.Unavailable(fetched.failure)
-                }
+    /**
+     * [recentPage] を、[collectionsOf] で取得済みのアクターから読む。アクター文書は取り直さない
+     */
+    suspend fun recentPage(actor: RemoteActorCollections, from: RemoteOutboxCursor?): RemoteOutboxPageResult {
+        if (from != null) return continuedPage(actorId = actor.actorId, actorUrl = actor.actorUrl, from = from)
+        val page = when (val first = firstPage(actor = actor, collectionName = "outbox", collectionRef = actor.outbox)) {
+            is FirstPage.Found -> first.page
+            FirstPage.Empty -> return RemoteOutboxPageResult.Found(RemoteOutboxPage(notes = listOf(), next = null))
+            is FirstPage.Unavailable -> return RemoteOutboxPageResult.Unavailable(first.failure)
+        }
+        return readPage(actorId = actor.actorId, actorUrl = actor.actorUrl, page = page, itemOffset = 0)
+    }
+
+    private suspend fun continuedPage(actorId: String, actorUrl: HttpUrl, from: RemoteOutboxCursor): RemoteOutboxPageResult {
+        val page = when (val fetched = fetch(from.pageId, actorUrl)) {
+            is DocumentFetch.Found -> fetched.document
+
+            is DocumentFetch.Failed -> {
+                logger.warn("outbox のページを読めなかった: actor=$actorId page=${from.pageId}")
+                return RemoteOutboxPageResult.Unavailable(fetched.failure)
             }
         }
+        return readPage(actorId = actorId, actorUrl = actorUrl, page = page, itemOffset = from.itemOffset)
+    }
+
+    private suspend fun readPage(actorId: String, actorUrl: HttpUrl, page: JsonObject, itemOffset: Int): RemoteOutboxPageResult {
         val reader = ContiguousReader(actorId = actorId, actorUrl = actorUrl, noteLimit = Int.MAX_VALUE, wantsMore = { it.isEmpty() })
-        return when (val progress = reader.read(page, from?.itemOffset ?: 0)) {
+        return when (val progress = reader.read(page, itemOffset)) {
             is ReadProgress.Stopped -> RemoteOutboxPageResult.Found(RemoteOutboxPage(notes = progress.notes.newestFirst(), next = progress.next))
             is ReadProgress.Failed -> RemoteOutboxPageResult.Unavailable(progress.failure)
         }
     }
 
     /**
-     * @param collectionName Actor のうち、投稿を並べたコレクションを指す項目の名前
+     * @param collectionName ログに出す、コレクションを指す項目の名前
+     * @param collectionRef Actor のうち、投稿を並べたコレクションを指す項目の値
      */
-    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): RemoteOutboxResult {
+    private suspend fun notesOf(actor: RemoteActorCollections, collectionName: String, collectionRef: JsonElement?, limit: Int): RemoteOutboxResult {
         require(limit in 1..MAX_NOTES)
-        val actorUrl = HttpUrl.parseHttps(actorId)
-        if (actorUrl == null) {
-            logger.warn("https のアクターではないので $collectionName を読まない: $actorId")
-            return RemoteOutboxResult.Unavailable(RemoteFetchFailure.NotHttps(actorId))
-        }
-        val firstPage = when (val first = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = collectionName)) {
+        val actorId = actor.actorId
+        val firstPage = when (val first = firstPage(actor = actor, collectionName = collectionName, collectionRef = collectionRef)) {
             is FirstPage.Found -> first.page
             FirstPage.Empty -> return RemoteOutboxResult.Found(listOf())
             is FirstPage.Unavailable -> return RemoteOutboxResult.Unavailable(first.failure)
         }
-        val reader = ContiguousReader(actorId = actorId, actorUrl = actorUrl, noteLimit = limit, wantsMore = { it.size < limit })
+        val reader = ContiguousReader(actorId = actorId, actorUrl = actor.actorUrl, noteLimit = limit, wantsMore = { it.size < limit })
         return when (val progress = reader.read(firstPage, 0)) {
             is ReadProgress.Stopped -> {
                 if (progress.notes.size < limit && progress.next != null) {
@@ -106,33 +163,25 @@ class HttpRemoteOutbox(
         }
     }
 
-    private suspend fun firstPage(actorId: String, actorUrl: HttpUrl, collectionName: String): FirstPage {
-        val actor = when (val fetched = fetch(actorId, actorUrl)) {
-            is DocumentFetch.Found -> fetched.document
-            is DocumentFetch.Failed -> return FirstPage.Unavailable(fetched.failure)
-        }
-        if (actor.text("id") != actorId) {
-            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
-            return FirstPage.Unavailable(RemoteFetchFailure.InvalidDocument(actorId, "アクターの id が取得先と違う: ${actor.text("id")}"))
-        }
+    private suspend fun firstPage(actor: RemoteActorCollections, collectionName: String, collectionRef: JsonElement?): FirstPage {
         // 項目が無いのは相手が並べていないだけなので、空として返す
-        val collectionRef = actor[collectionName] ?: return FirstPage.Empty
-        val collection = when (val fetched = reference(collectionRef, actorId, actorUrl)) {
+        if (collectionRef == null) return FirstPage.Empty
+        val collection = when (val fetched = reference(collectionRef, actor.actorId, actor.actorUrl)) {
             is DocumentFetch.Found -> fetched.document
 
             is DocumentFetch.Failed -> {
-                logger.warn("$collectionName を読めなかった: actor=$actorId")
+                logger.warn("$collectionName を読めなかった: actor=${actor.actorId}")
                 return FirstPage.Unavailable(fetched.failure)
             }
         }
         if (collection.items() != null) return FirstPage.Found(collection)
         // first も無ければ空のコレクション。指しているのに取れなければ失敗
         val firstRef = collection["first"] ?: return FirstPage.Empty
-        val first = when (val fetched = reference(firstRef, actorId, actorUrl)) {
+        val first = when (val fetched = reference(firstRef, actor.actorId, actor.actorUrl)) {
             is DocumentFetch.Found -> fetched.document
 
             is DocumentFetch.Failed -> {
-                logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
+                logger.warn("$collectionName の最初のページを読めなかった: actor=${actor.actorId}")
                 return FirstPage.Unavailable(fetched.failure)
             }
         }
@@ -387,6 +436,29 @@ class HttpRemoteOutbox(
         const val MAX_BODY_BYTES = 1024 * 1024
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }
+}
+
+/**
+ * [HttpRemoteOutbox.collectionsOf] で取得した相手のアクターのうち、投稿を並べたコレクションを指す部分。
+ * 中身は [HttpRemoteOutbox] だけが読む
+ *
+ * @param actorId 取得したアクターの id。取得先と同じ
+ */
+class RemoteActorCollections internal constructor(
+    val actorId: String,
+    internal val actorUrl: HttpUrl,
+    internal val outbox: JsonElement?,
+    internal val featured: JsonElement?,
+)
+
+/**
+ * [HttpRemoteOutbox.collectionsOf] の結果
+ */
+sealed interface RemoteActorCollectionsLookup {
+    data class Found(val collections: RemoteActorCollections) : RemoteActorCollectionsLookup
+
+    /** アクターを取得できない、または取得したアクターの id が取得先と違う */
+    data class Unavailable(val failure: RemoteFetchFailure) : RemoteActorCollectionsLookup
 }
 
 /**

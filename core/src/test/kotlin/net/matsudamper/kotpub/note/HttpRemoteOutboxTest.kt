@@ -260,6 +260,36 @@ class HttpRemoteOutboxTest {
         assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))).failure)
     }
 
+    @Test
+    fun recentPageAndFeaturedShareOneActorFetch() = runBlocking {
+        val featuredUrl = "$actorId/collections/featured"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","featured":"$featuredUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("recent", actorId, true)}]}"""
+        documents[featuredUrl] = """{"id":"$featuredUrl","orderedItems":[${note("pinned", actorId, true)}]}"""
+        val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
+
+        val page = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actor, null)).page
+        val featured = outbox.featured(actor, 20).notes()
+
+        assertEquals(listOf("$actorId/recent"), page.notes.map { it.id })
+        assertEquals(listOf("$actorId/pinned"), featured.map { it.id })
+        assertEquals(listOf(actorId, outboxUrl, featuredUrl), requests)
+    }
+
+    @Test
+    fun collectionsOfIsUnavailableWhenActorIdDiffers() = runBlocking {
+        documents[actorId] = """{"id":"https://remote.example/users/mallory","outbox":"$outboxUrl"}"""
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf(actorId)).failure)
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, null)).failure)
+    }
+
+    @Test
+    fun collectionsOfIsUnavailableWhenActorCannotBeRead() = runBlocking {
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf(actorId)).failure)
+        assertIs<RemoteFetchFailure.NotHttps>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf("http://remote.example/users/alice")).failure)
+        assertEquals(listOf(actorId), requests)
+    }
+
     private suspend fun recentPage(from: RemoteOutboxCursor?): RemoteOutboxPage = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actorId, from)).page
 
     private fun note(id: String, author: String, public: Boolean): String = note(id, author, public, "2026-11-01T00:00:00Z")
