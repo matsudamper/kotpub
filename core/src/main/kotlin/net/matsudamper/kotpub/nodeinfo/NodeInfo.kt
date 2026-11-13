@@ -34,9 +34,6 @@ data class NodeInfoDiscoveryLink(
 
 /**
  * `GET /nodeinfo/2.1` のレスポンス本体。
- *
- * ローカルユーザー数はまだ数えていないので [NodeInfoUsage.users] は常に total = 1。
- * 投稿数もまだ数えていないので `localPosts` は常に 0。
  */
 @Serializable
 data class NodeInfo(
@@ -77,16 +74,22 @@ data class NodeInfoServices(
     val outbound: List<String> = emptyList(),
 )
 
+/**
+ * @param localPosts このサーバーのユーザーが書いた投稿の数
+ */
 @Serializable
 data class NodeInfoUsage(
     @SerialName("users")
     val users: NodeInfoUsers,
     @SerialName("localPosts")
-    val localPosts: Int = 0,
+    val localPosts: Long,
 )
 
+/**
+ * @param total このサーバーのユーザー数
+ */
 @Serializable
 data class NodeInfoUsers(
     @SerialName("total")
-    val total: Int,
+    val total: Long,
 )

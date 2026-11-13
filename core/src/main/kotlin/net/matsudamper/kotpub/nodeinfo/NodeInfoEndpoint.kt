@@ -14,10 +14,14 @@ import net.matsudamper.kotpub.http.MediaType
  *   [net.matsudamper.kotpub.actor.ActorUrls] と違いここでは id 等を持たないので、
  *   専用の URL 組み立てクラスは作らずそのまま受け取る
  * @param software 公開するソフトウェア情報。使う側のアプリケーションの名前とバージョンを渡す
+ * @param openRegistrations 誰でもアカウントを作れるか
+ * @param usageSource ユーザー数・投稿数。リクエストのたびに問い合わせる
  */
 class NodeInfoEndpoint(
     private val domain: String,
     private val software: NodeInfoSoftware,
+    private val openRegistrations: Boolean,
+    private val usageSource: NodeInfoUsageSource,
 ) {
     /**
      * `/.well-known/nodeinfo`
@@ -41,13 +45,14 @@ class NodeInfoEndpoint(
     /**
      * `/nodeinfo/2.1`
      */
-    fun nodeInfo(): EndpointResponse =
+    suspend fun nodeInfo(): EndpointResponse =
         EndpointResponse.json(
             serializer = NodeInfo.serializer(),
             value =
             NodeInfo(
                 software = software,
-                usage = NodeInfoUsage(users = NodeInfoUsers(total = 1)),
+                openRegistrations = openRegistrations,
+                usage = usageSource.usage(),
             ),
             contentType = MediaType.Json,
         )
