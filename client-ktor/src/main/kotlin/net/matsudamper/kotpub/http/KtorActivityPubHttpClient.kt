@@ -53,11 +53,15 @@ class KtorActivityPubHttpClient internal constructor(
                     finalUrl = finalUrl,
                     body =
                     if (readsBody(status, finalUrl)) {
-                        runCatching { response.bodyAsChannel().readRemaining(maxBodyBytes + 1L).readByteArray() }
-                            // 呼び出し元が止めた合図まで本文の失敗に化けさせない
-                            .onFailure { if (it is CancellationException) throw it }
+                        try {
+                            ResponseBody.Read(response.bodyAsChannel().readRemaining(maxBodyBytes + 1L).readByteArray())
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            ResponseBody.Unreadable(e)
+                        }
                     } else {
-                        null
+                        ResponseBody.NotRead
                     },
                 )
             }
