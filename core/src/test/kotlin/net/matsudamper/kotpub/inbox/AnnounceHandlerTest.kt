@@ -13,6 +13,7 @@ import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.entity.PublicNoteId
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.ReceivedNote
@@ -56,8 +57,8 @@ class AnnounceHandlerTest {
             remoteNotes = RemoteNotes { noteId ->
                 val note = notes[noteId]
                 when {
-                    noteId in unavailableNoteIds -> RemoteNoteLookup.Unavailable
-                    note == null -> RemoteNoteLookup.NotFound
+                    noteId in unavailableNoteIds -> RemoteNoteLookup.Unavailable(RemoteFetchFailure.UnsuccessfulStatus(noteId, 503))
+                    note == null -> RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(noteId, 404))
                     else -> RemoteNoteLookup.Found(note)
                 }
             },

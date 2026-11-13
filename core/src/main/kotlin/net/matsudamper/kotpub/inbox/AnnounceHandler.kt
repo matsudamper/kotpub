@@ -125,16 +125,16 @@ class AnnounceHandler(
         val note = when (val lookup = remoteNotes.find(targetUrl)) {
             is RemoteNoteLookup.Found -> lookup.note
 
-            RemoteNoteLookup.NotFound -> {
+            is RemoteNoteLookup.NotFound -> {
                 logger.info("ブーストされた投稿が無いか読めないので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
                 InboxSpan.outcome("announce.note_not_found")
                 return
             }
 
             // 捨てると相手は送り直さないので、投げて inbox から送り直してもらう
-            RemoteNoteLookup.Unavailable -> {
+            is RemoteNoteLookup.Unavailable -> {
                 InboxSpan.outcome("announce.note_unavailable")
-                throw IllegalStateException("ブーストされた投稿を今は取得できない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
+                throw IllegalStateException("ブーストされた投稿を今は取得できない: ${recipient.logLabel} ← $actorUri object=$targetUrl 理由=${lookup.failure}")
             }
         }
 
