@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.inbox
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +16,7 @@ import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.ReceivedNote
+import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNotes
 
 class AnnounceHandlerTest {
@@ -44,13 +46,21 @@ class AnnounceHandlerTest {
         json: String,
         boosts: FakeBoostStore,
         notes: Map<String, ReceivedNote> = mapOf(),
+        unavailableNoteIds: Set<String> = setOf(),
         earlyUndone: FakeEarlyUndoneLikes = FakeEarlyUndoneLikes(),
     ) {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
         AnnounceHandler(
             domain = TestLocalActor.DOMAIN,
             remoteActors = TestRemoteActor.remoteActors(),
-            remoteNotes = RemoteNotes { notes[it] },
+            remoteNotes = RemoteNotes { noteId ->
+                val note = notes[noteId]
+                when {
+                    noteId in unavailableNoteIds -> RemoteNoteLookup.Unavailable
+                    note == null -> RemoteNoteLookup.NotFound
+                    else -> RemoteNoteLookup.Found(note)
+                }
+            },
             boosts = boosts,
             earlyUndone = earlyUndone,
         ).handle(
@@ -114,6 +124,17 @@ class AnnounceHandlerTest {
             boosts,
             notes = mapOf(remoteNoteId to remoteNote(NoteVisibility.Followers)),
         )
+
+        assertTrue(boosts.remoteRows.isEmpty())
+    }
+
+    @Test
+    fun `投稿を今は取得できなければ送り直してもらうために投げる`() = runBlocking {
+        val boosts = FakeBoostStore()
+
+        assertFailsWith<IllegalStateException> {
+            handle(announce(activityUri, remoteNoteId, PUBLIC, ""), boosts, unavailableNoteIds = setOf(remoteNoteId))
+        }
 
         assertTrue(boosts.remoteRows.isEmpty())
     }
