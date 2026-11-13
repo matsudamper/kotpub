@@ -1,5 +1,7 @@
 package net.matsudamper.kotpub.http
 
+import kotlinx.coroutines.CancellationException
+
 /**
  * 相手のサーバーへ出ていく HTTP。
  *
@@ -51,15 +53,34 @@ interface ActivityPubHttpClient : AutoCloseable {
 
 /**
  * @param finalUrl リダイレクトを追った後の URL。追っていなければ要求した URL
- * @param body 本文。読まなかったときは null、読めなかったときは失敗として持つ。
- *   本文が読めなくても status は使えるので、読めなかったことで status ごと捨てないこと。
+ * @param body 本文が読めなくても status は使えるので、読めなかったことで status ごと捨てないこと。
  *   410 の本文が読めなかっただけで、消えたことが分からなくなる
  */
 class ActivityPubClientResponse(
     val status: Int,
     val finalUrl: String,
-    val body: Result<ByteArray>?,
+    val body: ResponseBody,
 )
+
+/**
+ * 応答の本文。「読まなかった」「読めなかった」「読めた」を null と Result の組み合わせで表すと、
+ * 呼び出し側は読んだはずの本文の null を確かめ直し、失敗に紛れたキャンセルを取り分ける必要がある
+ */
+sealed interface ResponseBody {
+    /** [ActivityPubHttpClient.get] の readsBody が false を返したので読んでいない */
+    data object NotRead : ResponseBody
+
+    class Read(val bytes: ByteArray) : ResponseBody
+
+    /**
+     * 読もうとして失敗した。呼び出し元のキャンセルはここに入れず、そのまま投げること
+     */
+    class Unreadable(val failure: Exception) : ResponseBody {
+        init {
+            require(failure !is CancellationException) { "キャンセルは本文の失敗にせず投げること" }
+        }
+    }
+}
 
 class ActivityPubPostResponse(
     val status: Int,
