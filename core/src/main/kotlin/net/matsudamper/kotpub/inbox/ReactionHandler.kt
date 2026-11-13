@@ -42,41 +42,36 @@ class ReactionHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val targetUrl = activity.target?.id
         if (targetUrl == null) {
-            logger.warn("$type に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("reaction.no_object")
-            return
+            return InboxHandling.Ignored("$type に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         val notePublicId = NoteUrls.publicIdOf(domain = domain, url = targetUrl)
         if (notePublicId == null) {
-            logger.info("$type の対象がこちらの投稿ではないので何もしない: object=$targetUrl")
             InboxSpan.outcome("reaction.not_local_note")
-            return
+            return InboxHandling.Ignored("$type の対象がこちらの投稿ではないので何もしない: object=$targetUrl")
         }
 
         val emoji = StampEmoji.of(activity.content)
         InboxSpan.set(InboxSpan.STAMP_EMOJI, emoji)
         if (emoji == null && type != LIKE_TYPE) {
-            logger.info("$type に絵文字が無いので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("reaction.no_emoji")
-            return
+            return InboxHandling.Ignored("$type に絵文字が無いので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
         if (emoji != null && emoji.length > StampEmoji.MAX_LENGTH) {
-            logger.info("$type の絵文字が長すぎるので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("reaction.emoji_too_long")
-            return
+            return InboxHandling.Ignored("$type の絵文字が長すぎるので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         val activityUri = activity.id
         val undoneFirst = activityUri != null &&
             earlyUndoneLikes.isRemembered(actorUri = verifiedSignerActorId, activityUri = activityUri, now = Instant.now())
         if (undoneFirst) {
-            logger.info("先に取り消しが届いた $type なので記録しない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("reaction.undone_first")
-            return
+            return InboxHandling.Ignored("先に取り消しが届いた $type なので記録しない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
         }
 
         // 相手の公開鍵を記録できないと、相手が消えた後の `Delete` を検証できず、
@@ -85,13 +80,12 @@ class ReactionHandler(
             is RemoteActorLookup.Found -> lookup.actor
 
             RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
-                logger.warn("$type の押し手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId 理由=$lookup")
                 InboxSpan.outcome("reaction.actor_unavailable")
-                return
+                return InboxHandling.Ignored("$type の押し手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $verifiedSignerActorId 理由=$lookup")
             }
         }
 
-        if (emoji == null) {
+        return if (emoji == null) {
             addFavourite(recipient = recipient, notePublicId = notePublicId, actor = actor)
         } else {
             putStamp(
@@ -108,7 +102,7 @@ class ReactionHandler(
         recipient: InboxRecipient,
         notePublicId: PublicNoteId,
         actor: RemoteActor,
-    ) {
+    ): InboxHandling {
         val recorded = favourites.add(
             ReceivedFavourite(
                 notePublicId = notePublicId,
@@ -118,11 +112,11 @@ class ReactionHandler(
         )
 
         InboxSpan.outcome(if (recorded) "favourite.recorded" else "favourite.not_recorded")
-        if (recorded) {
-            logger.info("お気に入りを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
-        } else {
-            logger.info("お気に入りを記録しなかった。記録済みか投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
+        if (!recorded) {
+            return InboxHandling.Ignored("お気に入りを記録しなかった。記録済みか投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
         }
+        logger.info("お気に入りを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
+        return InboxHandling.Handled
     }
 
     private fun putStamp(
@@ -131,7 +125,7 @@ class ReactionHandler(
         actor: RemoteActor,
         emoji: String,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val recorded = stamps.put(
             ReceivedStamp(
                 notePublicId = notePublicId,
@@ -143,11 +137,11 @@ class ReactionHandler(
         )
 
         InboxSpan.outcome(if (recorded) "stamp.recorded" else "stamp.not_recorded")
-        if (recorded) {
-            logger.info("スタンプを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value} 絵文字=$emoji")
-        } else {
-            logger.info("スタンプを記録しなかった。投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
+        if (!recorded) {
+            return InboxHandling.Ignored("スタンプを記録しなかった。投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
         }
+        logger.info("スタンプを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value} 絵文字=$emoji")
+        return InboxHandling.Handled
     }
 
     companion object {

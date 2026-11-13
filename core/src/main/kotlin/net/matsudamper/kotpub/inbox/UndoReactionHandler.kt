@@ -27,16 +27,16 @@ class UndoReactionHandler(
     private val logger = LoggerFactory.getLogger(UndoReactionHandler::class.java)
 
     /**
-     * @return お気に入りかスタンプの取り消しだったら true。フォロー解除など別の取り消しなら false
+     * @return フォロー解除など、お気に入りかスタンプの取り消しでなければ null
      */
     fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         activity: InboxActivity,
-    ): Boolean {
+    ): InboxHandling? {
         return when (val undoObject = activity.target) {
-            null -> false
-            is LinkOrObject.Link -> false
+            null -> null
+            is LinkOrObject.Link -> null
             is LinkOrObject.Embedded -> removeEmbedded(recipient, verifiedSignerActorId, undoObject)
         }
     }
@@ -45,23 +45,22 @@ class UndoReactionHandler(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         undoObject: LinkOrObject.Embedded,
-    ): Boolean {
+    ): InboxHandling? {
         val undoneActivity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), undoObject.json) }.getOrNull()
         if (undoneActivity == null) {
             logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("undo_reaction.unreadable_object")
-            return false
+            return null
         }
 
         val undoneType = undoneActivity.type
-        if (undoneType != ReactionHandler.LIKE_TYPE && undoneType != ReactionHandler.EMOJI_REACT_TYPE) return false
+        if (undoneType != ReactionHandler.LIKE_TYPE && undoneType != ReactionHandler.EMOJI_REACT_TYPE) return null
 
         val notePublicId = undoneActivity.target?.id?.let { NoteUrls.publicIdOf(domain = domain, url = it) }
         if (notePublicId == null) {
-            logger.info("取り消す $undoneType が見つからない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("undo_reaction.not_local_note")
-            return true
+            return InboxHandling.Ignored("取り消す $undoneType が見つからない: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         val removed = remove(
@@ -73,15 +72,14 @@ class UndoReactionHandler(
         InboxSpan.outcome(if (removed) "undo_reaction.removed" else "undo_reaction.not_recorded")
         if (removed) {
             logger.info("$undoneType を取り消した: ${recipient.logLabel} ← $verifiedSignerActorId 投稿=${notePublicId.value}")
-            return true
+            return InboxHandling.Handled
         }
 
         val undoneActivityUri = undoneActivity.id
         if (undoneActivityUri != null) {
             rememberEarlyUndone(actorUri = verifiedSignerActorId, activityUri = undoneActivityUri)
         }
-        logger.info("取り消す $undoneType が記録に無い: ${recipient.logLabel} ← $verifiedSignerActorId 投稿=${notePublicId.value}")
-        return true
+        return InboxHandling.Ignored("取り消す $undoneType が記録に無い: ${recipient.logLabel} ← $verifiedSignerActorId 投稿=${notePublicId.value}")
     }
 
     private fun remove(

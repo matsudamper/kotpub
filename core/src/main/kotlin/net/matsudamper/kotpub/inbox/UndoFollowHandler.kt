@@ -27,22 +27,22 @@ class UndoFollowHandler(
     private val logger = LoggerFactory.getLogger(UndoFollowHandler::class.java)
 
     /**
-     * @return フォローを解除したら true
+     * @return フォローを解除しなかったら null。取り消しの対象が他にあるかもしれないので、何もしなかったとは決めない
      */
     suspend fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         activity: InboxActivity,
-    ): Boolean {
+    ): InboxHandling.Handled? {
         val undoneFollow = when (val undoObject = activity.target) {
             null -> {
                 logger.warn("Undo に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
-                return false
+                return null
             }
 
-            is LinkOrObject.Link -> linkedFollow(recipient, verifiedSignerActorId, undoObject.href) ?: return false
+            is LinkOrObject.Link -> linkedFollow(recipient, verifiedSignerActorId, undoObject.href) ?: return null
 
-            is LinkOrObject.Embedded -> embeddedFollow(recipient, verifiedSignerActorId, undoObject.json) ?: return false
+            is LinkOrObject.Embedded -> embeddedFollow(recipient, verifiedSignerActorId, undoObject.json) ?: return null
         }
         val followee = undoneFollow.followee
 
@@ -61,7 +61,7 @@ class UndoFollowHandler(
             // 既に Delete で消えた相手からも Undo は届く
             logger.info("解除するフォローが記録に無い: ${followee.acct} ← $verifiedSignerActorId")
         }
-        return removed
+        return InboxHandling.Handled.takeIf { removed }
     }
 
     private fun linkedFollow(

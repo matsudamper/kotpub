@@ -44,20 +44,18 @@ class FollowHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val followTargetActorId = activity.target?.id
         val followee = followTargetActorId?.let { directory.resolveActorId(it) }
         if (followee == null) {
-            logger.warn("Follow の宛先がこちらのアカウントではないので Accept を返さない: object=$followTargetActorId ${recipient.logLabel}")
-            return
+            return InboxHandling.Ignored("Follow の宛先がこちらのアカウントではないので Accept を返さない: object=$followTargetActorId ${recipient.logLabel}")
         }
 
         // 宛先の異なる Follow をこちらの inbox に投げ込むことはできる。
         // 中身を見ずに Accept を返すと、フォローしていないアクターの
         // フォローが成立したように相手に見える
         if (recipient is InboxRecipient.Account && followee.actorId != recipient.urls.actorId) {
-            logger.warn("Follow の宛先が違うので Accept を返さない: object=$followTargetActorId 宛先=${recipient.urls.actorId}")
-            return
+            return InboxHandling.Ignored("Follow の宛先が違うので Accept を返さない: object=$followTargetActorId 宛先=${recipient.urls.actorId}")
         }
 
         // 相手が `id` を付けずに送ってくると、同じ `Follow` の送り直しと
@@ -65,16 +63,14 @@ class FollowHandler(
         // 送り直しのたびに行が増えるか、別のフォローを取り違えて消すことになる
         val followActivityUri = activity.id
         if (followActivityUri == null) {
-            logger.warn("Follow に id が無いので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Follow に id が無いので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
         }
 
         val follower = when (val lookup = remoteActors.findActor(verifiedSignerActorId)) {
             is RemoteActorLookup.Found -> lookup.actor
 
             RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
-                logger.warn("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを取得できない 理由=$lookup")
-                return
+                return InboxHandling.Ignored("Follow に Accept を返せなかった: ${followee.acct} ← $verifiedSignerActorId フォロワーのアクターを取得できない 理由=$lookup")
             }
         }
 
@@ -97,11 +93,11 @@ class FollowHandler(
 
         // 特定した後に消されたアカウント宛。返す先のアカウントがもう無い
         if (!recorded) {
-            logger.info("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
         }
 
         logger.info("Follow を記録して Accept を配信キューに登録した: ${followee.acct} ← $verifiedSignerActorId")
+        return InboxHandling.Handled
     }
 
     private companion object {

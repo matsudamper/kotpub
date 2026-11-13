@@ -23,6 +23,8 @@ import net.matsudamper.kotpub.httpsignature.SignedRequest
  *
  * 404 と 413 だけがここでの判断になる。どちらも署名を検証する前、
  * ボディを受け取り切る前に決まるので、[InboxService] には渡せない。
+ *
+ * 呼び出し側には応答と一緒に [InboxService] の結果も返す。どう扱われたかを呼び出し側で記録できるようにする
  */
 class InboxEndpoint(
     private val directory: ActorDirectory,
@@ -34,9 +36,9 @@ class InboxEndpoint(
     suspend fun receiveForAccount(
         username: String?,
         request: IncomingInboxRequest,
-    ): EndpointResponse {
+    ): InboxEndpointResult {
         val urls = directory.resolve(username)
-            ?: return text(HttpStatusCodes.NOT_FOUND, "アクターが見つからない: $username")
+            ?: return InboxEndpointResult(text(HttpStatusCodes.NOT_FOUND, "アクターが見つからない: $username"), result = null)
 
         return receive(recipient = InboxRecipient.Account(urls), request = request)
     }
@@ -44,22 +46,22 @@ class InboxEndpoint(
     /**
      * [net.matsudamper.kotpub.actor.ActorUrls.SHARED_INBOX_PATH]
      */
-    suspend fun receiveShared(request: IncomingInboxRequest): EndpointResponse =
+    suspend fun receiveShared(request: IncomingInboxRequest): InboxEndpointResult =
         receive(recipient = InboxRecipient.Shared, request = request)
 
     private suspend fun receive(
         recipient: InboxRecipient,
         request: IncomingInboxRequest,
-    ): EndpointResponse {
+    ): InboxEndpointResult {
         // 読む前に長さで弾く。読んでから確かめても、その時点で受け取り終えている
         val declaredLength = request.headers[CONTENT_LENGTH_HEADER]?.toLongOrNull()
         if (declaredLength != null && declaredLength > MAX_BODY_BYTES) {
-            return text(HttpStatusCodes.PAYLOAD_TOO_LARGE, "ボディが大きすぎる")
+            return InboxEndpointResult(text(HttpStatusCodes.PAYLOAD_TOO_LARGE, "ボディが大きすぎる"), result = null)
         }
 
         val requestBodyBytes = request.readBody(MAX_BODY_BYTES)
         if (requestBodyBytes.size > MAX_BODY_BYTES) {
-            return text(HttpStatusCodes.PAYLOAD_TOO_LARGE, "ボディが大きすぎる")
+            return InboxEndpointResult(text(HttpStatusCodes.PAYLOAD_TOO_LARGE, "ボディが大きすぎる"), result = null)
         }
 
         val signedRequest =
@@ -70,14 +72,15 @@ class InboxEndpoint(
                 body = requestBodyBytes,
             )
 
-        // 落ちた理由は相手に返さない。どこで落ちたかを教えると通る形を探す助けになるので、
-        // 理由はサービス側がログに出し、ここには status しか渡ってこない
-        return when (service.receive(recipient = recipient, request = signedRequest)) {
+        // 落ちた理由は相手に返さない。どこで落ちたかを教えると通る形を探す助けになるので、status だけにする
+        val result = service.receive(recipient = recipient, request = signedRequest)
+        val response = when (result) {
             is InboxResult.Unauthorized -> text(HttpStatusCodes.UNAUTHORIZED, "署名を検証できなかった")
             is InboxResult.BadRequest -> text(HttpStatusCodes.BAD_REQUEST, "ボディを読めなかった")
             is InboxResult.Accepted -> text(HttpStatusCodes.ACCEPTED, "")
             is InboxResult.TemporarilyUnavailable -> text(HttpStatusCodes.SERVICE_UNAVAILABLE, "")
         }
+        return InboxEndpointResult(response = response, result = result)
     }
 
     private fun text(
@@ -85,6 +88,15 @@ class InboxEndpoint(
         text: String,
     ): EndpointResponse = EndpointResponse.text(status = status, text = text, headers = mapOf())
 }
+
+/**
+ * @param response 相手のサーバーへ返す応答。理由は含まない
+ * @param result [InboxService] の結果。署名を検証する前に返したとき（404・413）は null
+ */
+class InboxEndpointResult(
+    val response: EndpointResponse,
+    val result: InboxResult?,
+)
 
 /**
  * inbox に届いたリクエスト。
