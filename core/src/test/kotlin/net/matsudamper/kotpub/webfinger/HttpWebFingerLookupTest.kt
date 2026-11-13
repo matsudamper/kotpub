@@ -4,7 +4,6 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
@@ -23,7 +22,7 @@ class HttpWebFingerLookupTest {
 
         val actorId = runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }
 
-        assertEquals("https://example.com/users/alice", actorId)
+        assertEquals(WebFingerResult.Found("https://example.com/users/alice"), actorId)
         assertEquals("https://example.com/.well-known/webfinger?resource=acct%3Aalice%40example.com", client.requestedUrls.single())
     }
 
@@ -67,7 +66,7 @@ class HttpWebFingerLookupTest {
                     .map { HttpWebFingerLookup(client).findActorId(it) }
             }
 
-        assertEquals(listOf(null, null, null, null, null, null, null), results)
+        assertEquals(List(7) { WebFingerResult.InvalidAcct }, results)
         assertEquals(listOf(), client.requestedUrls)
     }
 
@@ -77,7 +76,7 @@ class HttpWebFingerLookupTest {
 
         val actorId = runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com／admin＃") }
 
-        assertNull(actorId)
+        assertEquals(WebFingerResult.InvalidAcct, actorId)
         assertEquals(listOf(), client.requestedUrls)
     }
 
@@ -109,21 +108,28 @@ class HttpWebFingerLookupTest {
 
         val actorId = runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }
 
-        assertEquals("https://example.com/users/alice", actorId)
+        assertEquals(WebFingerResult.Found("https://example.com/users/alice"), actorId)
     }
 
     @Test
     fun `httpsでないアクターのidは返さない`() {
         val client = RespondingClient(body = webFingerBody(href = "http://example.com/users/alice"))
 
-        assertNull(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
     }
 
     @Test
     fun `成功でない応答では返さない`() {
         val client = RespondingClient(body = webFingerBody(href = "https://example.com/users/alice"), status = HttpStatusCodes.NOT_FOUND)
 
-        assertNull(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+    }
+
+    @Test
+    fun `相手が5xxを返したら今は引けないと返す`() {
+        val client = RespondingClient(body = "", status = 503)
+
+        assertEquals(WebFingerResult.Unavailable, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
     }
 
     @Test
@@ -136,7 +142,7 @@ class HttpWebFingerLookupTest {
 
         val actorId = runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }
 
-        assertEquals("https://social.example.com/users/alice", actorId)
+        assertEquals(WebFingerResult.Found("https://social.example.com/users/alice"), actorId)
     }
 
     @Test
@@ -147,21 +153,21 @@ class HttpWebFingerLookupTest {
                 finalUrl = "http://example.com/.well-known/webfinger?resource=acct%3Aalice%40example.com",
             )
 
-        assertNull(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
     }
 
     @Test
-    fun `届かなければnullを返す`() {
+    fun `届かなければ今は引けないと返す`() {
         val client = FailingClient()
 
-        assertNull(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertEquals(WebFingerResult.Unavailable, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
     }
 
     @Test
-    fun `JSONとして読めなければnullを返す`() {
+    fun `JSONとして読めなければ見つからないと返す`() {
         val client = RespondingClient(body = "<html></html>")
 
-        assertNull(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
     }
 
     private fun webFingerBody(href: String): String =

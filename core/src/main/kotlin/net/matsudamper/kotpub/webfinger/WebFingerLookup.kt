@@ -19,11 +19,26 @@ import org.slf4j.LoggerFactory
  */
 interface WebFingerLookup {
     /**
-     * 見つからない・読めない・acct として読めないときは null。
-     *
      * @param acct `@alice@example.com`、`alice@example.com`、`acct:alice@example.com` のどれでもよい
      */
-    suspend fun findActorId(acct: String): String?
+    suspend fun findActorId(acct: String): WebFingerResult
+}
+
+/**
+ * [WebFingerLookup.findActorId] の結果。検索した人に「そのアカウントは無い」と
+ * 「相手のサーバーに今はつながらない」を言い分けられるように分ける
+ */
+sealed interface WebFingerResult {
+    data class Found(val actorId: String) : WebFingerResult
+
+    /** acct として読めない入力。問い合わせていない */
+    data object InvalidAcct : WebFingerResult
+
+    /** 相手が無いと答えた、または応答からアクターの id を読み取れない。問い合わせ直しても同じ結果になる */
+    data object NotFound : WebFingerResult
+
+    /** つながらない、相手が 5xx や 429 を返したなど。時間をおけば引ける見込みがある */
+    data object Unavailable : WebFingerResult
 }
 
 /**
@@ -47,8 +62,8 @@ class HttpWebFingerLookup(
 ) : WebFingerLookup {
     private val logger = LoggerFactory.getLogger(HttpWebFingerLookup::class.java)
 
-    override suspend fun findActorId(acct: String): String? {
-        val account = Acct.parse(acct) ?: return null
+    override suspend fun findActorId(acct: String): WebFingerResult {
+        val account = Acct.parse(acct) ?: return WebFingerResult.InvalidAcct
 
         val response =
             try {
@@ -64,16 +79,20 @@ class HttpWebFingerLookup(
                 throw e
             } catch (e: Exception) {
                 logger.warn("WebFinger の取得に失敗した: $acct", e)
-                return null
+                return WebFingerResult.Unavailable
             }
 
         if (!HttpStatusCodes.isSuccess(response.status)) {
+            if (isTemporaryFailure(response.status)) {
+                logger.warn("WebFinger の相手が今は応じない: $acct status=${response.status}")
+                return WebFingerResult.Unavailable
+            }
             logger.info("WebFinger でアカウントが見つからなかった: $acct status=${response.status}")
-            return null
+            return WebFingerResult.NotFound
         }
         if (HttpUrl.parseHttps(response.finalUrl) == null) {
             logger.warn("WebFinger が https ではない URL に移ったので捨てる: $acct → ${response.finalUrl}")
-            return null
+            return WebFingerResult.NotFound
         }
 
         val body = when (val responseBody = response.body) {
@@ -81,14 +100,14 @@ class HttpWebFingerLookup(
 
             is ResponseBody.Unreadable -> {
                 logger.warn("WebFinger の本文を読めなかった: $acct", responseBody.failure)
-                return null
+                return WebFingerResult.Unavailable
             }
 
             ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $acct")
         }
         if (body.size > MAX_BODY_BYTES) {
             logger.warn("WebFinger の本文が大きすぎるので捨てる: $acct")
-            return null
+            return WebFingerResult.NotFound
         }
 
         val document =
@@ -96,14 +115,22 @@ class HttpWebFingerLookup(
                 AppJson.decodeFromString(WebFingerResponse.serializer(), body.toString(Charsets.UTF_8))
             }.getOrElse { failure ->
                 logger.warn("WebFinger の応答を読めなかった: $acct", failure)
-                return null
+                return WebFingerResult.NotFound
             }
 
-        return document.links
+        val actorId = document.links
             .filter { it.rel == WebFingerLink.REL_SELF }
             .filter { link -> link.type?.let { MediaType.parseWithoutParameters(it) } in actorContentTypes }
             .firstNotNullOfOrNull { link -> link.href?.takeIf { HttpUrl.parseHttps(it) != null } }
+        if (actorId == null) {
+            logger.warn("WebFinger の応答に https のアクター文書へのリンクが無い: $acct")
+            return WebFingerResult.NotFound
+        }
+        return WebFingerResult.Found(actorId)
     }
+
+    private fun isTemporaryFailure(status: Int): Boolean =
+        status >= 500 || status == HttpStatusCodes.TOO_MANY_REQUESTS || status == HttpStatusCodes.REQUEST_TIMEOUT
 
     /**
      * @param host ポートが付いていればそれも含む
