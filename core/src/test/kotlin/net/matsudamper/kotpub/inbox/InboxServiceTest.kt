@@ -191,7 +191,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `受信を止めているかを判定できなければハンドラに渡さずに受け取って捨てる`() =
+    fun `受信を止めているかを判定できなければハンドラに渡さずに送り直してもらう`() =
         runBlocking {
             val handler = RecordingHandler("Follow")
             val domainBlocks = object : InboxDomainBlocks {
@@ -206,8 +206,27 @@ class InboxServiceTest {
                 handlers = listOf(handler),
             ).receive(recipient, signedRequest(follow()))
 
-            assertEquals(InboxResult.Accepted, result)
+            assertEquals(InboxResult.TemporarilyUnavailable, result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
+        }
+
+    @Test
+    fun `ハンドラが投げたら送り直してもらう`() =
+        runBlocking {
+            val handler = object : InboxActivityHandler {
+                override val type: String = "Follow"
+
+                override suspend fun handle(
+                    recipient: InboxRecipient,
+                    verifiedSignerActorId: String,
+                    activity: InboxActivity,
+                    rawActivityJson: JsonObject,
+                ) = throw IllegalStateException("記録先に書けない")
+            }
+
+            val result = service(listOf(handler)).receive(recipient, signedRequest(follow()))
+
+            assertEquals(InboxResult.TemporarilyUnavailable, result)
         }
 
     @Test
