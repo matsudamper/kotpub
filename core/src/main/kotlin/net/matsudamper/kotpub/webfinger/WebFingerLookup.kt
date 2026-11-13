@@ -7,6 +7,7 @@ import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.MediaType
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.json.AppJson
 import org.slf4j.LoggerFactory
@@ -35,10 +36,10 @@ sealed interface WebFingerResult {
     data object InvalidAcct : WebFingerResult
 
     /** 相手が無いと答えた、または応答からアクターの id を読み取れない。問い合わせ直しても同じ結果になる */
-    data object NotFound : WebFingerResult
+    data class NotFound(val failure: RemoteFetchFailure) : WebFingerResult
 
     /** つながらない、相手が 5xx や 429 を返したなど。時間をおけば引ける見込みがある */
-    data object Unavailable : WebFingerResult
+    data class Unavailable(val failure: RemoteFetchFailure) : WebFingerResult
 }
 
 /**
@@ -64,11 +65,12 @@ class HttpWebFingerLookup(
 
     override suspend fun findActorId(acct: String): WebFingerResult {
         val account = Acct.parse(acct) ?: return WebFingerResult.InvalidAcct
+        val url = account.webFingerUrl()
 
         val response =
             try {
                 client.get(
-                    url = account.webFingerUrl(),
+                    url = url,
                     headers = mapOf(ACCEPT_HEADER to "${ActivityPubContentTypes.JrdJson}, application/json"),
                     maxBodyBytes = MAX_BODY_BYTES,
                     readsBody = { status, finalUrl ->
@@ -79,20 +81,21 @@ class HttpWebFingerLookup(
                 throw e
             } catch (e: Exception) {
                 logger.warn("WebFinger の取得に失敗した: $acct", e)
-                return WebFingerResult.Unavailable
+                return WebFingerResult.Unavailable(RemoteFetchFailure.RequestFailed(url, e))
             }
 
         if (!HttpStatusCodes.isSuccess(response.status)) {
+            val failure = RemoteFetchFailure.UnsuccessfulStatus(url, response.status)
             if (isTemporaryFailure(response.status)) {
                 logger.warn("WebFinger の相手が今は応じない: $acct status=${response.status}")
-                return WebFingerResult.Unavailable
+                return WebFingerResult.Unavailable(failure)
             }
             logger.info("WebFinger でアカウントが見つからなかった: $acct status=${response.status}")
-            return WebFingerResult.NotFound
+            return WebFingerResult.NotFound(failure)
         }
         if (HttpUrl.parseHttps(response.finalUrl) == null) {
             logger.warn("WebFinger が https ではない URL に移ったので捨てる: $acct → ${response.finalUrl}")
-            return WebFingerResult.NotFound
+            return WebFingerResult.NotFound(RemoteFetchFailure.RedirectedToDisallowedUrl(url, response.finalUrl))
         }
 
         val body = when (val responseBody = response.body) {
@@ -100,14 +103,14 @@ class HttpWebFingerLookup(
 
             is ResponseBody.Unreadable -> {
                 logger.warn("WebFinger の本文を読めなかった: $acct", responseBody.failure)
-                return WebFingerResult.Unavailable
+                return WebFingerResult.Unavailable(RemoteFetchFailure.BodyUnreadable(url, responseBody.failure))
             }
 
             ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $acct")
         }
         if (body.size > MAX_BODY_BYTES) {
             logger.warn("WebFinger の本文が大きすぎるので捨てる: $acct")
-            return WebFingerResult.NotFound
+            return WebFingerResult.NotFound(RemoteFetchFailure.BodyTooLarge(url, MAX_BODY_BYTES))
         }
 
         val document =
@@ -115,7 +118,7 @@ class HttpWebFingerLookup(
                 AppJson.decodeFromString(WebFingerResponse.serializer(), body.toString(Charsets.UTF_8))
             }.getOrElse { failure ->
                 logger.warn("WebFinger の応答を読めなかった: $acct", failure)
-                return WebFingerResult.NotFound
+                return WebFingerResult.NotFound(RemoteFetchFailure.InvalidDocument(url, "WebFinger の応答として読めない", failure))
             }
 
         val actorId = document.links
@@ -124,7 +127,7 @@ class HttpWebFingerLookup(
             .firstNotNullOfOrNull { link -> link.href?.takeIf { HttpUrl.parseHttps(it) != null } }
         if (actorId == null) {
             logger.warn("WebFinger の応答に https のアクター文書へのリンクが無い: $acct")
-            return WebFingerResult.NotFound
+            return WebFingerResult.NotFound(RemoteFetchFailure.InvalidDocument(url, "https のアクター文書へのリンクが無い"))
         }
         return WebFingerResult.Found(actorId)
     }
