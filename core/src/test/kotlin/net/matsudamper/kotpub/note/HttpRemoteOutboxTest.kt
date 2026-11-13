@@ -194,15 +194,34 @@ class HttpRemoteOutboxTest {
 
     @Test
     fun recentPageResumesInsideLargePageWithoutDroppingItems() = runBlocking {
-        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        val items = (1..350).joinToString(",") { note("n$it", actorId, true) }
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[$items],"next":"$outboxUrl?page=2"}"""
         val first = recentPage(RemoteOutboxCursor("$outboxUrl?page=1", 0))
-        assertEquals(100, first.notes.size)
-        assertEquals(RemoteOutboxCursor("$outboxUrl?page=1", 100), first.next)
+        assertEquals(300, first.notes.size)
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=1", 300), first.next)
 
         val rest = recentPage(first.next)
-        assertEquals((101..150).map { "$actorId/n$it" }.toSet(), rest.notes.map { it.id }.toSet())
+        assertEquals((301..350).map { "$actorId/n$it" }.toSet(), rest.notes.map { it.id }.toSet())
         assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), rest.next)
+    }
+
+    @Test
+    fun recentReadsBeyondHundredItemsInSamePageInsteadOfSkippingToNextPage() = runBlocking {
+        val boosts = (1..120).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[$boosts,${note("own", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("older", actorId, true)}]}"""
+        assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).notes().map { it.id })
+        assertEquals(listOf(actorId, outboxUrl), requests)
+    }
+
+    @Test
+    fun recentStopsWithoutGapWhenItemLimitIsReached() = runBlocking {
+        val boosts = (1..300).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("newest", actorId, true)},$boosts,${note("beyond", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        assertEquals(listOf("$actorId/newest"), outbox.recent(actorId, 20).notes().map { it.id })
+        assertEquals(listOf(actorId, outboxUrl), requests)
     }
 
     @Test
