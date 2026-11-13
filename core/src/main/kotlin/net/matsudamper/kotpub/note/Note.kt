@@ -58,6 +58,16 @@ data class Note(
     val url: String? = null,
     @SerialName("attachment")
     val attachment: List<NoteDocument>,
+    /**
+     * 返信先の投稿の id。返信でなければ null
+     */
+    @SerialName("inReplyTo")
+    val inReplyTo: String?,
+    /**
+     * Mastodon はここの `Mention` を見て、宛てられたアカウントに通知する。本文のリンクだけでは通知しない
+     */
+    @SerialName("tag")
+    val tag: List<NoteMentionTag>,
 ) {
     /**
      * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
@@ -85,7 +95,33 @@ data class NoteDocument(
     val type: String = "Document"
 }
 
+/**
+ * 投稿で宛てたアカウント
+ *
+ * @param href 宛てたアクターの id
+ * @param name `@user@example.com` の形
+ */
+@Serializable
+data class NoteMentionTag(
+    @SerialName("href")
+    val href: String,
+    @SerialName("name")
+    val name: String,
+) {
+    @SerialName("type")
+    val type: String = "Mention"
+}
+
 internal fun List<NoteAttachment>.toNoteDocuments(): List<NoteDocument> =
     map { attachment ->
         NoteDocument(mediaType = attachment.mediaType, url = attachment.url, name = attachment.description)
     }
+
+internal fun List<NoteMention>.toNoteMentionTags(): List<NoteMentionTag> =
+    map { mention -> NoteMentionTag(href = mention.actorId, name = "@${mention.acct}") }
+
+/**
+ * 宛てたアクターを `cc` に入れないと、Mastodon は通知もせず、宛てた相手の画面にも出さない
+ */
+internal fun StoredNote.ccWith(followers: String): List<String> =
+    listOf(followers) + mentions.map { it.actorId }

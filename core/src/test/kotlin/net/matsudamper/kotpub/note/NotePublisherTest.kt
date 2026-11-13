@@ -23,7 +23,7 @@ class NotePublisherTest {
 
     @Test
     fun `Create に包んだ Note を組み立てる`() {
-        val prepared = publisher().prepare(sender, "<p>こんにちは</p>", listOf())
+        val prepared = publisher().prepare(sender, "<p>こんにちは</p>", listOf(), null, listOf())
 
         val activity = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson)
         assertEquals("Create", activity.type)
@@ -43,7 +43,7 @@ class NotePublisherTest {
 
     @Test
     fun `id は UUID v7 で時刻と揃う`() {
-        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf())
+        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(), null, listOf())
 
         assertEquals(7, UUID.fromString(prepared.publicId.value).version())
         assertEquals("<p>本文</p>", prepared.contentHtml)
@@ -56,7 +56,7 @@ class NotePublisherTest {
         val delivery = TestDelivery()
         val publisher = NotePublisher(notes, TestWebPageUrls)
 
-        publisher.prepare(sender, "<p>本文</p>", listOf())
+        publisher.prepare(sender, "<p>本文</p>", listOf(), null, listOf())
 
         assertTrue(notes.added.isEmpty())
         assertTrue(delivery.delivered.isEmpty())
@@ -66,8 +66,8 @@ class NotePublisherTest {
     fun `呼ぶたびに別の id になる`() {
         val publisher = publisher()
 
-        val first = publisher.prepare(sender, "<p>1</p>", listOf())
-        val second = publisher.prepare(sender, "<p>2</p>", listOf())
+        val first = publisher.prepare(sender, "<p>1</p>", listOf(), null, listOf())
+        val second = publisher.prepare(sender, "<p>2</p>", listOf(), null, listOf())
 
         assertTrue(first.publicId != second.publicId)
     }
@@ -81,6 +81,8 @@ class NotePublisherTest {
                 NoteAttachment(url = "https://example.com/media/1.png", mediaType = "image/png", description = "猫"),
                 NoteAttachment(url = "https://example.com/media/2.jpg", mediaType = "image/jpeg", description = null),
             ),
+            null,
+            listOf(),
         )
 
         val attachment = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson).target.attachment
@@ -88,5 +90,24 @@ class NotePublisherTest {
         assertEquals(listOf("image/png", "image/jpeg"), attachment.map { it.mediaType })
         assertEquals(listOf("猫", null), attachment.map { it.name })
         assertEquals(listOf("Document", "Document"), attachment.map { it.type })
+    }
+
+    @Test
+    fun `返信先と宛てたアカウントを載せ、宛てたアクターを cc に入れる`() {
+        val prepared = publisher().prepare(
+            sender,
+            "<p>@alice こんにちは</p>",
+            listOf(),
+            "https://remote.example/notes/1",
+            listOf(NoteMention(actorId = "https://remote.example/users/alice", acct = "alice@remote.example")),
+        )
+
+        val activity = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson)
+        assertEquals(listOf(sender.followers, "https://remote.example/users/alice"), activity.cc)
+        assertEquals(listOf(sender.followers, "https://remote.example/users/alice"), activity.target.cc)
+        assertEquals("https://remote.example/notes/1", activity.target.inReplyTo)
+        assertEquals(listOf("Mention"), activity.target.tag.map { it.type })
+        assertEquals(listOf("https://remote.example/users/alice"), activity.target.tag.map { it.href })
+        assertEquals(listOf("@alice@remote.example"), activity.target.tag.map { it.name })
     }
 }

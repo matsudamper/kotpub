@@ -42,6 +42,8 @@ class FollowBackfillPublisherTest {
                     contentHtml = "<p>$index</p>",
                     publishedAt = Instant.parse("2026-08-10T00:00:00Z").plusSeconds(index.toLong()),
                     attachments = listOf(),
+                    inReplyTo = null,
+                    mentions = listOf(),
                 ),
             )
         }
@@ -112,6 +114,8 @@ class FollowBackfillPublisherTest {
                     contentHtml = "<p>フォローの後</p>",
                     publishedAt = followAcceptedAt.plusSeconds(60),
                     attachments = listOf(),
+                    inReplyTo = null,
+                    mentions = listOf(),
                 ),
             )
         }
@@ -134,6 +138,8 @@ class FollowBackfillPublisherTest {
                         contentHtml = "<p>フォローの後 $index</p>",
                         publishedAt = followAcceptedAt.plusSeconds(index + 1L),
                         attachments = listOf(),
+                        inReplyTo = null,
+                        mentions = listOf(),
                     ),
                 )
             }
