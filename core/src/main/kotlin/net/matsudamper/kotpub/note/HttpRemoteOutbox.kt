@@ -10,37 +10,65 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpUrl
+import org.slf4j.LoggerFactory
 
 class HttpRemoteOutbox(
     private val client: ActivityPubHttpClient,
 ) {
+    private val logger = LoggerFactory.getLogger(HttpRemoteOutbox::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun recent(actorId: String, limit: Int): List<RemoteOutboxNote> =
-        notesOf(actorId = actorId, collectionName = "outbox", limit = limit)
-            .sortedByDescending { Instant.parse(it.publishedAt) }
-            .take(limit)
+    suspend fun recent(actorId: String, limit: Int): RemoteOutboxResult =
+        when (val result = notesOf(actorId = actorId, collectionName = "outbox", limit = limit)) {
+            is RemoteOutboxResult.Found -> RemoteOutboxResult.Found(
+                result.notes.sortedByDescending { Instant.parse(it.publishedAt) }.take(limit),
+            )
+
+            RemoteOutboxResult.Unavailable -> result
+        }
 
     /**
      * 相手がプロフィールの先頭に固定した投稿。Actor の `featured` が指すコレクションを、相手が並べた順のまま返す。
      * `featured` が無ければ空
      */
-    suspend fun featured(actorId: String, limit: Int): List<RemoteOutboxNote> =
+    suspend fun featured(actorId: String, limit: Int): RemoteOutboxResult =
         notesOf(actorId = actorId, collectionName = "featured", limit = limit)
 
     /**
      * @param collectionName Actor のうち、投稿を並べたコレクションを指す項目の名前
      */
-    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): List<RemoteOutboxNote> {
+    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): RemoteOutboxResult {
         require(limit in 1..MAX_NOTES)
-        val actorUrl = HttpUrl.parseHttps(actorId) ?: return listOf()
-        val actor = fetch(actorId, actorUrl) ?: error("アクターを取得できませんでした")
-        check(actor.text("id") == actorId) { "アクターの ID が一致しません" }
-        val collectionRef = actor[collectionName] ?: return listOf()
-        val collection = document(collectionRef, actorUrl) ?: error("$collectionName を取得できませんでした")
-        val firstPage = if (collection.items() == null) document(collection["first"], actorUrl) else collection
-        if (firstPage == null) return listOf()
-        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf())
+        val actorUrl = HttpUrl.parseHttps(actorId)
+        if (actorUrl == null) {
+            logger.warn("https のアクターではないので $collectionName を読まない: $actorId")
+            return RemoteOutboxResult.Unavailable
+        }
+        val actor = fetch(actorId, actorUrl) ?: return RemoteOutboxResult.Unavailable
+        if (actor.text("id") != actorId) {
+            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
+            return RemoteOutboxResult.Unavailable
+        }
+        // 項目が無いのは相手が並べていないだけなので、空として返す
+        val collectionRef = actor[collectionName] ?: return RemoteOutboxResult.Found(listOf())
+        val collection = document(collectionRef, actorUrl)
+        if (collection == null) {
+            logger.warn("$collectionName を読めなかった: actor=$actorId")
+            return RemoteOutboxResult.Unavailable
+        }
+        val firstPage = if (collection.items() == null) {
+            // first も無ければ空のコレクション。指しているのに取れなければ失敗
+            val firstRef = collection["first"] ?: return RemoteOutboxResult.Found(listOf())
+            val first = document(firstRef, actorUrl)
+            if (first == null) {
+                logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
+                return RemoteOutboxResult.Unavailable
+            }
+            first
+        } else {
+            collection
+        }
+        return RemoteOutboxResult.Found(pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, setOf(), listOf()))
     }
 
     private suspend fun pages(
@@ -54,10 +82,22 @@ class HttpRemoteOutbox(
     ): List<RemoteOutboxNote> {
         val pageId = page.text("id")
         if (pageId != null && pageId in visitedPageIds) return collectedNotes
-        val pageItems = page.items().orEmpty().take(MAX_ITEMS_PER_PAGE)
+        val allPageItems = page.items().orEmpty()
+        if (allPageItems.size > MAX_ITEMS_PER_PAGE) {
+            logger.warn(
+                "1ページの項目が上限を超えたので ${allPageItems.size - MAX_ITEMS_PER_PAGE} 件を読まずに捨てる: " +
+                    "actor=$actorId page=$pageId 項目数=${allPageItems.size}",
+            )
+        }
+        val pageItems = allPageItems.take(MAX_ITEMS_PER_PAGE)
         val notes = collectUniqueNotes(pageItems, 0, actorId, actorUrl, limit, collectedNotes)
         if (notes.size >= limit) return notes
-        if (remainingPages <= 1) return notes
+        if (remainingPages <= 1) {
+            if (page["next"] != null) {
+                logger.warn("読むページ数の上限に達したので続きのページを読まない: actor=$actorId page=$pageId 集まった投稿=${notes.size}")
+            }
+            return notes
+        }
         val nextPage = document(page["next"], actorUrl) ?: return notes
         return pages(nextPage, actorId, actorUrl, limit, remainingPages - 1, visitedPageIds + listOfNotNull(pageId), notes)
     }
@@ -100,7 +140,11 @@ class HttpRemoteOutbox(
         val id = note.text("id") ?: return null
         val content = note.text("content") ?: return null
         val publishedAt = note.text("published") ?: return null
-        if (runCatching { Instant.parse(publishedAt) }.isFailure) return null
+        val publishedParseFailure = runCatching { Instant.parse(publishedAt) }.exceptionOrNull()
+        if (publishedParseFailure != null) {
+            logger.warn("投稿の published を読めないので捨てる: $id", publishedParseFailure)
+            return null
+        }
         val received = ReceivedNoteJson.read(note) ?: return null
         return RemoteOutboxNote(
             id = id,
@@ -124,24 +168,54 @@ class HttpRemoteOutbox(
     }
 
     private suspend fun fetch(url: String, actorUrl: HttpUrl): JsonObject? {
-        val target = HttpUrl.parseHttps(url) ?: return null
-        if (!target.isSameHost(actorUrl)) return null
-        return try {
-            val response = client.get(
+        val target = HttpUrl.parseHttps(url)
+        if (target == null) {
+            logger.warn("https の URL ではないので取得しない: $url")
+            return null
+        }
+        if (!target.isSameHost(actorUrl)) {
+            logger.warn("アクターと別のホストなので取得しない: $url")
+            return null
+        }
+        val response = try {
+            client.get(
                 url = url,
                 headers = mapOf("Accept" to "application/activity+json"),
                 maxBodyBytes = MAX_BODY_BYTES,
                 readsBody = { status, finalUrl -> status == 200 && HttpUrl.parseHttps(finalUrl)?.isSameHost(actorUrl) == true },
             )
-            if (response.status != 200 || HttpUrl.parseHttps(response.finalUrl)?.isSameHost(actorUrl) != true) return null
-            val body = response.body?.getOrNull() ?: return null
-            if (body.size > MAX_BODY_BYTES) return null
-            json.parseToJsonElement(body.decodeToString()) as? JsonObject
         } catch (exception: CancellationException) {
             throw exception
-        } catch (_: Exception) {
-            null
+        } catch (exception: Exception) {
+            logger.warn("取得に失敗した: $url", exception)
+            return null
         }
+        if (response.status != 200) {
+            logger.warn("取得できなかった: $url status=${response.status}")
+            return null
+        }
+        if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(actorUrl) != true) {
+            logger.warn("別のホストに移ったので捨てる: $url → ${response.finalUrl}")
+            return null
+        }
+        val body = checkNotNull(response.body) { "成功応答なのに本文を読んでいない: $url" }.getOrElse { failure ->
+            if (failure is CancellationException) throw failure
+            logger.warn("本文を読めなかった: $url", failure)
+            return null
+        }
+        if (body.size > MAX_BODY_BYTES) {
+            logger.warn("本文が大きすぎるので捨てる: $url")
+            return null
+        }
+        val document = runCatching { json.parseToJsonElement(body.decodeToString()) }.getOrElse { failure ->
+            logger.warn("JSON として読めなかった: $url", failure)
+            return null
+        }
+        if (document !is JsonObject) {
+            logger.warn("JSON のオブジェクトではないので捨てる: $url")
+            return null
+        }
+        return document
     }
 
     private fun JsonObject.text(name: String): String? = (this[name] as? JsonPrimitive)?.content
@@ -155,6 +229,20 @@ class HttpRemoteOutbox(
         const val MAX_BODY_BYTES = 1024 * 1024
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }
+}
+
+/**
+ * [HttpRemoteOutbox] の結果。取得に失敗したことを「投稿が無い」と同じ空のリストで返すと、
+ * 呼び出し側は相手が投稿していないのか、こちらが読めなかったのかを区別できない
+ */
+sealed interface RemoteOutboxResult {
+    /**
+     * @param notes 相手が投稿を並べていなければ空。2 ページ目以降を取れなかったときは、それまでに読めた分
+     */
+    data class Found(val notes: List<RemoteOutboxNote>) : RemoteOutboxResult
+
+    /** アクターやコレクションを取得できない、または中身が条件を満たさない。理由はログに残す */
+    data object Unavailable : RemoteOutboxResult
 }
 
 /**
