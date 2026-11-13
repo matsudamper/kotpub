@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteNotesTest {
     private val noteId = "https://remote.example/notes/1"
@@ -17,7 +18,7 @@ class HttpRemoteNotesTest {
             val finalUrl = redirects[url] ?: url
             val document = documents[finalUrl]
             val status = if (document == null) 404 else 200
-            val body = if (document != null && readsBody(status, finalUrl)) Result.success(document.encodeToByteArray()) else null
+            val body = if (document != null && readsBody(status, finalUrl)) ResponseBody.Read(document.encodeToByteArray()) else ResponseBody.NotRead
             return ActivityPubClientResponse(status, finalUrl, body)
         }
 
