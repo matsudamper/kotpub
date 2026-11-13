@@ -226,11 +226,11 @@ class HttpRemoteOutboxTest {
 
     @Test
     fun recentPageReadsWholePageWithoutIdBecauseItCannotBeResumed() = runBlocking {
-        val items = (1..150).joinToString(",") { note("n$it", actorId, true) }
+        val items = (1..350).joinToString(",") { note("n$it", actorId, true) }
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"first":{"orderedItems":[$items]}}"""
         val page = recentPage(null)
-        assertEquals(150, page.notes.size)
+        assertEquals(350, page.notes.size)
         assertEquals(null, page.next)
     }
 
