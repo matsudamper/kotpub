@@ -19,16 +19,20 @@ class HttpRemoteOutbox(
     private val logger = LoggerFactory.getLogger(HttpRemoteOutbox::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun recent(actorId: String, limit: Int): List<RemoteOutboxNote> =
-        notesOf(actorId = actorId, collectionName = "outbox", limit = limit)
-            .sortedByDescending { Instant.parse(it.publishedAt) }
-            .take(limit)
+    suspend fun recent(actorId: String, limit: Int): RemoteOutboxResult =
+        when (val result = notesOf(actorId = actorId, collectionName = "outbox", limit = limit)) {
+            is RemoteOutboxResult.Found -> RemoteOutboxResult.Found(
+                result.notes.sortedByDescending { Instant.parse(it.publishedAt) }.take(limit),
+            )
+
+            RemoteOutboxResult.Unavailable -> result
+        }
 
     /**
      * 相手がプロフィールの先頭に固定した投稿。Actor の `featured` が指すコレクションを、相手が並べた順のまま返す。
      * `featured` が無ければ空
      */
-    suspend fun featured(actorId: String, limit: Int): List<RemoteOutboxNote> =
+    suspend fun featured(actorId: String, limit: Int): RemoteOutboxResult =
         notesOf(actorId = actorId, collectionName = "featured", limit = limit)
 
     /**
@@ -55,15 +59,38 @@ class HttpRemoteOutbox(
     /**
      * @param collectionName Actor のうち、投稿を並べたコレクションを指す項目の名前
      */
-    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): List<RemoteOutboxNote> {
+    private suspend fun notesOf(actorId: String, collectionName: String, limit: Int): RemoteOutboxResult {
         require(limit in 1..MAX_NOTES)
         val actorUrl = HttpUrl.parseHttps(actorId)
         if (actorUrl == null) {
             logger.warn("https のアクターではないので $collectionName を読まない: $actorId")
-            return listOf()
+            return RemoteOutboxResult.Unavailable
         }
-        val firstPage = firstPage(actorId = actorId, actorUrl = actorUrl, collectionName = collectionName) ?: return listOf()
-        return pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, ItemFetchBudget(MAX_ITEM_FETCHES), setOf(), listOf())
+        val actor = fetch(actorId, actorUrl) ?: return RemoteOutboxResult.Unavailable
+        if (actor.text("id") != actorId) {
+            logger.warn("取得したアクターの id が取得先と違う: $actorId id=${actor.text("id")}")
+            return RemoteOutboxResult.Unavailable
+        }
+        // 項目が無いのは相手が並べていないだけなので、空として返す
+        val collectionRef = actor[collectionName] ?: return RemoteOutboxResult.Found(listOf())
+        val collection = document(collectionRef, actorUrl)
+        if (collection == null) {
+            logger.warn("$collectionName を読めなかった: actor=$actorId")
+            return RemoteOutboxResult.Unavailable
+        }
+        val firstPage = if (collection.items() == null) {
+            // first も無ければ空のコレクション。指しているのに取れなければ失敗
+            val firstRef = collection["first"] ?: return RemoteOutboxResult.Found(listOf())
+            val first = document(firstRef, actorUrl)
+            if (first == null) {
+                logger.warn("$collectionName の最初のページを読めなかった: actor=$actorId")
+                return RemoteOutboxResult.Unavailable
+            }
+            first
+        } else {
+            collection
+        }
+        return RemoteOutboxResult.Found(pages(firstPage, actorId, actorUrl, limit, MAX_PAGES, ItemFetchBudget(MAX_ITEM_FETCHES), setOf(), listOf()))
     }
 
     /**
@@ -331,6 +358,20 @@ class HttpRemoteOutbox(
         const val MAX_BODY_BYTES = 1024 * 1024
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
     }
+}
+
+/**
+ * [HttpRemoteOutbox] の結果。取得に失敗したことを「投稿が無い」と同じ空のリストで返すと、
+ * 呼び出し側は相手が投稿していないのか、こちらが読めなかったのかを区別できない
+ */
+sealed interface RemoteOutboxResult {
+    /**
+     * @param notes 相手が投稿を並べていなければ空。2 ページ目以降を取れなかったときは、それまでに読めた分
+     */
+    data class Found(val notes: List<RemoteOutboxNote>) : RemoteOutboxResult
+
+    /** アクターやコレクションを取得できない、または中身が条件を満たさない。理由はログに残す */
+    data object Unavailable : RemoteOutboxResult
 }
 
 /**
