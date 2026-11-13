@@ -3,6 +3,8 @@ package net.matsudamper.kotpub.note
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
@@ -245,6 +247,36 @@ class HttpRemoteOutboxTest {
     fun recentPageIsUnavailableWhenNextPageCannotBeRead() = runBlocking {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
         assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0)))
+    }
+
+    @Test
+    fun recentPageAndFeaturedShareOneActorFetch() = runBlocking {
+        val featuredUrl = "$actorId/collections/featured"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","featured":"$featuredUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("recent", actorId, true)}]}"""
+        documents[featuredUrl] = """{"id":"$featuredUrl","orderedItems":[${note("pinned", actorId, true)}]}"""
+        val actor = assertNotNull(outbox.collectionsOf(actorId))
+
+        val page = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actor, null)).page
+        val featured = outbox.featured(actor, 20).notes()
+
+        assertEquals(listOf("$actorId/recent"), page.notes.map { it.id })
+        assertEquals(listOf("$actorId/pinned"), featured.map { it.id })
+        assertEquals(listOf(actorId, outboxUrl, featuredUrl), requests)
+    }
+
+    @Test
+    fun collectionsOfIsNullWhenActorIdDiffers() = runBlocking {
+        documents[actorId] = """{"id":"https://remote.example/users/mallory","outbox":"$outboxUrl"}"""
+        assertNull(outbox.collectionsOf(actorId))
+        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, null))
+    }
+
+    @Test
+    fun collectionsOfIsNullWhenActorCannotBeRead() = runBlocking {
+        assertNull(outbox.collectionsOf(actorId))
+        assertNull(outbox.collectionsOf("http://remote.example/users/alice"))
+        assertEquals(listOf(actorId), requests)
     }
 
     private suspend fun recentPage(from: RemoteOutboxCursor?): RemoteOutboxPage = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actorId, from)).page
