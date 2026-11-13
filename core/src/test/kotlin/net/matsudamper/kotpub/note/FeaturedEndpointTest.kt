@@ -26,6 +26,8 @@ class FeaturedEndpointTest {
         contentHtml = "<p>固定した投稿</p>",
         publishedAt = Instant.parse("2026-08-10T00:00:00Z"),
         attachments = listOf(),
+        inReplyTo = null,
+        mentions = listOf(),
     )
 
     @Test

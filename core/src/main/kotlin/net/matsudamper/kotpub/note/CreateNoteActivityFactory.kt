@@ -20,23 +20,26 @@ internal object CreateNoteActivityFactory {
     ): CreateNoteActivity {
         val urls = NoteUrls(domain = sender.domain, publicId = note.publicId)
         val published = note.publishedAt.toActivityPubPublished()
+        val cc = note.ccWith(sender.followers)
 
         return CreateNoteActivity(
             id = urls.createId,
             actor = sender.actorId,
             published = published,
             to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-            cc = listOf(sender.followers),
+            cc = cc,
             target = Note(
                 id = urls.noteId,
                 attributedTo = sender.actorId,
                 content = note.contentHtml,
                 published = published,
                 to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-                cc = listOf(sender.followers),
+                cc = cc,
                 url = webPages?.note(username = sender.username, publicId = note.publicId),
                 atomUri = urls.noteUrl,
                 attachment = note.attachments.toNoteDocuments(),
+                inReplyTo = note.inReplyTo,
+                tag = note.mentions.toNoteMentionTags(),
             ),
         )
     }

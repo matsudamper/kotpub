@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
+import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.json.AppJson
@@ -17,10 +18,21 @@ import org.slf4j.LoggerFactory
  * 投稿者が書いた中身だという裏付けにならない
  */
 fun interface RemoteNotes {
-    /**
-     * @return 取得できなかったか、投稿として読めなければ null
-     */
-    suspend fun find(noteId: String): ReceivedNote?
+    suspend fun find(noteId: String): RemoteNoteLookup
+}
+
+/**
+ * [RemoteNotes.find] の結果。取れなかったときに、送り直せば取れる見込みがあるかを分ける。
+ * 分けないと、相手のサーバーが一時的に落ちていただけでも、届いたブーストを捨てることになる
+ */
+sealed interface RemoteNoteLookup {
+    data class Found(val note: ReceivedNote) : RemoteNoteLookup
+
+    /** 相手が無いと答えた、投稿として読めない、条件を満たさない。取り直しても同じ結果になる */
+    data object NotFound : RemoteNoteLookup
+
+    /** つながらない、相手が 5xx や 429 を返したなど。時間をおけば取れる見込みがある */
+    data object Unavailable : RemoteNoteLookup
 }
 
 /**
@@ -36,27 +48,35 @@ class HttpRemoteNotes(
 ) : RemoteNotes {
     private val logger = LoggerFactory.getLogger(HttpRemoteNotes::class.java)
 
-    override suspend fun find(noteId: String): ReceivedNote? {
-        val noteUrl = HttpUrl.parseHttps(noteId) ?: return null
-        val json = fetch(noteId, noteUrl) ?: return null
+    override suspend fun find(noteId: String): RemoteNoteLookup {
+        val noteUrl = HttpUrl.parseHttps(noteId)
+        if (noteUrl == null) {
+            logger.warn("https の URL ではないので投稿を取得しない: $noteId")
+            return RemoteNoteLookup.NotFound
+        }
+        val json = when (val fetched = fetch(noteId, noteUrl)) {
+            is DocumentFetch.Found -> fetched.document
+            DocumentFetch.NotFound -> return RemoteNoteLookup.NotFound
+            DocumentFetch.Unavailable -> return RemoteNoteLookup.Unavailable
+        }
         val note = ReceivedNoteJson.read(json)
         if (note == null) {
             logger.warn("投稿として読めなかった: $noteId")
-            return null
+            return RemoteNoteLookup.NotFound
         }
         if (note.id != noteId) {
             logger.warn("取得した投稿の id が取得先と違う: $noteId id=${note.id}")
-            return null
+            return RemoteNoteLookup.NotFound
         }
         val authorUrl = HttpUrl.parseHttps(note.attributedTo)
         if (authorUrl == null || !authorUrl.isSameHost(noteUrl)) {
             logger.warn("投稿者が投稿と別のホストなので捨てる: $noteId 投稿者=${note.attributedTo}")
-            return null
+            return RemoteNoteLookup.NotFound
         }
-        return note
+        return RemoteNoteLookup.Found(note)
     }
 
-    private suspend fun fetch(url: String, noteUrl: HttpUrl): JsonObject? {
+    private suspend fun fetch(url: String, noteUrl: HttpUrl): DocumentFetch {
         val response = try {
             client.get(
                 url = url,
@@ -68,39 +88,50 @@ class HttpRemoteNotes(
             throw exception
         } catch (exception: Exception) {
             logger.warn("投稿の取得に失敗した: $url", exception)
-            return null
+            return DocumentFetch.Unavailable
         }
         if (response.status != 200) {
             logger.warn("投稿を取得できなかった: $url status=${response.status}")
-            return null
+            return if (isTemporaryFailure(response.status)) DocumentFetch.Unavailable else DocumentFetch.NotFound
         }
         if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) {
             logger.warn("投稿の取得で別のホストに移ったので捨てる: $url → ${response.finalUrl}")
-            return null
+            return DocumentFetch.NotFound
         }
         val body = when (val responseBody = response.body) {
             is ResponseBody.Read -> responseBody.bytes
 
             is ResponseBody.Unreadable -> {
                 logger.warn("投稿の本文を読めなかった: $url", responseBody.failure)
-                return null
+                return DocumentFetch.Unavailable
             }
 
             ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $url")
         }
         if (body.size > MAX_BODY_BYTES) {
             logger.warn("投稿の本文が大きすぎるので捨てる: $url")
-            return null
+            return DocumentFetch.NotFound
         }
         val document = runCatching { AppJson.parseToJsonElement(body.decodeToString()) }.getOrElse { failure ->
             logger.warn("投稿を JSON として読めなかった: $url", failure)
-            return null
+            return DocumentFetch.NotFound
         }
         if (document !is JsonObject) {
             logger.warn("投稿が JSON のオブジェクトではないので捨てる: $url")
-            return null
+            return DocumentFetch.NotFound
         }
-        return document
+        return DocumentFetch.Found(document)
+    }
+
+    private fun isTemporaryFailure(status: Int): Boolean =
+        status >= 500 || status == HttpStatusCodes.TOO_MANY_REQUESTS || status == HttpStatusCodes.REQUEST_TIMEOUT
+
+    private sealed interface DocumentFetch {
+        data class Found(val document: JsonObject) : DocumentFetch
+
+        data object NotFound : DocumentFetch
+
+        data object Unavailable : DocumentFetch
     }
 
     private companion object {

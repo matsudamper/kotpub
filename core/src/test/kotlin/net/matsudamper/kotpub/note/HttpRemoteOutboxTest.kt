@@ -2,7 +2,6 @@ package net.matsudamper.kotpub.note
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
@@ -39,14 +38,14 @@ class HttpRemoteOutboxTest {
             ${note("private", actorId, false)},
             ${note("newer", actorId, true, "2026-02-01T00:00:00Z")}
         ]}"""
-        assertEquals(listOf("$actorId/older", "$actorId/newer"), outbox.featured(actorId, 20).map { it.id })
+        assertEquals(listOf("$actorId/older", "$actorId/newer"), outbox.featured(actorId, 20).notes().map { it.id })
         assertEquals(listOf(actorId, featuredUrl), requests)
     }
 
     @Test
     fun featuredIsEmptyWhenActorHasNoFeaturedCollection() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
-        assertEquals(listOf(), outbox.featured(actorId, 20))
+        assertEquals(RemoteOutboxResult.Found(listOf()), outbox.featured(actorId, 20))
         assertEquals(listOf(actorId), requests)
     }
 
@@ -61,7 +60,7 @@ class HttpRemoteOutboxTest {
             {"type":"Announce","object":${note("boost", actorId, true)}},
             ${note("first", actorId, true)}
         ]}"""
-        val notes = outbox.recent(actorId, 20)
+        val notes = outbox.recent(actorId, 20).notes()
         assertEquals(listOf("$actorId/first"), notes.map { it.id })
         assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1"), requests)
     }
@@ -74,21 +73,32 @@ class HttpRemoteOutboxTest {
                 "to":["$actorId/followers"],"cc":["https://www.w3.org/ns/activitystreams#Public"]},
             ${note("public", actorId, true)}
         ]}"""
-        assertEquals(listOf("$actorId/unlisted" to true, "$actorId/public" to false), outbox.recent(actorId, 20).map { it.id to it.unlisted })
+        assertEquals(listOf("$actorId/unlisted" to true, "$actorId/public" to false), outbox.recent(actorId, 20).notes().map { it.id to it.unlisted })
     }
 
     @Test
     fun doesNotFollowOutboxOnAnotherHost() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"https://other.example/outbox"}"""
-        assertFailsWith<IllegalStateException> { outbox.recent(actorId, 20) }
+        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent(actorId, 20))
         assertEquals(listOf(actorId), requests)
+    }
+
+    @Test
+    fun distinguishesUnreachableCollectionFromEmptyOne() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent(actorId, 20))
+
+        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent("https://remote.example/users/nobody", 20))
+
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[]}"""
+        assertEquals(RemoteOutboxResult.Found(listOf()), outbox.recent(actorId, 20))
     }
 
     @Test
     fun stopsAtRequestedLimitWithoutLoadingNextPage() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"orderedItems":[${note("first", actorId, true)}],"next":"$outboxUrl?page=2"}"""
-        assertEquals(1, outbox.recent(actorId, 1).size)
+        assertEquals(1, outbox.recent(actorId, 1).notes().size)
         assertEquals(listOf(actorId, outboxUrl), requests)
     }
 
@@ -99,7 +109,7 @@ class HttpRemoteOutboxTest {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
         documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[],"next":"$outboxUrl?page=3"}"""
         documents["$outboxUrl?page=3"] = """{"id":"$outboxUrl?page=3","orderedItems":[${note("third", actorId, true)}],"next":"$outboxUrl?page=4"}"""
-        assertEquals(listOf("$actorId/third"), outbox.recent(actorId, 20).map { it.id })
+        assertEquals(listOf("$actorId/third"), outbox.recent(actorId, 20).notes().map { it.id })
         assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1", "$outboxUrl?page=2", "$outboxUrl?page=3"), requests)
     }
 
@@ -108,7 +118,7 @@ class HttpRemoteOutboxTest {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("a", actorId, true)}],"next":"$outboxUrl?page=2"}"""
         documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("a", actorId, true)},${note("b", actorId, true)}]}"""
-        assertEquals(setOf("$actorId/a", "$actorId/b"), outbox.recent(actorId, 2).map { it.id }.toSet())
+        assertEquals(setOf("$actorId/a", "$actorId/b"), outbox.recent(actorId, 2).notes().map { it.id }.toSet())
     }
 
     @Test
@@ -116,7 +126,7 @@ class HttpRemoteOutboxTest {
         val boosts = (1..20).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[$boosts,${note("own", actorId, true)}]}"""
-        assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).map { it.id })
+        assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).notes().map { it.id })
     }
 
     @Test
@@ -125,7 +135,7 @@ class HttpRemoteOutboxTest {
         documents[outboxUrl] = """{"orderedItems":[{"type":"Note","id":"$actorId/media","attributedTo":"$actorId","content":"<p>画像</p>",
             "published":"2026-11-01T00:00:00Z","to":["https://www.w3.org/ns/activitystreams#Public"],"summary":"注意","sensitive":true,
             "attachment":[{"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png","name":"説明"}]}]}"""
-        val note = outbox.recent(actorId, 20).single()
+        val note = outbox.recent(actorId, 20).notes().single()
         assertEquals("注意", note.summary)
         assertEquals(true, note.sensitive)
         assertEquals(listOf(ReceivedNoteAttachment(url = "https://remote.example/a.png", mediaType = "image/png", name = "説明")), note.attachments)
@@ -137,7 +147,7 @@ class HttpRemoteOutboxTest {
         documents[outboxUrl] = """{"orderedItems":[{"type":"Note","id":"$actorId/emoji","attributedTo":"$actorId","content":"<p>:blob:</p>",
             "published":"2026-11-01T00:00:00Z","to":["https://www.w3.org/ns/activitystreams#Public"],
             "tag":[{"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://remote.example/blob.png"}}]}]}"""
-        val note = outbox.recent(actorId, 20).single()
+        val note = outbox.recent(actorId, 20).notes().single()
         assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")), note.emojis)
     }
 
@@ -145,4 +155,10 @@ class HttpRemoteOutboxTest {
 
     private fun note(id: String, author: String, public: Boolean, published: String): String =
         """{"type":"Note","id":"$actorId/$id","attributedTo":"$author","content":"<p>投稿</p>","published":"$published","to":["${if (public) "https://www.w3.org/ns/activitystreams#Public" else actorId}"]}"""
+
+    private fun RemoteOutboxResult.notes(): List<RemoteOutboxNote> =
+        when (this) {
+            is RemoteOutboxResult.Found -> notes
+            RemoteOutboxResult.Unavailable -> error("取得できなかった")
+        }
 }

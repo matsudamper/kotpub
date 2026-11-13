@@ -116,7 +116,7 @@ class OutboxEndpoint(
                         actor = urls.actorId,
                         published = note.publishedAt.toActivityPubPublished(),
                         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-                        cc = listOf(urls.followers),
+                        cc = note.ccWith(urls.followers),
                         target = noteDocument(urls = urls, note = note, embedded = true, webPages = webPages),
                     ),
                 ),
@@ -251,9 +251,11 @@ private fun noteDocument(
         content = note.contentHtml,
         published = note.publishedAt.toActivityPubPublished(),
         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
-        cc = listOf(urls.followers),
+        cc = note.ccWith(urls.followers),
         atomUri = noteUrls.noteUrl,
         url = webPages?.note(username = urls.username, publicId = note.publicId),
         attachment = note.attachments.toNoteDocuments(),
+        inReplyTo = note.inReplyTo,
+        tag = note.mentions.toNoteMentionTags(),
     )
 }
