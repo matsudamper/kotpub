@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.note
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
@@ -150,6 +151,103 @@ class HttpRemoteOutboxTest {
         val note = outbox.recent(actorId, 20).notes().single()
         assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://remote.example/blob.png")), note.emojis)
     }
+
+    @Test
+    fun recentPageReturnsWholePageAndNextPageId() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","first":"$outboxUrl?page=1"}"""
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[
+            ${note("older", actorId, true, "2026-01-01T00:00:00Z")},
+            ${note("newer", actorId, true, "2026-02-01T00:00:00Z")}
+        ],"next":"$outboxUrl?page=2"}"""
+        val page = recentPage(null)
+        assertEquals(listOf("$actorId/newer", "$actorId/older"), page.notes.map { it.id })
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), page.next)
+        assertEquals(listOf(actorId, outboxUrl, "$outboxUrl?page=1"), requests)
+    }
+
+    @Test
+    fun recentPageReadsGivenPageWithoutActor() = runBlocking {
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}]}"""
+        val page = recentPage(RemoteOutboxCursor("$outboxUrl?page=2", 0))
+        assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
+        assertEquals(null, page.next)
+        assertEquals(listOf("$outboxUrl?page=2"), requests)
+    }
+
+    @Test
+    fun recentPageSkipsPagesWithoutReadableNotes() = runBlocking {
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[${note("private", actorId, false)}],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("second", actorId, true)}],"next":"$outboxUrl?page=3"}"""
+        val page = recentPage(RemoteOutboxCursor("$outboxUrl?page=1", 0))
+        assertEquals(listOf("$actorId/second"), page.notes.map { it.id })
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=3", 0), page.next)
+    }
+
+    @Test
+    fun recentPageSkipsIntoEmbeddedNextPageWithoutId() = runBlocking {
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":{"orderedItems":[${note("embedded", actorId, true)}]}}"""
+        val page = recentPage(RemoteOutboxCursor("$outboxUrl?page=1", 0))
+        assertEquals(listOf("$actorId/embedded"), page.notes.map { it.id })
+        assertEquals(null, page.next)
+    }
+
+    @Test
+    fun recentPageResumesInsideLargePageWithoutDroppingItems() = runBlocking {
+        val items = (1..350).joinToString(",") { note("n$it", actorId, true) }
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[$items],"next":"$outboxUrl?page=2"}"""
+        val first = recentPage(RemoteOutboxCursor("$outboxUrl?page=1", 0))
+        assertEquals(300, first.notes.size)
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=1", 300), first.next)
+
+        val rest = recentPage(first.next)
+        assertEquals((301..350).map { "$actorId/n$it" }.toSet(), rest.notes.map { it.id }.toSet())
+        assertEquals(RemoteOutboxCursor("$outboxUrl?page=2", 0), rest.next)
+    }
+
+    @Test
+    fun recentReadsBeyondHundredItemsInSamePageInsteadOfSkippingToNextPage() = runBlocking {
+        val boosts = (1..120).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[$boosts,${note("own", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        documents["$outboxUrl?page=2"] = """{"id":"$outboxUrl?page=2","orderedItems":[${note("older", actorId, true)}]}"""
+        assertEquals(listOf("$actorId/own"), outbox.recent(actorId, 1).notes().map { it.id })
+        assertEquals(listOf(actorId, outboxUrl), requests)
+    }
+
+    @Test
+    fun recentStopsWithoutGapWhenItemLimitIsReached() = runBlocking {
+        val boosts = (1..300).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("newest", actorId, true)},$boosts,${note("beyond", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        assertEquals(listOf("$actorId/newest"), outbox.recent(actorId, 20).notes().map { it.id })
+        assertEquals(listOf(actorId, outboxUrl), requests)
+    }
+
+    @Test
+    fun recentPageReadsWholePageWithoutIdBecauseItCannotBeResumed() = runBlocking {
+        val items = (1..350).joinToString(",") { note("n$it", actorId, true) }
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"first":{"orderedItems":[$items]}}"""
+        val page = recentPage(null)
+        assertEquals(350, page.notes.size)
+        assertEquals(null, page.next)
+    }
+
+    @Test
+    fun recentPageDoesNotReadPageOnAnotherHost() = runBlocking {
+        documents["https://other.example/outbox?page=2"] = """{"orderedItems":[${note("other", actorId, true)}]}"""
+        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, RemoteOutboxCursor("https://other.example/outbox?page=2", 0)))
+        assertEquals(listOf(), requests)
+    }
+
+    @Test
+    fun recentPageIsUnavailableWhenNextPageCannotBeRead() = runBlocking {
+        documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
+        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0)))
+    }
+
+    private suspend fun recentPage(from: RemoteOutboxCursor?): RemoteOutboxPage = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actorId, from)).page
 
     private fun note(id: String, author: String, public: Boolean): String = note(id, author, public, "2026-11-01T00:00:00Z")
 
