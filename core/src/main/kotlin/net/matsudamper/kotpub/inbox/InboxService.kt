@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.inbox
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
@@ -59,6 +60,7 @@ class InboxService(
                 InboxResult.Accepted -> "accepted"
                 InboxResult.BadRequest -> "bad_request"
                 InboxResult.Unauthorized -> "unauthorized"
+                InboxResult.TemporarilyUnavailable -> "temporarily_unavailable"
             },
         )
         return result
@@ -71,7 +73,18 @@ class InboxService(
         // 鍵を取得する前に断る。検証してからだと、止めている相手のサーバーから取得することになる。
         // 断っても 202 で返す。4xx や 5xx を返すと、相手は諦めるまで同じものを送り直してくる
         val claimedKeyId = verifier.claimedKeyId(request)
-        if (claimedKeyId != null && blocksInboxFrom(claimedKeyId)) {
+        val blocked = if (claimedKeyId == null) {
+            false
+        } else {
+            runCatching { domainBlocks.blocksInboxFrom(claimedKeyId) }.getOrElse { failure ->
+                if (failure is CancellationException) throw failure
+                // 止めている相手のものを通さず、捨てもしない。送り直してもらい、判定できるようになってから受ける
+                InboxSpan.failed(failure)
+                logger.warn("受信を止めているドメインかを判定できなかったので送り直してもらう: $claimedKeyId", failure)
+                return InboxResult.TemporarilyUnavailable
+            }
+        }
+        if (blocked) {
             InboxSpan.outcome("domain_blocked")
             logger.info("${recipient.logLabel} に受信を止めているドメインから届いたので捨てる: keyId=$claimedKeyId")
             return InboxResult.Accepted
@@ -103,17 +116,19 @@ class InboxService(
         recordSignedRequest(verifiedSignerActorId)
 
         val rawActivityJson =
-            runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) as? JsonObject }
-                .getOrNull()
-        val activity =
-            rawActivityJson?.let {
-                runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), it) }.getOrNull()
+            runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) }.getOrElse { failure ->
+                logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
+                return InboxResult.BadRequest
             }
-
-        if (rawActivityJson == null || activity == null) {
-            logger.warn("inbox のボディを読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
+        if (rawActivityJson !is JsonObject) {
+            logger.warn("inbox のボディが JSON のオブジェクトではない: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
             return InboxResult.BadRequest
         }
+        val activity =
+            runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson) }.getOrElse { failure ->
+                logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
+                return InboxResult.BadRequest
+            }
 
         // 署名した鍵の持ち主と、アクティビティの実行者が別なら、なりすまし。
         // 署名だけ通る形は作れるので、ここを見ないと他人の Undo を送り込める
@@ -145,28 +160,22 @@ class InboxService(
             )
         }
 
-        // 処理に失敗しても 202 で返す。5xx にすると相手は同じものを送り直し続けるので、
-        // こちらが書き込めない間ずっと同じ失敗を繰り返すことになる。
-        // 何が起きたかはここに残っているものが唯一の手がかりになる
-        handled.onFailure { failure ->
+        // ハンドラは受け付けられない中身なら投げずに戻る。投げるのは記録先に書けないなど、
+        // こちらの都合で処理できなかったときなので、送り直してもらう。
+        // 相手の再送は回数と間隔に上限があるので、送り直しが止まらなくなることはない
+        val failure = handled.exceptionOrNull()
+        if (failure != null) {
+            if (failure is CancellationException) throw failure
             InboxSpan.failed(failure)
             logger.warn(
-                "inbox の処理に失敗した: ${recipient.logLabel} type=${activity.type} actor=$verifiedSignerActorId",
+                "inbox の処理に失敗したので送り直してもらう: ${recipient.logLabel} type=${activity.type} actor=$verifiedSignerActorId",
                 failure,
             )
+            return InboxResult.TemporarilyUnavailable
         }
 
         return InboxResult.Accepted
     }
-
-    /**
-     * 判定できなければ止めているものとして捨てる。止めていないものとして通すと、止めている相手の
-     * アクティビティが処理される。5xx を返すと相手は同じものを送り直し続けるので、落としもしない
-     */
-    private fun blocksInboxFrom(keyId: String): Boolean =
-        runCatching { domainBlocks.blocksInboxFrom(keyId) }
-            .onFailure { failure -> logger.warn("受信を止めているドメインかを判定できなかったので捨てる: $keyId", failure) }
-            .getOrDefault(true)
 
     /**
      * 受け取ったものの処理とは関係が無いので、落ちても受信は続ける
@@ -302,6 +311,11 @@ sealed interface InboxResult {
     /** 署名は通ったが、ボディが JSON として読めない */
     data object BadRequest : InboxResult
 
-    /** 署名が通った。中身の処理の成否は含めない。受信を止めているドメインから届いたものも、捨ててこれを返す */
+    /**
+     * 署名が通った。受け付けられない中身や、受信を止めているドメインから届いたものも、捨ててこれを返す
+     */
     data object Accepted : InboxResult
+
+    /** 記録先に書けないなど、こちらの都合で処理できなかった。相手に送り直してもらう */
+    data object TemporarilyUnavailable : InboxResult
 }

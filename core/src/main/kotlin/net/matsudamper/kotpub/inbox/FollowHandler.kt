@@ -82,27 +82,17 @@ class FollowHandler(
                 target = LinkOrObject.Embedded(rawActivityJson),
             )
 
-        val recorded = runCatching {
-            followers.record(
-                username = followee.username,
-                follower = follower,
-                followActivityUri = followActivityUri,
-                receivedAt = Instant.now(),
-                acceptBody = AppJson.encodeToString(OutgoingActivity.serializer(), accept),
-            )
-        }
-        if (recorded.isFailure) {
-            // 記録できていないので Accept も配信キューに登録されていない。相手には保留のまま見えるが、
-            // Follow は送り直されるので次の機会がある
-            logger.warn(
-                "Follow を記録できなかったので Accept を返さない: ${followee.acct} ← $verifiedSignerActorId",
-                recorded.exceptionOrNull(),
-            )
-            return
-        }
+        // 記録できなければ投げる。Accept も配信キューに登録されないので、inbox が 503 を返して送り直してもらう
+        val recorded = followers.record(
+            username = followee.username,
+            follower = follower,
+            followActivityUri = followActivityUri,
+            receivedAt = Instant.now(),
+            acceptBody = AppJson.encodeToString(OutgoingActivity.serializer(), accept),
+        )
 
         // 特定した後に消されたアカウント宛。返す先のアカウントがもう無い
-        if (recorded.getOrDefault(false).not()) {
+        if (!recorded) {
             logger.info("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
             return
         }

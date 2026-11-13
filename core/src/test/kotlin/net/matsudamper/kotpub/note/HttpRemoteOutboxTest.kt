@@ -7,6 +7,7 @@ import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteOutboxTest {
     private val actorId = "https://remote.example/users/alice"
@@ -18,7 +19,7 @@ class HttpRemoteOutboxTest {
             requests.add(url)
             val document = documents[url]
             val status = if (document == null) 404 else 200
-            val body = if (document != null && readsBody(status, url)) Result.success(document.encodeToByteArray()) else null
+            val body = if (document != null && readsBody(status, url)) ResponseBody.Read(document.encodeToByteArray()) else ResponseBody.NotRead
             return ActivityPubClientResponse(status, url, body)
         }
 

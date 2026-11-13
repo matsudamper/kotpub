@@ -10,6 +10,7 @@ import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
 import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.ResponseBody
 
 /**
  * acct から WebFinger の URL を組み立てる部分と、応答からアクターの id を選ぶ部分。通信は差し替える
@@ -200,7 +201,7 @@ class HttpWebFingerLookupTest {
             return ActivityPubClientResponse(
                 status = status,
                 finalUrl = respondedUrl,
-                body = if (readsBody(status, respondedUrl)) Result.success(body.toByteArray()) else null,
+                body = if (readsBody(status, respondedUrl)) ResponseBody.Read(body.toByteArray()) else ResponseBody.NotRead,
             )
         }
 
