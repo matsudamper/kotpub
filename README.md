@@ -3,12 +3,6 @@
 Kotlin/JVM 向けの ActivityPub 実装。WebFinger・Actor・inbox・NodeInfo の応答、
 HTTP Signature の署名と検証、WebFinger による相手のアクターの発見、相手のアクター文書の取得、アクティビティの配送を持つ。
 
-## 次のリリース: 1.5.0
-
-`RemoteActors.findActor` の戻り値の `actorId` は、問い合わせ URL ではなく取得した文書の `id` になる。
-文書の `id` が無い、HTTPS でない、取得先とホストが違う場合は取得に失敗する。
-`gradle.properties` は `latest-SNAPSHOT` を維持し、正式版は GHA の `-Pversion=1.5.0` で公開する。
-
 ## 使い方
 
 ### 正式版
@@ -56,8 +50,6 @@ dependencies {
 `RemoteActorProfile.summary` には自己紹介の HTML が入るため、表示する側で安全な形式に変換する。
 
 ## ビルド
-
-Java 25（Gradle が toolchain / daemon JVM を解決する。詳細は AGENTS.md）。
 
 ```shell
 ./gradlew build
