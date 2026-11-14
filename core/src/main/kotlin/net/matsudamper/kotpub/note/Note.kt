@@ -64,6 +64,21 @@ data class Note(
     @SerialName("inReplyTo")
     val inReplyTo: String?,
     /**
+     * 引用した投稿の id。引用でなければ null。FEP-044f の名前で、Mastodon 4.4 以降が読む
+     */
+    @SerialName("quote")
+    val quote: String?,
+    /**
+     * [quote] と同じ値。FEP-044f より前の Mastodon のフォークや Pleroma 系はこちらを読む
+     */
+    @SerialName("quoteUrl")
+    val quoteUrl: String?,
+    /**
+     * [quote] と同じ値。Misskey 系はこちらを読む
+     */
+    @SerialName("_misskey_quote")
+    val misskeyQuote: String?,
+    /**
      * Mastodon はここの `Mention` を見て、宛てられたアカウントに通知する。本文のリンクだけでは通知しない
      */
     @SerialName("tag")
