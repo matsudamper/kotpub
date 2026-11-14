@@ -9,7 +9,6 @@ import net.matsudamper.kotpub.delivery.DeliveryResult
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.url.WebPageUrls
-import org.slf4j.LoggerFactory
 
 /**
  * フォローが成立した相手にだけ、フォローより前の投稿を配る。
@@ -30,8 +29,6 @@ class FollowBackfillPublisher(
     private val delivery: ActivityDelivery,
     private val webPages: WebPageUrls?,
 ) {
-    private val logger = LoggerFactory.getLogger(FollowBackfillPublisher::class.java)
-
     /**
      * 同時に走る配信の数。
      *
@@ -54,7 +51,6 @@ class FollowBackfillPublisher(
     ): BackfillResult {
         if (!running.tryAcquire()) {
             // 配れなくてもフォローは成立している。次の新着からは普通に届く
-            logger.warn("過去の投稿を配る余裕が無いので諦めた: ${sender.urls.acct} → $inbox")
             return BackfillResult.Busy
         }
 
@@ -98,13 +94,11 @@ class FollowBackfillPublisher(
                 is DeliveryResult.Failed -> {
                     // 再送はしない。届かなくてもフォロー自体は成立しているので、
                     // 次の新着からは普通に届く
-                    logger.warn("過去の投稿を配れなかった: ${sender.urls.acct} → $inbox ${note.publicId} ${result.reason}")
                     failed += BackfillFailure(notePublicId = note.publicId, result = result)
                 }
             }
         }
 
-        logger.info("フォローされたので過去の投稿を配った: ${sender.urls.acct} → $inbox 宛先=${recentNotes.size} 成功=${delivered.size}")
         return BackfillResult.Attempted(delivered = delivered, failed = failed)
     }
 
