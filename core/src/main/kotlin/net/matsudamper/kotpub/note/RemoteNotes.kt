@@ -47,31 +47,55 @@ class HttpRemoteNotes(
     private val client: ActivityPubHttpClient,
 ) : RemoteNotes {
 
-    override suspend fun find(noteId: String): RemoteNoteLookup {
+    override suspend fun find(noteId: String): RemoteNoteLookup = when (val lookup = findDocument(noteId)) {
+        is RemoteNoteDocumentLookup.Found -> RemoteNoteLookup.Found(lookup.note)
+        is RemoteNoteDocumentLookup.NotFound -> RemoteNoteLookup.NotFound(lookup.failure)
+        is RemoteNoteDocumentLookup.Unavailable -> RemoteNoteLookup.Unavailable(lookup.failure)
+    }
+
+    /**
+     * [find] と同じ確かめ方で取得し、読んだ投稿と一緒に取得した文書そのものも返す。
+     * 投稿に付いたコレクション（`replies` など）は [ReceivedNote] に載らないので、文書から読む
+     */
+    internal suspend fun findDocument(noteId: String): RemoteNoteDocumentLookup {
         val noteUrl = HttpUrl.parseHttps(noteId)
         if (noteUrl == null) {
-            return RemoteNoteLookup.NotFound(RemoteFetchFailure.NotHttps(noteId))
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.NotHttps(noteId))
         }
-        val json = when (val fetched = fetch(noteId, noteUrl)) {
-            is DocumentFetch.Found -> fetched.document
-            is DocumentFetch.NotFound -> return RemoteNoteLookup.NotFound(fetched.failure)
-            is DocumentFetch.Unavailable -> return RemoteNoteLookup.Unavailable(fetched.failure)
+        val json = when (val fetched = fetchSameHost(noteId, noteUrl)) {
+            is RemoteDocumentFetch.Found -> fetched.document
+            is RemoteDocumentFetch.NotFound -> return RemoteNoteDocumentLookup.NotFound(fetched.failure)
+            is RemoteDocumentFetch.Unavailable -> return RemoteNoteDocumentLookup.Unavailable(fetched.failure)
         }
         val note = ReceivedNoteJson.read(json)
         if (note == null) {
-            return RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿として読めない"))
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿として読めない"))
         }
         if (note.id != noteId) {
-            return RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "id が取得先と違う: ${note.id}"))
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "id が取得先と違う: ${note.id}"))
         }
         val authorUrl = HttpUrl.parseHttps(note.attributedTo)
         if (authorUrl == null || !authorUrl.isSameHost(noteUrl)) {
-            return RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿者が投稿と別のホスト: ${note.attributedTo}"))
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿者が投稿と別のホスト: ${note.attributedTo}"))
         }
-        return RemoteNoteLookup.Found(note)
+        return RemoteNoteDocumentLookup.Found(note, json)
     }
 
-    private suspend fun fetch(url: String, noteUrl: HttpUrl): DocumentFetch {
+    /**
+     * [originUrl] と同じホストの文書だけを取得する。リダイレクトで別ホストに移ったものも読まない
+     */
+    internal suspend fun fetchSameHost(url: String, originUrl: HttpUrl): RemoteDocumentFetch {
+        val target = HttpUrl.parseHttps(url)
+        if (target == null) {
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.NotHttps(url))
+        }
+        if (!target.isSameHost(originUrl)) {
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.DisallowedHost(url))
+        }
+        return fetch(url, originUrl)
+    }
+
+    private suspend fun fetch(url: String, noteUrl: HttpUrl): RemoteDocumentFetch {
         val response = try {
             client.get(
                 url = url,
@@ -82,48 +106,62 @@ class HttpRemoteNotes(
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            return DocumentFetch.Unavailable(RemoteFetchFailure.RequestFailed(url, exception))
+            return RemoteDocumentFetch.Unavailable(RemoteFetchFailure.RequestFailed(url, exception))
         }
         if (response.status != 200) {
             val failure = RemoteFetchFailure.UnsuccessfulStatus(url, response.status)
-            return if (isTemporaryFailure(response.status)) DocumentFetch.Unavailable(failure) else DocumentFetch.NotFound(failure)
+            return if (isTemporaryFailure(response.status)) RemoteDocumentFetch.Unavailable(failure) else RemoteDocumentFetch.NotFound(failure)
         }
         if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) {
-            return DocumentFetch.NotFound(RemoteFetchFailure.RedirectedToDisallowedUrl(url, response.finalUrl))
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.RedirectedToDisallowedUrl(url, response.finalUrl))
         }
         val body = when (val responseBody = response.body) {
             is ResponseBody.Read -> responseBody.bytes
 
             is ResponseBody.Unreadable -> {
-                return DocumentFetch.Unavailable(RemoteFetchFailure.BodyUnreadable(url, responseBody.failure))
+                return RemoteDocumentFetch.Unavailable(RemoteFetchFailure.BodyUnreadable(url, responseBody.failure))
             }
 
             ResponseBody.NotRead -> error("成功応答なのに本文を読んでいない: $url")
         }
         if (body.size > MAX_BODY_BYTES) {
-            return DocumentFetch.NotFound(RemoteFetchFailure.BodyTooLarge(url, MAX_BODY_BYTES))
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.BodyTooLarge(url, MAX_BODY_BYTES))
         }
         val document = runCatching { AppJson.parseToJsonElement(body.decodeToString()) }.getOrElse { failure ->
-            return DocumentFetch.NotFound(RemoteFetchFailure.InvalidDocument(url, "JSON として読めない", failure))
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.InvalidDocument(url, "JSON として読めない", failure))
         }
         if (document !is JsonObject) {
-            return DocumentFetch.NotFound(RemoteFetchFailure.InvalidDocument(url, "JSON のオブジェクトではない"))
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.InvalidDocument(url, "JSON のオブジェクトではない"))
         }
-        return DocumentFetch.Found(document)
+        return RemoteDocumentFetch.Found(document)
     }
 
     private fun isTemporaryFailure(status: Int): Boolean =
         status >= 500 || status == HttpStatusCodes.TOO_MANY_REQUESTS || status == HttpStatusCodes.REQUEST_TIMEOUT
 
-    private sealed interface DocumentFetch {
-        data class Found(val document: JsonObject) : DocumentFetch
-
-        data class NotFound(val failure: RemoteFetchFailure) : DocumentFetch
-
-        data class Unavailable(val failure: RemoteFetchFailure) : DocumentFetch
-    }
-
     private companion object {
         const val MAX_BODY_BYTES = 1024 * 1024
     }
+}
+
+/**
+ * [HttpRemoteNotes.findDocument] の結果。分け方は [RemoteNoteLookup] と同じ
+ */
+internal sealed interface RemoteNoteDocumentLookup {
+    data class Found(val note: ReceivedNote, val document: JsonObject) : RemoteNoteDocumentLookup
+
+    data class NotFound(val failure: RemoteFetchFailure) : RemoteNoteDocumentLookup
+
+    data class Unavailable(val failure: RemoteFetchFailure) : RemoteNoteDocumentLookup
+}
+
+/**
+ * [HttpRemoteNotes.fetchSameHost] の結果。分け方は [RemoteNoteLookup] と同じ
+ */
+internal sealed interface RemoteDocumentFetch {
+    data class Found(val document: JsonObject) : RemoteDocumentFetch
+
+    data class NotFound(val failure: RemoteFetchFailure) : RemoteDocumentFetch
+
+    data class Unavailable(val failure: RemoteFetchFailure) : RemoteDocumentFetch
 }
