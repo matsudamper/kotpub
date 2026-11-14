@@ -88,6 +88,19 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun likedReadsEmbeddedNextPageWithoutId() = runBlocking {
+        val likedUrl = "$actorId/liked"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","liked":"$likedUrl"}"""
+        documents[likedUrl] = """{"id":"$likedUrl","orderedItems":["https://other.example/notes/1"],
+            "next":{"orderedItems":["https://other.example/notes/2"]}}"""
+
+        val page = assertIs<RemoteLikedPageResult.Found>(outbox.likedPage(actorId, null, 20)).page
+
+        assertEquals(listOf("https://other.example/notes/1", "https://other.example/notes/2"), page.objectUris)
+        assertEquals(null, page.next)
+    }
+
+    @Test
     fun likedIsAbsentWhenActorHasNoLikedCollection() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections

@@ -166,6 +166,10 @@ class HttpRemoteOutbox(
         }
         val visited = visitedPageIds + listOfNotNull(pageId)
         val nextPageRef = page["next"]
+        if (nextPageRef is JsonObject && nextPageRef.text("id") == null) {
+            // 続きとして指せないので、件数によらず今読む。埋め込まれているので取りに行かずに済む
+            return readLikedPage(actor, nextPageRef, 0, limit, remainingPageFetches, visited, objectUris)
+        }
         val nextPageId = when (nextPageRef) {
             is JsonPrimitive -> nextPageRef.takeIf { it.isString }?.content
             is JsonObject -> nextPageRef.text("id")
