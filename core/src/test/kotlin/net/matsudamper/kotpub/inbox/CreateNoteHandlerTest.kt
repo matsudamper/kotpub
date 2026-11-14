@@ -87,6 +87,38 @@ class CreateNoteHandlerTest {
         )
     }
 
+    @Test
+    fun quoteIsReadFromEachImplementationsKey() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        listOf(
+            """"quote":"https://other.example/notes/fep"""",
+            """"quoteUrl":"https://other.example/notes/url"""",
+            """"quoteUri":"https://other.example/notes/uri"""",
+            """"_misskey_quote":"https://other.example/notes/misskey"""",
+            """"quote":{"type":"Link","href":"https://other.example/notes/link"}""",
+            """"quote":"https://other.example/notes/fep","_misskey_quote":"https://other.example/notes/misskey"""",
+            """"inReplyTo":null""",
+        ).forEach { quote ->
+            receive(
+                handler,
+                """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>q</p>","to":["$PUBLIC"],$quote}""",
+            )
+        }
+        assertEquals(
+            listOf(
+                "https://other.example/notes/fep",
+                "https://other.example/notes/url",
+                "https://other.example/notes/uri",
+                "https://other.example/notes/misskey",
+                "https://other.example/notes/link",
+                "https://other.example/notes/fep",
+                null,
+            ),
+            store.saved.map { it.quote },
+        )
+    }
+
     private suspend fun receive(handler: CreateNoteHandler, target: String) {
         val raw = AppJson.parseToJsonElement("""{"type":"Create","actor":"$ACTOR","object":$target}""").jsonObject
         handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)

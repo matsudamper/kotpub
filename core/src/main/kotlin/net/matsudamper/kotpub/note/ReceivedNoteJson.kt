@@ -29,6 +29,7 @@ internal object ReceivedNoteJson {
             to = to,
             cc = cc,
             inReplyTo = note["inReplyTo"].string(),
+            quote = note.quote(),
             summary = note["summary"].string(),
             sensitive = (note["sensitive"] as? JsonPrimitive)?.booleanOrNull ?: false,
             visibility = visibilityOf(actorId = attributedTo, to = to, cc = cc),
@@ -45,6 +46,19 @@ internal object ReceivedNoteJson {
         PUBLIC in cc -> NoteVisibility.Unlisted
         (to + cc).any { it == "$actorId/followers" } -> NoteVisibility.Followers
         else -> NoteVisibility.Direct
+    }
+
+    /**
+     * 実装ごとに名前が違う。FEP-044f の `quote` を先に見て、無ければ古い名前を見る
+     */
+    private fun JsonObject.quote(): String? =
+        QUOTE_KEYS.firstNotNullOfOrNull { key -> this[key].idOrString() }
+
+    // Link オブジェクトで来ることもあるので、その場合は href を使う
+    private fun JsonElement?.idOrString(): String? = when (this) {
+        is JsonObject -> this["href"].string() ?: this["id"].string()
+        is JsonArray -> firstNotNullOfOrNull { it.idOrString() }
+        else -> string()
     }
 
     fun JsonElement?.strings(): List<String> = when (this) {
@@ -83,6 +97,8 @@ internal object ReceivedNoteJson {
     private class AttachmentLink(val href: String, val mediaType: String?)
 
     private fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    private val QUOTE_KEYS = listOf("quote", "quoteUrl", "quoteUri", "_misskey_quote")
 
     private const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 }
