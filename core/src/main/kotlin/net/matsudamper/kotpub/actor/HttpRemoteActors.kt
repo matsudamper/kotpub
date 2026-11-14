@@ -16,7 +16,6 @@ import net.matsudamper.kotpub.http.ResponseBody
 import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 import net.matsudamper.kotpub.httpsignature.SignatureKey
 import net.matsudamper.kotpub.json.AppJson
-import org.slf4j.LoggerFactory
 
 /**
  * 相手のアクター文書を実際に GET して、公開鍵と inbox を取得する。
@@ -51,7 +50,6 @@ class HttpRemoteActors(
     openTelemetry: OpenTelemetry?,
 ) : RemoteActors,
     Closeable {
-    private val logger = LoggerFactory.getLogger(HttpRemoteActors::class.java)
     private val tracer = (openTelemetry ?: OpenTelemetry.noop()).getTracer("activitypub-remote-actor")
 
     /**
@@ -127,7 +125,6 @@ class HttpRemoteActors(
         val decodedPublicKey =
             runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }
                 .getOrElse { failure ->
-                    logger.warn("アクター文書の公開鍵を読めなかった: $keyId", failure)
                     return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵を読めない", failure))
                 }
 
@@ -294,7 +291,6 @@ class HttpRemoteActors(
                 )
             }.getOrElse { failure ->
                 if (failure is CancellationException) throw failure
-                logger.warn("アクター文書の取得に失敗した: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("request_failed")
                 return DocumentFetch.Unavailable(RemoteFetchFailure.RequestFailed(rawUrl, failure))
@@ -336,7 +332,6 @@ class HttpRemoteActors(
                 is ResponseBody.Read -> responseBody.bytes
 
                 is ResponseBody.Unreadable -> {
-                    logger.warn("アクター文書の本文を読めなかった: $rawUrl", responseBody.failure)
                     RemoteActorSpan.failed(responseBody.failure)
                     RemoteActorSpan.outcome("request_failed")
                     return DocumentFetch.Unavailable(RemoteFetchFailure.BodyUnreadable(rawUrl, responseBody.failure))
@@ -353,7 +348,6 @@ class HttpRemoteActors(
             runCatching {
                 AppJson.decodeFromString(RemoteActorDocument.serializer(), body.toString(Charsets.UTF_8))
             }.getOrElse { failure ->
-                logger.warn("アクター文書を読めなかった: $rawUrl", failure)
                 RemoteActorSpan.failed(failure)
                 RemoteActorSpan.outcome("undecodable_document")
                 return DocumentFetch.Unavailable(RemoteFetchFailure.InvalidDocument(rawUrl, "アクター文書として読めない", failure))
