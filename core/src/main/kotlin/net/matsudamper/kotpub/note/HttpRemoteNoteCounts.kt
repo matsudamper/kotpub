@@ -47,18 +47,29 @@ class HttpRemoteNoteCounts(
 
     private suspend fun countReplies(repliesRef: JsonElement?, noteUrl: HttpUrl, maxPages: Int): RemoteReplyCount? {
         if (repliesRef == null) return null
-        val collection = resolve(repliesRef, noteUrl) ?: return null
+        val collection = resolve(repliesRef, noteUrl)?.takeIf { it.isCollection() } ?: return null
         val totalItems = collection.totalItems()
         if (totalItems != null) return RemoteReplyCount(count = totalItems, complete = true)
-        if (collection.items() != null) return countPages(collection, noteUrl, remainingPages = maxPages - 1, visitedPageIds = setOf(), counted = 0)
-        // first も無ければリプライの無いコレクション
-        val firstRef = collection["first"] ?: return RemoteReplyCount(count = 0, complete = true)
-        val firstPage = resolve(firstRef, noteUrl) ?: return null
-        return countPages(firstPage, noteUrl, remainingPages = maxPages - 1, visitedPageIds = setOfNotNull(collection.text("id")), counted = 0)
+        val collectionIds = setOfNotNull(collection.text("id"), referenceUrlOf(repliesRef))
+        if (collection.items() != null) return countPages(collection, noteUrl, remainingPages = maxPages - 1, visitedPageIds = collectionIds, counted = 0)
+        val firstRef = collection["first"]
+        if (firstRef == null) {
+            // 型でコレクションと名乗っていて first も無ければリプライの無いコレクション。名乗っていなければ読めない形
+            return if (collection.hasCollectionType()) RemoteReplyCount(count = 0, complete = true) else null
+        }
+        val firstPage = resolve(firstRef, noteUrl)?.takeIf { it.isPage() } ?: return null
+        return countPages(
+            page = firstPage,
+            noteUrl = noteUrl,
+            remainingPages = maxPages - 1,
+            visitedPageIds = collectionIds + setOfNotNull(referenceUrlOf(firstRef)),
+            counted = 0,
+        )
     }
 
     /**
      * @param remainingPages [page] の後に、まだ読んでよいページの数
+     * @param visitedPageIds 読んだページの id と、取りに行った URL。id の無いページも同じ URL を取り直さないよう URL も入れる
      */
     private tailrec suspend fun countPages(
         page: JsonObject,
@@ -69,18 +80,18 @@ class HttpRemoteNoteCounts(
     ): RemoteReplyCount {
         val total = counted + page.items().orEmpty().size
         val visited = visitedPageIds + setOfNotNull(page.text("id"))
-        val nextRef = page["next"]
+        val nextRef = page["next"] ?: return RemoteReplyCount(count = total, complete = true)
         val nextPageId = when (nextRef) {
             is JsonPrimitive -> nextRef.takeIf { it.isString }?.content
             is JsonObject -> nextRef.text("id")
             else -> null
         }
-        val hasNext = nextRef is JsonObject || nextPageId != null
-        if (!hasNext || (nextPageId != null && nextPageId in visited)) return RemoteReplyCount(count = total, complete = true)
+        // 前に読んだページに戻るのは終わりではなく、続きを読めないだけ
+        if (nextPageId != null && nextPageId in visited) return RemoteReplyCount(count = total, complete = false)
         if (remainingPages <= 0) return RemoteReplyCount(count = total, complete = false)
         // 続きを読めなかったら、そこまでの数を数え切れていないものとして返す
-        val nextPage = resolve(nextRef, noteUrl) ?: return RemoteReplyCount(count = total, complete = false)
-        return countPages(nextPage, noteUrl, remainingPages - 1, visited, total)
+        val nextPage = resolve(nextRef, noteUrl)?.takeIf { it.isPage() } ?: return RemoteReplyCount(count = total, complete = false)
+        return countPages(nextPage, noteUrl, remainingPages - 1, visited + setOfNotNull(nextPageId), total)
     }
 
     /**
@@ -96,7 +107,8 @@ class HttpRemoteNoteCounts(
      * 埋め込まれていればそのまま使い、URL なら投稿と同じホストのときだけ取得する。読めなければ null
      */
     private suspend fun resolve(value: JsonElement?, noteUrl: HttpUrl): JsonObject? = when (value) {
-        is JsonObject -> value
+        // 埋め込みでも、別のホストの id を名乗るものは、投稿のサーバーが出した数の裏付けにならない
+        is JsonObject -> value.takeIf { embedded -> embedded.text("id")?.let { isOnNoteHost(it, noteUrl) } ?: true }
 
         is JsonPrimitive -> if (value.isString) {
             when (val fetched = notes.fetchSameHost(value.content, noteUrl)) {
@@ -111,11 +123,35 @@ class HttpRemoteNoteCounts(
         else -> null
     }
 
+    private fun isOnNoteHost(url: String, noteUrl: HttpUrl): Boolean = HttpUrl.parseHttps(url)?.isSameHost(noteUrl) == true
+
+    private fun referenceUrlOf(value: JsonElement): String? = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    private fun JsonObject.typeNames(): Set<String> = when (val type = this["type"]) {
+        is JsonPrimitive -> setOfNotNull(type.takeIf { it.isString }?.content)
+        is JsonArray -> type.mapNotNull { (it as? JsonPrimitive)?.takeIf { name -> name.isString }?.content }.toSet()
+        else -> setOf()
+    }
+
+    private fun JsonObject.hasCollectionType(): Boolean = typeNames().any { it in COLLECTION_TYPES }
+
+    /**
+     * 型を書かないサーバーもあるので、数に使う項目のどれかがあればコレクションとして読む
+     */
+    private fun JsonObject.isCollection(): Boolean = hasCollectionType() || totalItems() != null || items() != null || this["first"] != null
+
+    private fun JsonObject.isPage(): Boolean = typeNames().any { it in PAGE_TYPES } || items() != null
+
     private fun JsonObject.text(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     private fun JsonObject.items(): JsonArray? = (this["orderedItems"] ?: this["items"]) as? JsonArray
 
     private fun JsonObject.totalItems(): Long? = (this["totalItems"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.takeIf { it >= 0 }
+
+    private companion object {
+        val COLLECTION_TYPES = setOf("Collection", "OrderedCollection")
+        val PAGE_TYPES = setOf("CollectionPage", "OrderedCollectionPage")
+    }
 }
 
 /**

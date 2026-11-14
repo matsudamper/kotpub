@@ -96,6 +96,52 @@ class HttpRemoteNoteCountsTest {
     }
 
     @Test
+    fun ignoresEmbeddedCollectionsThatClaimAnotherHost() = runBlocking {
+        documents[noteId] = note(
+            ""","replies":{"id":"https://other.example/replies","type":"Collection","totalItems":100},
+            "likes":{"id":"https://other.example/likes","type":"Collection","totalItems":100}""",
+        )
+
+        assertEquals(RemoteNoteCountsResult.Found(replies = null, likes = null, shares = null), counts.count(noteId, 5))
+    }
+
+    @Test
+    fun doesNotFetchOrCountPageWithoutIdAgain() = runBlocking {
+        documents[noteId] = note(""","replies":{"type":"Collection","first":"$repliesUrl?page=1"}""")
+        documents["$repliesUrl?page=1"] = """{"type":"CollectionPage","next":"$repliesUrl?page=1","items":["https://other.example/notes/1"]}"""
+
+        val found = assertIs<RemoteNoteCountsResult.Found>(counts.count(noteId, 5))
+
+        assertEquals(RemoteReplyCount(count = 1, complete = false), found.replies)
+        assertEquals(listOf(noteId, "$repliesUrl?page=1"), requests)
+    }
+
+    @Test
+    fun reportsPaginationCycleAsIncomplete() = runBlocking {
+        documents[noteId] = note(""","replies":{"type":"Collection","first":"$repliesUrl?page=a"}""")
+        documents["$repliesUrl?page=a"] = """{"id":"$repliesUrl?page=a","type":"CollectionPage","next":"$repliesUrl?page=b","items":["https://other.example/notes/1"]}"""
+        documents["$repliesUrl?page=b"] = """{"id":"$repliesUrl?page=b","type":"CollectionPage","next":"$repliesUrl?page=a","items":["https://other.example/notes/2"]}"""
+
+        val found = assertIs<RemoteNoteCountsResult.Found>(counts.count(noteId, 5))
+
+        assertEquals(RemoteReplyCount(count = 2, complete = false), found.replies)
+        assertEquals(listOf(noteId, "$repliesUrl?page=a", "$repliesUrl?page=b"), requests)
+    }
+
+    @Test
+    fun returnsNullWhenRepliesOrFirstPageAreUnreadable() = runBlocking {
+        documents[noteId] = note(""","replies":{"unexpected":true}""")
+        assertEquals(RemoteNoteCountsResult.Found(replies = null, likes = null, shares = null), counts.count(noteId, 5))
+
+        documents[noteId] = note(""","replies":{"type":"Collection","first":"$repliesUrl?page=1"}""")
+        documents["$repliesUrl?page=1"] = """{"error":"busy"}"""
+        assertEquals(RemoteNoteCountsResult.Found(replies = null, likes = null, shares = null), counts.count(noteId, 5))
+
+        documents[noteId] = note(""","replies":{"type":"Collection"}""")
+        assertEquals(RemoteNoteCountsResult.Found(replies = RemoteReplyCount(count = 0, complete = true), likes = null, shares = null), counts.count(noteId, 5))
+    }
+
+    @Test
     fun reportsIncompleteWhenNextPageIsOnAnotherHostOrUnreadable() = runBlocking {
         documents[noteId] = note(""","replies":{"first":{"next":"https://other.example/replies?page=1","items":["https://remote.example/notes/2"]}}""")
 
