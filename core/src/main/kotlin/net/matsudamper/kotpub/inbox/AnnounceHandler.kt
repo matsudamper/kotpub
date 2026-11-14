@@ -18,7 +18,6 @@ import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.ReceivedNoteJson.strings
 import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNotes
-import org.slf4j.LoggerFactory
 
 /**
  * ブースト（`Announce`）を受け取る。
@@ -37,8 +36,6 @@ class AnnounceHandler(
     private val earlyUndone: EarlyUndoneLikes,
 ) : InboxActivityHandler {
     override val type: String = TYPE
-
-    private val logger = LoggerFactory.getLogger(AnnounceHandler::class.java)
 
     override suspend fun handle(
         recipient: InboxRecipient,
@@ -112,7 +109,6 @@ class AnnounceHandler(
         if (!recorded) {
             return InboxHandling.Ignored("こちらの投稿のブーストを記録しなかった。記録済みか投稿が無い: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
         }
-        logger.info("こちらの投稿のブーストを記録した: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
         return InboxHandling.Handled
     }
 

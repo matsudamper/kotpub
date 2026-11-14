@@ -6,7 +6,6 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.json.AppJson
-import org.slf4j.LoggerFactory
 
 /**
  * ブーストの取り消し。`Announce` の id を記録しているので、`object` が id だけでも取り消せる
@@ -15,7 +14,6 @@ class UndoBoostHandler(
     private val boosts: BoostStore,
     private val earlyUndone: EarlyUndoneLikes,
 ) {
-    private val logger = LoggerFactory.getLogger(UndoBoostHandler::class.java)
 
     /**
      * @return ブーストの取り消しでなければ null。id だけの `object` は、記録にあって消せたときだけ null 以外
@@ -66,7 +64,6 @@ class UndoBoostHandler(
     ): Boolean {
         val removed = boosts.remove(actorUri = verifiedSignerActorId, activityUri = activityUri)
         if (removed) {
-            logger.info("ブーストを取り消した: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("undo_boost.removed")
         }
         return removed

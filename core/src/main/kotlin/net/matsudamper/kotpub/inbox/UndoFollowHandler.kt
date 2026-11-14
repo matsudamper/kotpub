@@ -8,7 +8,6 @@ import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.json.AppJson
-import org.slf4j.LoggerFactory
 
 /**
  * `object` が `Follow` だったときだけ消す。相手の実装によって、`object` に
@@ -24,7 +23,6 @@ class UndoFollowHandler(
     private val directory: ActorDirectory,
     private val followers: FollowerStore,
 ) {
-    private val logger = LoggerFactory.getLogger(UndoFollowHandler::class.java)
 
     /**
      * id だけの `object` は、記録にあるフォローを解除できなかったら null を返す。
@@ -57,7 +55,6 @@ class UndoFollowHandler(
         )
 
         if (removed) {
-            logger.info("フォローを解除した: ${followee.acct} ← $verifiedSignerActorId")
             return InboxHandling.Handled
         }
         // 記録が無いのは異常ではない。こちらが Accept を返せなかったフォローや、

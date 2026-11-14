@@ -7,7 +7,6 @@ import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.favourite.FavouriteStore
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.stamp.StampStore
-import org.slf4j.LoggerFactory
 
 /**
  * `Delete` を受けたときの処理。アカウントが消えたフォロワーを掃除する。
@@ -32,8 +31,6 @@ class DeleteActorHandler(
 ) : InboxActivityHandler {
     override val type: String = "Delete"
 
-    private val logger = LoggerFactory.getLogger(DeleteActorHandler::class.java)
-
     override suspend fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
@@ -51,19 +48,14 @@ class DeleteActorHandler(
 
         // お気に入りとスタンプとブーストを先に消す。フォローの解除は相手のアクターの記録ごと消すので、
         // 順番を入れ替えると道連れで消えて、件数だけが 0 になる
-        val removedFavourites = favourites.removeActor(deleteObjectId)
-        val removedStamps = stamps.removeActor(deleteObjectId)
-        val removedBoosts = boosts.removeActor(deleteObjectId)
+        favourites.removeActor(deleteObjectId)
+        stamps.removeActor(deleteObjectId)
+        boosts.removeActor(deleteObjectId)
 
         // こちらのどのアカウントをフォローしていたかに関わらず全部消える。
         // 宛先のアカウントだけを消すと、同じ相手が他のアカウントをフォローしていた分が
         // 残り、消えた相手に送り続けることになる
-        val removed = followers.removeRemoteActor(deleteObjectId)
-
-        logger.info(
-            "アクターが削除されたので記録から外した: $deleteObjectId " +
-                "解除したフォロー=$removed 件 取り消したお気に入り=$removedFavourites 件 取り消したスタンプ=$removedStamps 件 取り消したブースト=$removedBoosts 件",
-        )
+        followers.removeRemoteActor(deleteObjectId)
         return InboxHandling.Handled
     }
 }
