@@ -13,7 +13,6 @@ import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.json.AppJson
-import org.slf4j.LoggerFactory
 
 /**
  * `Follow` を受けたときの処理。
@@ -36,8 +35,6 @@ class FollowHandler(
     private val followers: FollowerStore,
 ) : InboxActivityHandler {
     override val type: String = "Follow"
-
-    private val logger = LoggerFactory.getLogger(FollowHandler::class.java)
 
     override suspend fun handle(
         recipient: InboxRecipient,
@@ -96,7 +93,6 @@ class FollowHandler(
             return InboxHandling.Ignored("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
         }
 
-        logger.info("Follow を記録して Accept を配信キューに登録した: ${followee.acct} ← $verifiedSignerActorId")
         return InboxHandling.Handled
     }
 

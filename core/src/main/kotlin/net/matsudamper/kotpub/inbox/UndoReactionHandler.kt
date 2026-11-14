@@ -11,7 +11,6 @@ import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteUrls
 import net.matsudamper.kotpub.stamp.StampEmoji
 import net.matsudamper.kotpub.stamp.StampStore
-import org.slf4j.LoggerFactory
 
 /**
  * 受け取った `Like` / `EmojiReact` アクティビティ自身の `id` は記録していないので、
@@ -24,7 +23,6 @@ class UndoReactionHandler(
     private val stamps: StampStore,
     private val earlyUndoneLikes: EarlyUndoneLikes,
 ) {
-    private val logger = LoggerFactory.getLogger(UndoReactionHandler::class.java)
 
     /**
      * @return フォロー解除など、お気に入りかスタンプの取り消しでなければ null
@@ -70,7 +68,6 @@ class UndoReactionHandler(
         )
         InboxSpan.outcome(if (removed) "undo_reaction.removed" else "undo_reaction.not_recorded")
         if (removed) {
-            logger.info("$undoneType を取り消した: ${recipient.logLabel} ← $verifiedSignerActorId 投稿=${notePublicId.value}")
             return InboxHandling.Handled
         }
 

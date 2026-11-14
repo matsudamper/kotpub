@@ -15,7 +15,6 @@ import net.matsudamper.kotpub.stamp.StampEmoji
 import net.matsudamper.kotpub.stamp.StampEmojiTags
 import net.matsudamper.kotpub.stamp.StampStore
 import net.matsudamper.kotpub.stamp.StampStore.ReceivedStamp
-import org.slf4j.LoggerFactory
 
 /**
  * Mastodon のお気に入りは `content` を持たない `Like` で届く。Misskey は押した
@@ -35,7 +34,6 @@ class ReactionHandler(
     private val stamps: StampStore,
     private val earlyUndoneLikes: EarlyUndoneLikes,
 ) : InboxActivityHandler {
-    private val logger = LoggerFactory.getLogger(ReactionHandler::class.java)
 
     override suspend fun handle(
         recipient: InboxRecipient,
@@ -115,7 +113,6 @@ class ReactionHandler(
         if (!recorded) {
             return InboxHandling.Ignored("お気に入りを記録しなかった。記録済みか投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
         }
-        logger.info("お気に入りを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
         return InboxHandling.Handled
     }
 
@@ -140,7 +137,6 @@ class ReactionHandler(
         if (!recorded) {
             return InboxHandling.Ignored("スタンプを記録しなかった。投稿が無い: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value}")
         }
-        logger.info("スタンプを記録した: ${recipient.logLabel} ← ${actor.actorId} 投稿=${notePublicId.value} 絵文字=$emoji")
         return InboxHandling.Handled
     }
 

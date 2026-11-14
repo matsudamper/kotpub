@@ -133,11 +133,6 @@ class InboxService(
         InboxSpan.set(InboxSpan.ACTIVITY_ID, activity.id)
         InboxSpan.set(InboxSpan.ACTIVITY_OBJECT, activity.target?.id)
 
-        logger.info(
-            "inbox で受信: 宛先=${recipient.logLabel} type=${activity.type} " +
-                "id=${activity.id} actor=$verifiedSignerActorId",
-        )
-
         // 対応するハンドラが無い type は何もしない。未対応のアクティビティに 5xx を返すと
         // 相手は同じものを送り直し続けることになる
         val handler = handlersByType[activity.type]
