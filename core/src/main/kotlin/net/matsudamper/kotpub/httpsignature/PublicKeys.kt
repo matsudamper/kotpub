@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.httpsignature
 
 import java.security.PublicKey
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 
 /**
  * `keyId` から検証用の公開鍵を探す。
@@ -50,7 +51,9 @@ sealed interface PublicKeyLookup {
      *
      * 消えたのかどうかは分からないので、消えた前提の扱いをしてはいけない
      */
-    data object Unavailable : PublicKeyLookup
+    data class Unavailable(
+        val failure: RemoteFetchFailure,
+    ) : PublicKeyLookup
 }
 
 /**

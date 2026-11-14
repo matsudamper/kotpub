@@ -64,7 +64,7 @@ class RecordedFallbackPublicKeys(
 
             PublicKeyLookup.Gone -> findRecorded(keyId) ?: PublicKeyLookup.Gone
 
-            PublicKeyLookup.Unavailable -> PublicKeyLookup.Unavailable
+            is PublicKeyLookup.Unavailable -> lookup
         }
 
     private fun findRecorded(keyId: String): PublicKeyLookup.Found? {

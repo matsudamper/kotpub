@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.actor
 
 import net.matsudamper.kotpub.emoji.CustomEmoji
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.httpsignature.PublicKeys
 
 /**
@@ -16,15 +17,15 @@ interface RemoteActors :
     PublicKeys,
     AutoCloseable {
     /**
-     * アクター文書から、配信と記録に要る部分を取得する。取得できなければ null。
-     * 戻り値の actorId は取得した文書の id。id が無い、HTTPS でない、取得先とホストが違う場合は null。
+     * アクター文書から、配信と記録に要る部分を取得する。
+     * 戻り値の actorId は取得した文書の id。id が無い、HTTPS でない、取得先とホストが違う場合は [RemoteActorLookup.Unavailable]。
      *
      * 1 回の呼び出しで全部返すのは、これらが同じ 1 つの文書から読めるため。
      * フォロワーとして記録するときに inbox と公開鍵を別々に取得すると、
      * 相手のサーバーへの GET が増えるうえ、間に鍵が入れ替わると
      * 記録した鍵と inbox が別のバージョンのものになる。
      */
-    suspend fun findActor(actorId: String): RemoteActor?
+    suspend fun findActor(actorId: String): RemoteActorLookup
 
     /**
      * 人が入力した URL から、それが指すアクターを [findActor] と同じ形で取得する。
@@ -34,7 +35,20 @@ interface RemoteActors :
      * 移った先の URL から [findActor] で取得し直す。
      * 移った先の文書は移った先のホストを基準に確かめるので、リダイレクトしたホストが他所のアクターを名乗ることはできない
      */
-    suspend fun findActorByUrl(url: String): RemoteActor? = findActor(url)
+    suspend fun findActorByUrl(url: String): RemoteActorLookup = findActor(url)
+}
+
+/**
+ * [RemoteActors.findActor] と [RemoteActors.findActorByUrl] の結果
+ */
+sealed interface RemoteActorLookup {
+    data class Found(val actor: RemoteActor) : RemoteActorLookup
+
+    /** 相手のサーバーが「そのアクターはもう無い」と答えた */
+    data object Gone : RemoteActorLookup
+
+    /** 取得できなかった、または配信と記録に要る部分が条件を満たさない */
+    data class Unavailable(val failure: RemoteFetchFailure) : RemoteActorLookup
 }
 
 /**

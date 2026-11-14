@@ -4,12 +4,14 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
 import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 
 /**
@@ -115,21 +117,21 @@ class HttpWebFingerLookupTest {
     fun `httpsでないアクターのidは返さない`() {
         val client = RespondingClient(body = webFingerBody(href = "http://example.com/users/alice"))
 
-        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<WebFingerResult.NotFound>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     @Test
     fun `成功でない応答では返さない`() {
         val client = RespondingClient(body = webFingerBody(href = "https://example.com/users/alice"), status = HttpStatusCodes.NOT_FOUND)
 
-        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<WebFingerResult.NotFound>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     @Test
     fun `相手が5xxを返したら今は引けないと返す`() {
         val client = RespondingClient(body = "", status = 503)
 
-        assertEquals(WebFingerResult.Unavailable, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<WebFingerResult.Unavailable>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     @Test
@@ -153,21 +155,21 @@ class HttpWebFingerLookupTest {
                 finalUrl = "http://example.com/.well-known/webfinger?resource=acct%3Aalice%40example.com",
             )
 
-        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<WebFingerResult.NotFound>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     @Test
     fun `届かなければ今は引けないと返す`() {
         val client = FailingClient()
 
-        assertEquals(WebFingerResult.Unavailable, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.RequestFailed>(assertIs<WebFingerResult.Unavailable>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     @Test
     fun `JSONとして読めなければ見つからないと返す`() {
         val client = RespondingClient(body = "<html></html>")
 
-        assertEquals(WebFingerResult.NotFound, runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") })
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<WebFingerResult.NotFound>(runBlocking { HttpWebFingerLookup(client).findActorId("@alice@example.com") }).failure)
     }
 
     private fun webFingerBody(href: String): String =

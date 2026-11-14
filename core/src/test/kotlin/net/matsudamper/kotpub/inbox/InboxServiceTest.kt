@@ -4,6 +4,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -53,13 +54,14 @@ class InboxServiceTest {
             verifiedSignerActorId: String,
             activity: InboxActivity,
             rawActivityJson: JsonObject,
-        ) {
+        ): InboxHandling {
             calls += Call(
                 recipient = recipient,
                 verifiedSignerActorId = verifiedSignerActorId,
                 activity = activity,
                 rawActivityJson = rawActivityJson,
             )
+            return InboxHandling.Handled
         }
 
         class Call(
@@ -155,7 +157,7 @@ class InboxServiceTest {
 
             val result = service(listOf(handler)).receive(recipient, signedRequest(follow()))
 
-            assertEquals(InboxResult.Accepted, result)
+            assertEquals(InboxResult.Accepted(InboxHandling.Handled), result)
 
             val call = handler.calls.single()
             assertEquals(recipient, call.recipient)
@@ -185,7 +187,7 @@ class InboxServiceTest {
             ).receive(recipient, signedRequest(follow()))
 
             // 4xx を返すと相手は諦めるまで送り直してくる
-            assertEquals(InboxResult.Accepted, result)
+            assertIs<InboxHandling.Ignored>(assertIs<InboxResult.Accepted>(result).handling)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
             assertTrue(domainBlocks.signedRequestSigners.isEmpty())
         }
@@ -206,7 +208,7 @@ class InboxServiceTest {
                 handlers = listOf(handler),
             ).receive(recipient, signedRequest(follow()))
 
-            assertEquals(InboxResult.TemporarilyUnavailable, result)
+            assertIs<InboxResult.TemporarilyUnavailable>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -226,7 +228,7 @@ class InboxServiceTest {
 
             val result = service(listOf(handler)).receive(recipient, signedRequest(follow()))
 
-            assertEquals(InboxResult.TemporarilyUnavailable, result)
+            assertIs<InboxResult.TemporarilyUnavailable>(result)
         }
 
     @Test
@@ -248,7 +250,7 @@ class InboxServiceTest {
             val result = service(listOf(handler)).receive(recipient, signedRequest(undo()))
 
             // 未対応のアクティビティに 5xx を返すと相手は同じものを送り直し続ける
-            assertEquals(InboxResult.Accepted, result)
+            assertIs<InboxHandling.Ignored>(assertIs<InboxResult.Accepted>(result).handling)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -261,7 +263,7 @@ class InboxServiceTest {
                 service(listOf(handler), remoteActors = TestRemoteActors())
                     .receive(recipient, signedRequest(follow()))
 
-            assertEquals(InboxResult.Unauthorized, result)
+            assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -274,7 +276,7 @@ class InboxServiceTest {
             val request = signedRequest(body = undo(), signedBody = follow())
             val result = service(listOf(handler)).receive(recipient, request)
 
-            assertEquals(InboxResult.Unauthorized, result)
+            assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -285,7 +287,7 @@ class InboxServiceTest {
 
             val result = service(listOf(handler)).receive(recipient, signedRequest("not json".toByteArray()))
 
-            assertEquals(InboxResult.BadRequest, result)
+            assertIs<InboxResult.BadRequest>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -298,7 +300,7 @@ class InboxServiceTest {
             val request = signedRequest(follow(actor = "https://remote.example/users/bob"))
             val result = service(listOf(handler)).receive(recipient, request)
 
-            assertEquals(InboxResult.Unauthorized, result)
+            assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -314,7 +316,7 @@ class InboxServiceTest {
             val result = service(listOf(handler)).receive(recipient, signedRequest(body))
 
             // actor が無い以上なりすましようが無いので、署名した相手のものとして扱う
-            assertEquals(InboxResult.Accepted, result)
+            assertEquals(InboxResult.Accepted(InboxHandling.Handled), result)
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertNull(call.activity.actorId)
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
@@ -330,7 +332,7 @@ class InboxServiceTest {
                     .receive(recipient, signedRequest(delete()))
 
             // 落とすと相手が送り直し続ける。検証は通っていないので掃除はしない
-            assertEquals(InboxResult.Accepted, result)
+            assertIs<InboxHandling.Ignored>(assertIs<InboxResult.Accepted>(result).handling)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
 
@@ -352,7 +354,7 @@ class InboxServiceTest {
                 service(listOf(handler), publicKeys = publicKeys)
                     .receive(recipient, signedRequest(delete()))
 
-            assertEquals(InboxResult.Accepted, result)
+            assertEquals(InboxResult.Accepted(InboxHandling.Handled), result)
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
         }
@@ -385,7 +387,7 @@ class InboxServiceTest {
                 service(listOf(handler), publicKeys = publicKeys)
                     .receive(recipient, signedRequest(delete()))
 
-            assertEquals(InboxResult.Accepted, result)
+            assertEquals(InboxResult.Accepted(InboxHandling.Handled), result)
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
         }

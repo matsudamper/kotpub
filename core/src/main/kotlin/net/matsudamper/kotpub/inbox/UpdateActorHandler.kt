@@ -7,7 +7,6 @@ import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.RemoteActorDocument
 import net.matsudamper.kotpub.follower.FollowerStore
 import net.matsudamper.kotpub.json.AppJson
-import org.slf4j.LoggerFactory
 
 /**
  * `Update` を受けたときの処理。フォロワーの表示名とアイコンを追従させる。
@@ -31,34 +30,30 @@ class UpdateActorHandler(
 ) : InboxActivityHandler {
     override val type: String = "Update"
 
-    private val logger = LoggerFactory.getLogger(UpdateActorHandler::class.java)
-
     override suspend fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val target = activity.target
         if (target?.id != verifiedSignerActorId) {
-            logger.info("Update の対象がアクター自身ではないので何もしない: object=${target?.id} 署名者=$verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Update の対象がアクター自身ではないので何もしない: object=${target?.id} 署名者=$verifiedSignerActorId")
         }
 
         // id だけで来る実装もある。中身が無ければ入れ替えるものが無い
         val embedded = (target as? LinkOrObject.Embedded)?.json
         if (embedded == null) {
-            logger.info("Update に中身が埋め込まれていないので何もしない: $verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Update に中身が埋め込まれていないので何もしない: $verifiedSignerActorId")
         }
 
         val document = runCatching { AppJson.decodeFromJsonElement(RemoteActorDocument.serializer(), embedded) }
             .getOrNull()
         if (document == null) {
-            logger.warn("Update のアクターを読めなかった: $verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Update のアクターを読めなかった: $verifiedSignerActorId")
         }
 
         followers.rememberProfile(actorUri = verifiedSignerActorId, profile = document.profile())
+        return InboxHandling.Handled
     }
 }

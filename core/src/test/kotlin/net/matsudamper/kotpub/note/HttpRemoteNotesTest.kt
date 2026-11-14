@@ -2,10 +2,12 @@ package net.matsudamper.kotpub.note
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteNotesTest {
@@ -44,21 +46,21 @@ class HttpRemoteNotesTest {
     @Test
     fun rejectsNoteClaimingAnotherIdOrAuthorOnAnotherHost() = runBlocking {
         documents[noteId] = note("https://remote.example/notes/2", "https://remote.example/users/alice")
-        assertEquals(RemoteNoteLookup.NotFound, notes.find(noteId))
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
 
         documents[noteId] = note(noteId, "https://other.example/users/alice")
-        assertEquals(RemoteNoteLookup.NotFound, notes.find(noteId))
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
     }
 
     @Test
     fun distinguishesTemporaryFailureFromMissingNote() = runBlocking {
-        assertEquals(RemoteNoteLookup.NotFound, notes.find(noteId))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
 
         statuses[noteId] = 503
-        assertEquals(RemoteNoteLookup.Unavailable, notes.find(noteId))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteNoteLookup.Unavailable>(notes.find(noteId)).failure)
 
         statuses[noteId] = 429
-        assertEquals(RemoteNoteLookup.Unavailable, notes.find(noteId))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteNoteLookup.Unavailable>(notes.find(noteId)).failure)
     }
 
     @Test
@@ -66,9 +68,9 @@ class HttpRemoteNotesTest {
         val otherUrl = "https://other.example/notes/1"
         redirects[noteId] = otherUrl
         documents[otherUrl] = note(noteId, "https://remote.example/users/alice")
-        assertEquals(RemoteNoteLookup.NotFound, notes.find(noteId))
+        assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
 
         documents["http://remote.example/notes/3"] = note("http://remote.example/notes/3", "http://remote.example/users/alice")
-        assertEquals(RemoteNoteLookup.NotFound, notes.find("http://remote.example/notes/3"))
+        assertIs<RemoteFetchFailure.NotHttps>(assertIs<RemoteNoteLookup.NotFound>(notes.find("http://remote.example/notes/3")).failure)
     }
 }

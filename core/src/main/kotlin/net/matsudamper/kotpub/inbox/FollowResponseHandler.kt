@@ -20,14 +20,20 @@ class FollowResponseHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
-        if (activity.actorId != verifiedSignerActorId) return
-        val target = activity.target ?: return
-        if (target is LinkOrObject.Embedded) {
-            val follow = runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), target.json) }.getOrNull() ?: return
-            if (follow.type != "Follow" || follow.target?.id != verifiedSignerActorId) return
+    ): InboxHandling {
+        if (activity.actorId != verifiedSignerActorId) {
+            return InboxHandling.Ignored("$type の actor が署名者と違う: actor=${activity.actorId} 署名者=$verifiedSignerActorId")
         }
-        val followId = target.id ?: return
+        val target = activity.target ?: return InboxHandling.Ignored("$type に object が無い: $verifiedSignerActorId")
+        if (target is LinkOrObject.Embedded) {
+            val follow = runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), target.json) }.getOrNull()
+                ?: return InboxHandling.Ignored("$type の object を読めない: $verifiedSignerActorId")
+            if (follow.type != "Follow" || follow.target?.id != verifiedSignerActorId) {
+                return InboxHandling.Ignored("$type の対象が署名者への Follow ではない: type=${follow.type} object=${follow.target?.id} 署名者=$verifiedSignerActorId")
+            }
+        }
+        val followId = target.id ?: return InboxHandling.Ignored("$type の対象の Follow に id が無い: $verifiedSignerActorId")
         if (type == "Accept") responses.accept(verifiedSignerActorId, followId) else responses.reject(verifiedSignerActorId, followId)
+        return InboxHandling.Handled
     }
 }

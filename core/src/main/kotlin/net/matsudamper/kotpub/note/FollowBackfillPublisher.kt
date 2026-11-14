@@ -51,15 +51,15 @@ class FollowBackfillPublisher(
         sender: LocalActor,
         inbox: String,
         publishedBefore: Instant,
-    ) {
+    ): BackfillResult {
         if (!running.tryAcquire()) {
             // 配れなくてもフォローは成立している。次の新着からは普通に届く
             logger.warn("過去の投稿を配る余裕が無いので諦めた: ${sender.urls.acct} → $inbox")
-            return
+            return BackfillResult.Busy
         }
 
         try {
-            deliver(sender = sender, inbox = inbox, publishedBefore = publishedBefore)
+            return deliver(sender = sender, inbox = inbox, publishedBefore = publishedBefore)
         } finally {
             running.release()
         }
@@ -69,7 +69,7 @@ class FollowBackfillPublisher(
         sender: LocalActor,
         inbox: String,
         publishedBefore: Instant,
-    ) {
+    ): BackfillResult.Attempted {
         // 上限で切ってから絞ると、成立後に作られた投稿の分だけ送る件数が減る。
         // 一覧の位置として渡して、絞ってから 5 件を取る。id は空にする。
         // 同じ時刻の投稿は id の降順に並ぶので、空の id より後ろには何も無い
@@ -78,9 +78,10 @@ class FollowBackfillPublisher(
             after = NotePosition(publishedAt = publishedBefore, publicId = PublicNoteId("")),
             limit = BACKFILL_LIMIT,
         )
-        if (recentNotes.isEmpty()) return
+        if (recentNotes.isEmpty()) return BackfillResult.Attempted(delivered = listOf(), failed = listOf())
 
-        var delivered = 0
+        val delivered = mutableListOf<PublicNoteId>()
+        val failed = mutableListOf<BackfillFailure>()
         recentNotes.reversed().forEach { note ->
             // 送っている間に利用側のアプリから消されることがある。消えた投稿を送ると、
             // 相手には `Delete` の後から `Create` が届いて消したものが戻る
@@ -92,17 +93,19 @@ class FollowBackfillPublisher(
             ).toByteArray()
 
             when (val result = delivery.deliver(inbox = inbox, sender = sender, body = body)) {
-                is DeliveryResult.Delivered -> delivered++
+                is DeliveryResult.Delivered -> delivered += note.publicId
 
                 is DeliveryResult.Failed -> {
                     // 再送はしない。届かなくてもフォロー自体は成立しているので、
                     // 次の新着からは普通に届く
                     logger.warn("過去の投稿を配れなかった: ${sender.urls.acct} → $inbox ${note.publicId} ${result.reason}")
+                    failed += BackfillFailure(notePublicId = note.publicId, result = result)
                 }
             }
         }
 
-        logger.info("フォローされたので過去の投稿を配った: ${sender.urls.acct} → $inbox 宛先=${recentNotes.size} 成功=$delivered")
+        logger.info("フォローされたので過去の投稿を配った: ${sender.urls.acct} → $inbox 宛先=${recentNotes.size} 成功=${delivered.size}")
+        return BackfillResult.Attempted(delivered = delivered, failed = failed)
     }
 
     private companion object {
@@ -122,3 +125,30 @@ class FollowBackfillPublisher(
         const val MAX_CONCURRENT_BACKFILLS: Int = 2
     }
 }
+
+/**
+ * [FollowBackfillPublisher.deliverRecentNotes] の結果。配れなくてもフォローは成立している
+ */
+sealed interface BackfillResult {
+    /** 同時に走る配信が上限に達していたので、配らなかった */
+    data object Busy : BackfillResult
+
+    /**
+     * 配った。送っている間に消された投稿は、どちらにも入らない
+     *
+     * @param delivered 届いた投稿。送った順
+     * @param failed 届かなかった投稿。再送はしない
+     */
+    data class Attempted(
+        val delivered: List<PublicNoteId>,
+        val failed: List<BackfillFailure>,
+    ) : BackfillResult
+}
+
+/**
+ * @param result 配信の結果。理由と、送り直せば届く見込みがあるかを持つ
+ */
+data class BackfillFailure(
+    val notePublicId: PublicNoteId,
+    val result: DeliveryResult.Failed,
+)

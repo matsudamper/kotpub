@@ -91,8 +91,8 @@ class HttpSignatureVerifier(
                 PublicKeyLookup.Gone ->
                     return HttpSignatureResult.Rejected("アクターが消えていて公開鍵を取得できない: ${signature.keyId}")
 
-                PublicKeyLookup.Unavailable ->
-                    return HttpSignatureResult.Rejected("公開鍵を取得できない: ${signature.keyId}")
+                is PublicKeyLookup.Unavailable ->
+                    return HttpSignatureResult.Rejected("公開鍵を取得できない: ${signature.keyId} 理由=${lookup.failure}")
             }
 
         if (matches(signature, signingString, key)) {

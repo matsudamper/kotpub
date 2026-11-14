@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.note
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.FakeNoteStore
@@ -56,20 +57,19 @@ class FollowBackfillPublisherTest {
     private suspend fun deliver(
         notes: FakeNoteStore,
         delivery: TestDelivery,
-    ) {
-        publisher(notes = notes, delivery = delivery).deliverRecentNotes(
-            sender = sender,
-            inbox = TestRemoteActor.INBOX,
-            publishedBefore = followAcceptedAt,
-        )
-    }
+    ): BackfillResult = publisher(notes = notes, delivery = delivery).deliverRecentNotes(
+        sender = sender,
+        inbox = TestRemoteActor.INBOX,
+        publishedBefore = followAcceptedAt,
+    )
 
     @Test
     fun `フォローより前の投稿を古い順に配る`() = runBlocking {
         val delivery = TestDelivery()
 
-        deliver(notes = notesOf(3), delivery = delivery)
+        val result = deliver(notes = notesOf(3), delivery = delivery)
 
+        assertEquals(3, assertIs<BackfillResult.Attempted>(result).delivered.size)
         assertEquals(listOf(TestRemoteActor.INBOX), delivery.delivered.map { it.inbox }.distinct())
         assertEquals(listOf("<p>0</p>", "<p>1</p>", "<p>2</p>"), deliveredCreates(delivery).map { it.target.content })
     }

@@ -18,16 +18,16 @@ class UndoBoostHandler(
     private val logger = LoggerFactory.getLogger(UndoBoostHandler::class.java)
 
     /**
-     * @return ブーストの取り消しだったら true。id だけの `object` は、記録にあって消せたときだけ true
+     * @return ブーストの取り消しでなければ null。id だけの `object` は、記録にあって消せたときだけ null 以外
      */
     fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         activity: InboxActivity,
-    ): Boolean {
+    ): InboxHandling? {
         return when (val undoObject = activity.target) {
-            null -> false
-            is LinkOrObject.Link -> remove(recipient, verifiedSignerActorId, undoObject.href)
+            null -> null
+            is LinkOrObject.Link -> InboxHandling.Handled.takeIf { remove(recipient, verifiedSignerActorId, undoObject.href) }
             is LinkOrObject.Embedded -> removeEmbedded(recipient, verifiedSignerActorId, undoObject)
         }
     }
@@ -36,16 +36,15 @@ class UndoBoostHandler(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         undoObject: LinkOrObject.Embedded,
-    ): Boolean {
+    ): InboxHandling? {
         val undoneActivity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), undoObject.json) }.getOrNull()
-        if (undoneActivity?.type != AnnounceHandler.TYPE) return false
+        if (undoneActivity?.type != AnnounceHandler.TYPE) return null
 
         val activityUri = undoneActivity.id
         if (activityUri == null) {
-            logger.info("取り消す Announce に id が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("undo_boost.no_id")
-            return true
+            return InboxHandling.Ignored("取り消す Announce に id が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
         if (!remove(recipient, verifiedSignerActorId, activityUri)) {
             // 配送の順番は保証されないので、後から届く同じ id の Announce に備える
@@ -54,10 +53,10 @@ class UndoBoostHandler(
                 activityUri = activityUri,
                 expiresAt = Instant.now() + EarlyUndoneLikes.TTL.toJavaDuration(),
             )
-            logger.info("取り消す Announce が記録に無い: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("undo_boost.not_recorded")
+            return InboxHandling.Ignored("取り消す Announce が記録に無い: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
         }
-        return true
+        return InboxHandling.Handled
     }
 
     private fun remove(

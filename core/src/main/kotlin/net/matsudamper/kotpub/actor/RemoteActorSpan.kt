@@ -5,7 +5,7 @@ import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
 
 /**
- * 取得できなかった理由は [RemoteActors] の結果には残らず、署名の検証失敗や宛先なしとしか見えない。
+ * 取得できなかった理由は [RemoteActors] の結果にも載るが、キャッシュを使ったか、取得し直しの間隔で止めたかは載らない。
  * どこで落ちたかを取得の span に載せる。
  */
 internal object RemoteActorSpan {

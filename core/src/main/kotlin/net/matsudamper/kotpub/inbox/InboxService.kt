@@ -24,9 +24,8 @@ import org.slf4j.LoggerFactory
  * 信用してよいか」の判断と振り分けで、HTTP の status に直すのは [InboxEndpoint] の仕事。
  * 分けておくと、サーバーを立てずに判断だけを確かめられる。
  *
- * 落とした理由は結果に載せずログにだけ出す。相手にどこで落ちたかを教えると、
- * 通る形を総当たりで探す助けになるため。ルート側が理由を知らない形にしておけば、
- * うっかり応答に混ぜることもない。
+ * 落とした理由は結果に載せて呼び出し側へ返す。ただし相手のサーバーへの応答には混ぜないこと。
+ * 相手にどこで落ちたかを教えると、通る形を総当たりで探す助けになる。
  */
 class InboxService(
     private val verifier: HttpSignatureVerifier,
@@ -57,10 +56,10 @@ class InboxService(
         InboxSpan.set(
             InboxSpan.RESULT,
             when (result) {
-                InboxResult.Accepted -> "accepted"
-                InboxResult.BadRequest -> "bad_request"
-                InboxResult.Unauthorized -> "unauthorized"
-                InboxResult.TemporarilyUnavailable -> "temporarily_unavailable"
+                is InboxResult.Accepted -> "accepted"
+                is InboxResult.BadRequest -> "bad_request"
+                is InboxResult.Unauthorized -> "unauthorized"
+                is InboxResult.TemporarilyUnavailable -> "temporarily_unavailable"
             },
         )
         return result
@@ -81,13 +80,13 @@ class InboxService(
                 // 止めている相手のものを通さず、捨てもしない。送り直してもらい、判定できるようになってから受ける
                 InboxSpan.failed(failure)
                 logger.warn("受信を止めているドメインかを判定できなかったので送り直してもらう: $claimedKeyId", failure)
-                return InboxResult.TemporarilyUnavailable
+                return InboxResult.TemporarilyUnavailable(failure)
             }
         }
         if (blocked) {
             InboxSpan.outcome("domain_blocked")
             logger.info("${recipient.logLabel} に受信を止めているドメインから届いたので捨てる: keyId=$claimedKeyId")
-            return InboxResult.Accepted
+            return InboxResult.Accepted(InboxHandling.Ignored("受信を止めているドメインから届いた: keyId=$claimedKeyId"))
         }
 
         val verifiedSignerActorId =
@@ -101,11 +100,11 @@ class InboxService(
                     // 記録の無い相手は通しようが無い
                     if (isSelfDelete(request.body)) {
                         logger.info("${recipient.logLabel} に検証できない Delete が届いたので受け流す。理由:${verification.reason}")
-                        return InboxResult.Accepted
+                        return InboxResult.Accepted(InboxHandling.Ignored("検証できない Delete を受け流した。理由:${verification.reason}"))
                     }
 
                     logger.warn("inbox の署名を拒否した: ${recipient.logLabel} 理由:${verification.reason}")
-                    return InboxResult.Unauthorized
+                    return InboxResult.Unauthorized(verification.reason)
                 }
 
                 is HttpSignatureResult.Verified -> {
@@ -118,16 +117,16 @@ class InboxService(
         val rawActivityJson =
             runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) }.getOrElse { failure ->
                 logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
-                return InboxResult.BadRequest
+                return InboxResult.BadRequest("ボディを JSON として読めない: 例外=${failure::class.qualifiedName}")
             }
         if (rawActivityJson !is JsonObject) {
             logger.warn("inbox のボディが JSON のオブジェクトではない: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
-            return InboxResult.BadRequest
+            return InboxResult.BadRequest("ボディが JSON のオブジェクトではない")
         }
         val activity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson) }.getOrElse { failure ->
                 logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
-                return InboxResult.BadRequest
+                return InboxResult.BadRequest("ボディをアクティビティとして読めない: 例外=${failure::class.qualifiedName}")
             }
 
         // 署名した鍵の持ち主と、アクティビティの実行者が別なら、なりすまし。
@@ -135,7 +134,7 @@ class InboxService(
         val actorId = activity.actorId
         if (actorId != null && actorId != verifiedSignerActorId) {
             logger.warn("inbox の actor が署名者と違う: actor=$actorId 署名者=$verifiedSignerActorId")
-            return InboxResult.Unauthorized
+            return InboxResult.Unauthorized("actor が署名者と違う: actor=$actorId 署名者=$verifiedSignerActorId")
         }
 
         InboxSpan.set(InboxSpan.ACTIVITY_TYPE, activity.type)
@@ -150,9 +149,12 @@ class InboxService(
         // 対応するハンドラが無い type は何もしない。未対応のアクティビティに 5xx を返すと
         // 相手は同じものを送り直し続けることになる
         val handler = handlersByType[activity.type]
-        if (handler == null) InboxSpan.outcome("no_handler")
+        if (handler == null) {
+            InboxSpan.outcome("no_handler")
+            return InboxResult.Accepted(InboxHandling.Ignored("対応していない type: ${activity.type}"))
+        }
         val handled = runCatching {
-            handler?.handle(
+            handler.handle(
                 recipient = recipient,
                 verifiedSignerActorId = verifiedSignerActorId,
                 activity = activity,
@@ -171,10 +173,14 @@ class InboxService(
                 "inbox の処理に失敗したので送り直してもらう: ${recipient.logLabel} type=${activity.type} actor=$verifiedSignerActorId",
                 failure,
             )
-            return InboxResult.TemporarilyUnavailable
+            return InboxResult.TemporarilyUnavailable(failure)
         }
 
-        return InboxResult.Accepted
+        val handling = handled.getOrThrow()
+        if (handling is InboxHandling.Ignored) {
+            logger.info("inbox で受け付けなかった: ${recipient.logLabel} type=${activity.type} 理由:${handling.reason}")
+        }
+        return InboxResult.Accepted(handling)
     }
 
     /**
@@ -303,19 +309,27 @@ class InboxService(
  *
  * 中身の処理に失敗しても [Accepted] を返す。相手のサーバーは 5xx を見ると
  * 再送を繰り返すので、こちらの都合で溜め込ませない。
+ *
+ * 理由は相手のサーバーへの応答に混ぜないこと。どこで落ちたかを教えると、通る形を総当たりで探す助けになる
  */
 sealed interface InboxResult {
     /** 署名が無い、通らない、`actor` と署名者が違う */
-    data object Unauthorized : InboxResult
+    data class Unauthorized(val reason: String) : InboxResult
 
-    /** 署名は通ったが、ボディが JSON として読めない */
-    data object BadRequest : InboxResult
+    /** 署名は通ったが、ボディをアクティビティとして読めない */
+    data class BadRequest(val reason: String) : InboxResult
 
     /**
      * 署名が通った。受け付けられない中身や、受信を止めているドメインから届いたものも、捨ててこれを返す
+     *
+     * @param handling 処理したか、何もしなかったならその理由
      */
-    data object Accepted : InboxResult
+    data class Accepted(val handling: InboxHandling) : InboxResult
 
-    /** 記録先に書けないなど、こちらの都合で処理できなかった。相手に送り直してもらう */
-    data object TemporarilyUnavailable : InboxResult
+    /**
+     * 記録先に書けないなど、こちらの都合で処理できなかった。相手に送り直してもらう
+     *
+     * @param cause 処理できなかった原因
+     */
+    data class TemporarilyUnavailable(val cause: Throwable) : InboxResult
 }

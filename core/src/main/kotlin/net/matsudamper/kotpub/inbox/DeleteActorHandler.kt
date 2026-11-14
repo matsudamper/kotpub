@@ -39,16 +39,14 @@ class DeleteActorHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val deleteObjectId = activity.target?.id
         if (deleteObjectId == null) {
-            logger.warn("Delete に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Delete に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         if (deleteObjectId != verifiedSignerActorId) {
-            logger.info("Delete の対象がアクター自身ではないので何もしない: object=$deleteObjectId 署名者=$verifiedSignerActorId")
-            return
+            return InboxHandling.Ignored("Delete の対象がアクター自身ではないので何もしない: object=$deleteObjectId 署名者=$verifiedSignerActorId")
         }
 
         // お気に入りとスタンプとブーストを先に消す。フォローの解除は相手のアクターの記録ごと消すので、
@@ -66,5 +64,6 @@ class DeleteActorHandler(
             "アクターが削除されたので記録から外した: $deleteObjectId " +
                 "解除したフォロー=$removed 件 取り消したお気に入り=$removedFavourites 件 取り消したスタンプ=$removedStamps 件 取り消したブースト=$removedBoosts 件",
         )
+        return InboxHandling.Handled
     }
 }

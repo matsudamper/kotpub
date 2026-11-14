@@ -17,14 +17,19 @@ class CreateNoteHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
-        val json = (activity.target as? LinkOrObject.Embedded)?.json ?: return
-        val note = ReceivedNoteJson.read(json) ?: return
-        val actor = activity.actorId ?: return
-        if (actor != verifiedSignerActorId || note.attributedTo != actor) return
-        val actorUrl = HttpUrl.parse(actor) ?: return
-        val noteUrl = HttpUrl.parse(note.id) ?: return
-        if (!actorUrl.isSameHost(noteUrl)) return
+    ): InboxHandling {
+        val json = (activity.target as? LinkOrObject.Embedded)?.json
+            ?: return InboxHandling.Ignored("Create に投稿が埋め込まれていない: $verifiedSignerActorId")
+        val note = ReceivedNoteJson.read(json)
+            ?: return InboxHandling.Ignored("Create の object を投稿として読めない: $verifiedSignerActorId")
+        val actor = activity.actorId ?: return InboxHandling.Ignored("Create に actor が無い: $verifiedSignerActorId")
+        if (actor != verifiedSignerActorId || note.attributedTo != actor) {
+            return InboxHandling.Ignored("Create の actor か投稿者が署名者と違う: actor=$actor 投稿者=${note.attributedTo} 署名者=$verifiedSignerActorId")
+        }
+        val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Create の actor を URL として読めない: $actor")
+        val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
+        if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
         notes.save(note)
+        return InboxHandling.Handled
     }
 }

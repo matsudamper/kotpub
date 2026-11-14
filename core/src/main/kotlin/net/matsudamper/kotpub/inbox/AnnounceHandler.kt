@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.id
+import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.boost.BoostStore
 import net.matsudamper.kotpub.boost.BoostStore.ReceivedBoost
@@ -44,48 +45,42 @@ class AnnounceHandler(
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         if (activity.actorId != verifiedSignerActorId) {
-            logger.info("Announce の actor が署名者と違うので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("announce.actor_mismatch")
-            return
+            return InboxHandling.Ignored("Announce の actor が署名者と違うので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         val activityUri = activity.id
         val actorUrl = HttpUrl.parseHttps(verifiedSignerActorId)
         val activityUrl = activityUri?.let { HttpUrl.parseHttps(it) }
         if (activityUri == null || actorUrl == null || activityUrl == null || !activityUrl.isSameHost(actorUrl)) {
-            logger.info("Announce の id が無いかブーストした相手と別のホストなので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("announce.invalid_id")
-            return
+            return InboxHandling.Ignored("Announce の id が無いかブーストした相手と別のホストなので何もしない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
         }
 
         if (earlyUndone.isRemembered(actorUri = verifiedSignerActorId, activityUri = activityUri, now = Instant.now())) {
-            logger.info("先に取り消しが届いた Announce なので記録しない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
             InboxSpan.outcome("announce.undone_first")
-            return
+            return InboxHandling.Ignored("先に取り消しが届いた Announce なので記録しない: ${recipient.logLabel} ← $verifiedSignerActorId id=$activityUri")
         }
 
         val targetUrl = activity.target?.id
         if (targetUrl == null) {
-            logger.warn("Announce に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
             InboxSpan.outcome("announce.no_object")
-            return
+            return InboxHandling.Ignored("Announce に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
         val notePublicId = NoteUrls.publicIdOf(domain = domain, url = targetUrl)
         if (notePublicId != null) {
-            addLocalBoost(recipient, verifiedSignerActorId, activityUri, notePublicId)
-            return
+            return addLocalBoost(recipient, verifiedSignerActorId, activityUri, notePublicId)
         }
 
         if (HttpUrl.parse(targetUrl)?.host.equals(domain, ignoreCase = true)) {
-            logger.info("Announce の対象がこちらの投稿の URL ではないので何もしない: object=$targetUrl")
             InboxSpan.outcome("announce.not_local_note")
-            return
+            return InboxHandling.Ignored("Announce の対象がこちらの投稿の URL ではないので何もしない: object=$targetUrl")
         }
 
-        saveRemoteBoost(recipient, verifiedSignerActorId, activityUri, targetUrl, rawActivityJson)
+        return saveRemoteBoost(recipient, verifiedSignerActorId, activityUri, targetUrl, rawActivityJson)
     }
 
     private suspend fun addLocalBoost(
@@ -93,14 +88,16 @@ class AnnounceHandler(
         actorUri: String,
         activityUri: String,
         notePublicId: PublicNoteId,
-    ) {
+    ): InboxHandling {
         // 相手の公開鍵を記録できないと、相手が消えた後の `Delete` を検証できず、
         // 居ない相手のブーストが残り続ける
-        val actor = remoteActors.findActor(actorUri)
-        if (actor == null) {
-            logger.warn("Announce の相手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $actorUri")
-            InboxSpan.outcome("announce.actor_unavailable")
-            return
+        val actor = when (val lookup = remoteActors.findActor(actorUri)) {
+            is RemoteActorLookup.Found -> lookup.actor
+
+            RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                InboxSpan.outcome("announce.actor_unavailable")
+                return InboxHandling.Ignored("Announce の相手のアクター文書を取得できないので受け付けない: ${recipient.logLabel} ← $actorUri 理由=$lookup")
+            }
         }
 
         val recorded = boosts.add(
@@ -113,6 +110,7 @@ class AnnounceHandler(
         )
         InboxSpan.outcome(if (recorded) "announce.local_recorded" else "announce.local_not_recorded")
         logger.info("こちらの投稿のブーストを${if (recorded) "記録した" else "記録しなかった"}: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
+        return InboxHandling.Handled
     }
 
     private suspend fun saveRemoteBoost(
@@ -121,28 +119,26 @@ class AnnounceHandler(
         activityUri: String,
         targetUrl: String,
         rawActivityJson: JsonObject,
-    ) {
+    ): InboxHandling {
         val note = when (val lookup = remoteNotes.find(targetUrl)) {
             is RemoteNoteLookup.Found -> lookup.note
 
-            RemoteNoteLookup.NotFound -> {
-                logger.info("ブーストされた投稿が無いか読めないので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
+            is RemoteNoteLookup.NotFound -> {
                 InboxSpan.outcome("announce.note_not_found")
-                return
+                return InboxHandling.Ignored("ブーストされた投稿が無いか読めないので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl 理由=${lookup.failure}")
             }
 
             // 捨てると相手は送り直さないので、投げて inbox から送り直してもらう
-            RemoteNoteLookup.Unavailable -> {
+            is RemoteNoteLookup.Unavailable -> {
                 InboxSpan.outcome("announce.note_unavailable")
-                throw IllegalStateException("ブーストされた投稿を今は取得できない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
+                throw IllegalStateException("ブーストされた投稿を今は取得できない: ${recipient.logLabel} ← $actorUri object=$targetUrl 理由=${lookup.failure}")
             }
         }
 
         // 取得できる時点で公開されているはずだが、宛先を限った投稿を名乗る文書は広めない
         if (note.visibility != NoteVisibility.Public && note.visibility != NoteVisibility.Unlisted) {
-            logger.info("公開されていない投稿のブーストなので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
             InboxSpan.outcome("announce.note_not_public")
-            return
+            return InboxHandling.Ignored("公開されていない投稿のブーストなので何もしない: ${recipient.logLabel} ← $actorUri object=$targetUrl")
         }
 
         val to = rawActivityJson["to"].strings()
@@ -161,6 +157,7 @@ class AnnounceHandler(
             ),
         )
         InboxSpan.outcome("announce.remote_passed")
+        return InboxHandling.Handled
     }
 
     companion object {

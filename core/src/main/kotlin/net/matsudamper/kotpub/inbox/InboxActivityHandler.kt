@@ -21,7 +21,7 @@ interface InboxActivityHandler {
     /**
      * 中身の処理をする。
      *
-     * 受け付けられない中身なら、理由を残して投げずに戻る。inbox は 202 を返して捨てる。
+     * 受け付けられない中身なら、投げずに [InboxHandling.Ignored] で理由を返す。inbox は 202 を返して捨てる。
      * 記録先に書けないなど、こちらの都合で処理できなかったときは投げる。inbox は 503 を返し、
      * 相手に送り直してもらう。送り直されても同じ結果になる失敗で投げると、相手が諦めるまで再送が続く。
      */
@@ -30,5 +30,20 @@ interface InboxActivityHandler {
         verifiedSignerActorId: String,
         activity: InboxActivity,
         rawActivityJson: JsonObject,
-    )
+    ): InboxHandling
+}
+
+/**
+ * [InboxActivityHandler.handle] の結果。どちらでも inbox は 202 を返す
+ */
+sealed interface InboxHandling {
+    /** 記録や配信の登録など、中身に応じた処理をした */
+    data object Handled : InboxHandling
+
+    /**
+     * 受け付けられない中身か、こちらに関係の無い中身なので、何もしなかった
+     *
+     * @param reason 何もしなかった理由
+     */
+    data class Ignored(val reason: String) : InboxHandling
 }

@@ -3,13 +3,12 @@ package net.matsudamper.kotpub.note
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteOutboxTest {
@@ -82,16 +81,16 @@ class HttpRemoteOutboxTest {
     @Test
     fun doesNotFollowOutboxOnAnotherHost() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"https://other.example/outbox"}"""
-        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent(actorId, 20))
+        assertIs<RemoteFetchFailure.DisallowedHost>(assertIs<RemoteOutboxResult.Unavailable>(outbox.recent(actorId, 20)).failure)
         assertEquals(listOf(actorId), requests)
     }
 
     @Test
     fun distinguishesUnreachableCollectionFromEmptyOne() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
-        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent(actorId, 20))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteOutboxResult.Unavailable>(outbox.recent(actorId, 20)).failure)
 
-        assertEquals(RemoteOutboxResult.Unavailable, outbox.recent("https://remote.example/users/nobody", 20))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteOutboxResult.Unavailable>(outbox.recent("https://remote.example/users/nobody", 20)).failure)
 
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[]}"""
         assertEquals(RemoteOutboxResult.Found(listOf()), outbox.recent(actorId, 20))
@@ -222,8 +221,20 @@ class HttpRemoteOutboxTest {
         val boosts = (1..300).joinToString(",") { """{"type":"Announce","object":${note("boost$it", actorId, true)}}""" }
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("newest", actorId, true)},$boosts,${note("beyond", actorId, true)}],"next":"$outboxUrl?page=2"}"""
-        assertEquals(listOf("$actorId/newest"), outbox.recent(actorId, 20).notes().map { it.id })
+        val result = assertIs<RemoteOutboxResult.Found>(outbox.recent(actorId, 20))
+        assertEquals(listOf("$actorId/newest"), result.notes.map { it.id })
+        assertEquals(RemoteOutboxIncomplete.ReadLimitReached(RemoteOutboxCursor(outboxUrl, 300)), result.incomplete)
         assertEquals(listOf(actorId, outboxUrl), requests)
+    }
+
+    @Test
+    fun recentReturnsNotesReadBeforeNextPageBecameUnavailable() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("newest", actorId, true)}],"next":"$outboxUrl?page=2"}"""
+        val result = assertIs<RemoteOutboxResult.Found>(outbox.recent(actorId, 20))
+        assertEquals(listOf("$actorId/newest"), result.notes.map { it.id })
+        val incomplete = assertIs<RemoteOutboxIncomplete.PageUnavailable>(result.incomplete)
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(incomplete.failure)
     }
 
     @Test
@@ -239,14 +250,14 @@ class HttpRemoteOutboxTest {
     @Test
     fun recentPageDoesNotReadPageOnAnotherHost() = runBlocking {
         documents["https://other.example/outbox?page=2"] = """{"orderedItems":[${note("other", actorId, true)}]}"""
-        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, RemoteOutboxCursor("https://other.example/outbox?page=2", 0)))
+        assertIs<RemoteFetchFailure.DisallowedHost>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, RemoteOutboxCursor("https://other.example/outbox?page=2", 0))).failure)
         assertEquals(listOf(), requests)
     }
 
     @Test
     fun recentPageIsUnavailableWhenNextPageCannotBeRead() = runBlocking {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
-        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0)))
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))).failure)
     }
 
     @Test
@@ -255,7 +266,7 @@ class HttpRemoteOutboxTest {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","featured":"$featuredUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("recent", actorId, true)}]}"""
         documents[featuredUrl] = """{"id":"$featuredUrl","orderedItems":[${note("pinned", actorId, true)}]}"""
-        val actor = assertNotNull(outbox.collectionsOf(actorId))
+        val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
 
         val page = assertIs<RemoteOutboxPageResult.Found>(outbox.recentPage(actor, null)).page
         val featured = outbox.featured(actor, 20).notes()
@@ -266,16 +277,16 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
-    fun collectionsOfIsNullWhenActorIdDiffers() = runBlocking {
+    fun collectionsOfIsUnavailableWhenActorIdDiffers() = runBlocking {
         documents[actorId] = """{"id":"https://remote.example/users/mallory","outbox":"$outboxUrl"}"""
-        assertNull(outbox.collectionsOf(actorId))
-        assertEquals(RemoteOutboxPageResult.Unavailable, outbox.recentPage(actorId, null))
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf(actorId)).failure)
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, null)).failure)
     }
 
     @Test
-    fun collectionsOfIsNullWhenActorCannotBeRead() = runBlocking {
-        assertNull(outbox.collectionsOf(actorId))
-        assertNull(outbox.collectionsOf("http://remote.example/users/alice"))
+    fun collectionsOfIsUnavailableWhenActorCannotBeRead() = runBlocking {
+        assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf(actorId)).failure)
+        assertIs<RemoteFetchFailure.NotHttps>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf("http://remote.example/users/alice")).failure)
         assertEquals(listOf(actorId), requests)
     }
 
@@ -289,6 +300,6 @@ class HttpRemoteOutboxTest {
     private fun RemoteOutboxResult.notes(): List<RemoteOutboxNote> =
         when (this) {
             is RemoteOutboxResult.Found -> notes
-            RemoteOutboxResult.Unavailable -> error("取得できなかった")
+            is RemoteOutboxResult.Unavailable -> error("取得できなかった: $failure")
         }
 }
