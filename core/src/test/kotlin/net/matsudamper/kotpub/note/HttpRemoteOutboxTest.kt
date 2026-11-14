@@ -52,6 +52,52 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun likedReadsObjectIdsFromStringsAndEmbeddedLikes() = runBlocking {
+        val likedUrl = "$actorId/liked"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","liked":"$likedUrl"}"""
+        documents[likedUrl] = """{"id":"$likedUrl","first":"$likedUrl?page=1"}"""
+        documents["$likedUrl?page=1"] = """{"id":"$likedUrl?page=1","orderedItems":[
+            "https://other.example/notes/1",
+            {"type":"Like","object":"https://other.example/notes/2"},
+            {"type":"Note","id":"https://other.example/notes/3"},
+            "http://other.example/notes/4"
+        ],"next":"$likedUrl?page=2"}"""
+        documents["$likedUrl?page=2"] = """{"id":"$likedUrl?page=2","orderedItems":["https://other.example/notes/5"]}"""
+
+        val page = assertIs<RemoteLikedPageResult.Found>(outbox.likedPage(actorId, null, 20)).page
+
+        assertEquals(
+            listOf("https://other.example/notes/1", "https://other.example/notes/2", "https://other.example/notes/3", "https://other.example/notes/5"),
+            page.objectUris,
+        )
+        assertEquals(null, page.next)
+    }
+
+    @Test
+    fun likedStopsAtLimitAndContinuesFromThere() = runBlocking {
+        val likedUrl = "$actorId/liked"
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","liked":"$likedUrl"}"""
+        documents[likedUrl] = """{"id":"$likedUrl","orderedItems":["https://other.example/notes/1","https://other.example/notes/2","https://other.example/notes/3"]}"""
+
+        val first = assertIs<RemoteLikedPageResult.Found>(outbox.likedPage(actorId, null, 2)).page
+        val next = assertIs<RemoteLikedPageResult.Found>(outbox.likedPage(actorId, first.next, 2)).page
+
+        assertEquals(listOf("https://other.example/notes/1", "https://other.example/notes/2"), first.objectUris)
+        assertEquals(listOf("https://other.example/notes/3"), next.objectUris)
+        assertEquals(null, next.next)
+    }
+
+    @Test
+    fun likedIsAbsentWhenActorHasNoLikedCollection() = runBlocking {
+        documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+        val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
+
+        assertEquals(false, actor.likedAvailable)
+        assertEquals(RemoteLikedPageResult.Absent, outbox.likedPage(actor, null, 20))
+        assertEquals(listOf(actorId), requests)
+    }
+
+    @Test
     fun followsFirstPageAndOnlyReturnsPublicNotesFromRequestedActor() = runBlocking {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","first":"$outboxUrl?page=1"}"""

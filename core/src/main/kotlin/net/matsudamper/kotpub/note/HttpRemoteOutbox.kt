@@ -39,7 +39,7 @@ class HttpRemoteOutbox(
             return RemoteActorCollectionsLookup.Unavailable(RemoteFetchFailure.InvalidDocument(actorId, "アクターの id が取得先と違う: ${actor.text("id")}"))
         }
         return RemoteActorCollectionsLookup.Found(
-            RemoteActorCollections(actorId = actorId, actorUrl = actorUrl, outbox = actor["outbox"], featured = actor["featured"]),
+            RemoteActorCollections(actorId = actorId, actorUrl = actorUrl, outbox = actor["outbox"], featured = actor["featured"], liked = actor["liked"]),
         )
     }
 
@@ -110,6 +110,101 @@ class HttpRemoteOutbox(
             is FirstPage.Unavailable -> return RemoteOutboxPageResult.Unavailable(first.failure)
         }
         return readPage(actorId = actor.actorId, actorUrl = actor.actorUrl, page = page, itemOffset = 0)
+    }
+
+    /**
+     * 相手がいいねした投稿の id を、相手が並べた順に [limit] 件まで読む。投稿そのものは取りに行かない。
+     * 続きは [RemoteLikedPage.next] を [from] に渡して読む。項目が `Like` なら、その `object` を投稿の id とする
+     *
+     * @param from 読み始める位置。null なら最初のページの先頭
+     * @return アクターが `liked` を出していなければ [RemoteLikedPageResult.Absent]
+     */
+    suspend fun likedPage(actor: RemoteActorCollections, from: RemoteOutboxCursor?, limit: Int): RemoteLikedPageResult {
+        require(limit in 1..MAX_ITEMS_PER_CALL)
+        if (actor.liked == null) return RemoteLikedPageResult.Absent
+        val (page, itemOffset) = if (from == null) {
+            when (val first = firstPage(actor = actor, collectionRef = actor.liked)) {
+                is FirstPage.Found -> first.page to 0
+                FirstPage.Empty -> return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = listOf(), next = null))
+                is FirstPage.Unavailable -> return RemoteLikedPageResult.Unavailable(first.failure)
+            }
+        } else {
+            when (val fetched = fetch(from.pageId, actor.actorUrl)) {
+                is DocumentFetch.Found -> fetched.document to from.itemOffset
+                is DocumentFetch.Failed -> return RemoteLikedPageResult.Unavailable(fetched.failure)
+            }
+        }
+        return readLikedPage(actor = actor, page = page, itemOffset = itemOffset, limit = limit, remainingPageFetches = MAX_PAGES - 1, visitedPageIds = setOf(), collected = listOf())
+    }
+
+    /**
+     * [likedPage] を、アクター文書を取るところから読む
+     */
+    suspend fun likedPage(actorId: String, from: RemoteOutboxCursor?, limit: Int): RemoteLikedPageResult =
+        when (val lookup = collectionsOf(actorId)) {
+            is RemoteActorCollectionsLookup.Found -> likedPage(lookup.collections, from, limit)
+            is RemoteActorCollectionsLookup.Unavailable -> RemoteLikedPageResult.Unavailable(lookup.failure)
+        }
+
+    private tailrec suspend fun readLikedPage(
+        actor: RemoteActorCollections,
+        page: JsonObject,
+        itemOffset: Int,
+        limit: Int,
+        remainingPageFetches: Int,
+        visitedPageIds: Set<String>,
+        collected: List<String>,
+    ): RemoteLikedPageResult {
+        val pageId = page.text("id")
+        val items = page.items().orEmpty()
+        // id の無いページは後から指せないので、件数によらず読み切る
+        val readableItems = if (pageId == null) items.drop(itemOffset) else items.drop(itemOffset).take(limit - collected.size)
+        val objectUris = (collected + readableItems.mapNotNull { likedObjectUri(it) }).distinct()
+        val nextItemOffset = itemOffset + readableItems.size
+        if (pageId != null && nextItemOffset < items.size) {
+            return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset)))
+        }
+        val visited = visitedPageIds + listOfNotNull(pageId)
+        val nextPageRef = page["next"]
+        val nextPageId = when (nextPageRef) {
+            is JsonPrimitive -> nextPageRef.takeIf { it.isString }?.content
+            is JsonObject -> nextPageRef.text("id")
+            else -> null
+        }?.takeIf { it !in visited }
+        if (nextPageId == null) return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = null))
+        val nextPage = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0)
+        if (objectUris.size >= limit || remainingPageFetches <= 0) {
+            return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = nextPage))
+        }
+        val nextPageDocument = when (val fetched = reference(nextPageRef, actor.actorId, actor.actorUrl)) {
+            is DocumentFetch.Found -> fetched.document
+
+            // 先頭から抜け無く読めた分は返し、読めなかったページから続けられるようにする
+            is DocumentFetch.Failed -> return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = nextPage))
+        }
+        return readLikedPage(actor, nextPageDocument, 0, limit, remainingPageFetches - 1, visited, objectUris)
+    }
+
+    /**
+     * 項目は投稿の id の文字列のことも、投稿や `Like` が埋め込まれていることもある。https の id だけを読む
+     */
+    private fun likedObjectUri(item: JsonElement): String? {
+        val uri = when (item) {
+            is JsonPrimitive -> item.takeIf { it.isString }?.content
+
+            is JsonObject -> if (item.text("type") == "Like") {
+                when (val likedObject = item["object"]) {
+                    is JsonPrimitive -> likedObject.takeIf { it.isString }?.content
+                    is JsonObject -> likedObject.text("id")
+                    else -> null
+                }
+            } else {
+                item.text("id")
+            }
+
+            else -> null
+        }
+        return uri?.takeIf { HttpUrl.parseHttps(it) != null }
     }
 
     private suspend fun continuedPage(actorId: String, actorUrl: HttpUrl, from: RemoteOutboxCursor): RemoteOutboxPageResult {
@@ -440,7 +535,13 @@ class RemoteActorCollections internal constructor(
     internal val actorUrl: HttpUrl,
     internal val outbox: JsonElement?,
     internal val featured: JsonElement?,
-)
+    internal val liked: JsonElement?,
+) {
+    /**
+     * いいねした投稿の一覧を出しているか。出していても、取りに行くと読めないことはある
+     */
+    val likedAvailable: Boolean get() = liked != null
+}
 
 /**
  * [HttpRemoteOutbox.collectionsOf] の結果
@@ -530,4 +631,26 @@ data class RemoteOutboxNote(
     val attachments: List<ReceivedNoteAttachment>,
     val emojis: List<CustomEmoji>,
     val unlisted: Boolean,
+)
+
+/**
+ * [HttpRemoteOutbox.likedPage] の結果
+ */
+sealed interface RemoteLikedPageResult {
+    data class Found(val page: RemoteLikedPage) : RemoteLikedPageResult
+
+    /** アクターが `liked` を出していない */
+    data object Absent : RemoteLikedPageResult
+
+    /** アクター・コレクション・ページを取得できない、または中身が条件を満たさない */
+    data class Unavailable(val failure: RemoteFetchFailure) : RemoteLikedPageResult
+}
+
+/**
+ * @param objectUris いいねした投稿の id。相手が並べた順
+ * @param next 続きを読むときに [HttpRemoteOutbox.likedPage] に渡す位置。続きが無ければ null
+ */
+data class RemoteLikedPage(
+    val objectUris: List<String>,
+    val next: RemoteOutboxCursor?,
 )
