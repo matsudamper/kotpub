@@ -156,17 +156,19 @@ class HttpRemoteOutbox(
         collected: List<String>,
     ): RemoteLikedPageResult {
         val pageId = page.text("id")
+        // 続きは fetch で取り直すので、取りに行けないページは id があっても後から指せない
+        val resumablePageId = pageId?.takeIf { actor.canResumeFrom(it) }
         val items = page.items().orEmpty()
-        // id の無いページは後から指せないので、件数によらず読み切る
-        val readableItems = if (pageId == null) items.drop(itemOffset) else items.drop(itemOffset).take(limit - collected.size)
+        // 後から指せないページは、件数によらず読み切る
+        val readableItems = if (resumablePageId == null) items.drop(itemOffset) else items.drop(itemOffset).take(limit - collected.size)
         val objectUris = (collected + readableItems.mapNotNull { likedObjectUri(it) }).distinct()
         val nextItemOffset = itemOffset + readableItems.size
-        if (pageId != null && nextItemOffset < items.size) {
-            return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = RemoteOutboxCursor(pageId = pageId, itemOffset = nextItemOffset)))
+        if (resumablePageId != null && nextItemOffset < items.size) {
+            return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = RemoteOutboxCursor(pageId = resumablePageId, itemOffset = nextItemOffset)))
         }
         val visited = visitedPageIds + listOfNotNull(pageId)
         val nextPageRef = page["next"]
-        if (nextPageRef is JsonObject && nextPageRef.text("id") == null) {
+        if (nextPageRef is JsonObject && nextPageRef.text("id")?.let { actor.canResumeFrom(it) } != true) {
             // 続きとして指せないので、件数によらず今読む。埋め込まれているので取りに行かずに済む
             return readLikedPage(actor, nextPageRef, 0, limit, remainingPageFetches, visited, objectUris)
         }
@@ -174,7 +176,7 @@ class HttpRemoteOutbox(
             is JsonPrimitive -> nextPageRef.takeIf { it.isString }?.content
             is JsonObject -> nextPageRef.text("id")
             else -> null
-        }?.takeIf { it !in visited }
+        }?.takeIf { it !in visited && actor.canResumeFrom(it) }
         if (nextPageId == null) return RemoteLikedPageResult.Found(RemoteLikedPage(objectUris = objectUris, next = null))
         val nextPage = RemoteOutboxCursor(pageId = nextPageId, itemOffset = 0)
         if (objectUris.size >= limit || remainingPageFetches <= 0) {
@@ -188,6 +190,11 @@ class HttpRemoteOutbox(
         }
         return readLikedPage(actor, nextPageDocument, 0, limit, remainingPageFetches - 1, visited, objectUris)
     }
+
+    /**
+     * [fetch] はアクターと同じホストしか取りに行かないので、それ以外のページは続きとして返さない
+     */
+    private fun RemoteActorCollections.canResumeFrom(pageId: String): Boolean = HttpUrl.parseHttps(pageId)?.isSameHost(actorUrl) == true
 
     /**
      * 項目は投稿の id の文字列のことも、投稿や `Like` が埋め込まれていることもある。https の id だけを読む
