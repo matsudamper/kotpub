@@ -109,7 +109,10 @@ class AnnounceHandler(
             ),
         )
         InboxSpan.outcome(if (recorded) "announce.local_recorded" else "announce.local_not_recorded")
-        logger.info("こちらの投稿のブーストを${if (recorded) "記録した" else "記録しなかった"}: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
+        if (!recorded) {
+            return InboxHandling.Ignored("こちらの投稿のブーストを記録しなかった。記録済みか投稿が無い: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
+        }
+        logger.info("こちらの投稿のブーストを記録した: ${recipient.logLabel} ← $actorUri 投稿=${notePublicId.value}")
         return InboxHandling.Handled
     }
 

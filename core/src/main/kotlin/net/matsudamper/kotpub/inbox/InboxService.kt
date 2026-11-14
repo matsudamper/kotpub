@@ -79,13 +79,11 @@ class InboxService(
                 if (failure is CancellationException) throw failure
                 // 止めている相手のものを通さず、捨てもしない。送り直してもらい、判定できるようになってから受ける
                 InboxSpan.failed(failure)
-                logger.warn("受信を止めているドメインかを判定できなかったので送り直してもらう: $claimedKeyId", failure)
                 return InboxResult.TemporarilyUnavailable(failure)
             }
         }
         if (blocked) {
             InboxSpan.outcome("domain_blocked")
-            logger.info("${recipient.logLabel} に受信を止めているドメインから届いたので捨てる: keyId=$claimedKeyId")
             return InboxResult.Accepted(InboxHandling.Ignored("受信を止めているドメインから届いた: keyId=$claimedKeyId"))
         }
 
@@ -99,11 +97,9 @@ class InboxService(
                     // 検証できるが、Mastodon は面識の無いサーバーにも配るので、
                     // 記録の無い相手は通しようが無い
                     if (isSelfDelete(request.body)) {
-                        logger.info("${recipient.logLabel} に検証できない Delete が届いたので受け流す。理由:${verification.reason}")
                         return InboxResult.Accepted(InboxHandling.Ignored("検証できない Delete を受け流した。理由:${verification.reason}"))
                     }
 
-                    logger.warn("inbox の署名を拒否した: ${recipient.logLabel} 理由:${verification.reason}")
                     return InboxResult.Unauthorized(verification.reason)
                 }
 
@@ -116,16 +112,13 @@ class InboxService(
 
         val rawActivityJson =
             runCatching { AppJson.parseToJsonElement(request.body.decodeToString()) }.getOrElse { failure ->
-                logger.warn("inbox のボディを JSON として読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return InboxResult.BadRequest("ボディを JSON として読めない: 例外=${failure::class.qualifiedName}")
             }
         if (rawActivityJson !is JsonObject) {
-            logger.warn("inbox のボディが JSON のオブジェクトではない: ${recipient.logLabel} 署名者=$verifiedSignerActorId")
             return InboxResult.BadRequest("ボディが JSON のオブジェクトではない")
         }
         val activity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson) }.getOrElse { failure ->
-                logger.warn("inbox のボディをアクティビティとして読めなかった: ${recipient.logLabel} 署名者=$verifiedSignerActorId 例外=${failure::class.qualifiedName}")
                 return InboxResult.BadRequest("ボディをアクティビティとして読めない: 例外=${failure::class.qualifiedName}")
             }
 
@@ -133,7 +126,6 @@ class InboxService(
         // 署名だけ通る形は作れるので、ここを見ないと他人の Undo を送り込める
         val actorId = activity.actorId
         if (actorId != null && actorId != verifiedSignerActorId) {
-            logger.warn("inbox の actor が署名者と違う: actor=$actorId 署名者=$verifiedSignerActorId")
             return InboxResult.Unauthorized("actor が署名者と違う: actor=$actorId 署名者=$verifiedSignerActorId")
         }
 
@@ -169,18 +161,10 @@ class InboxService(
         if (failure != null) {
             if (failure is CancellationException) throw failure
             InboxSpan.failed(failure)
-            logger.warn(
-                "inbox の処理に失敗したので送り直してもらう: ${recipient.logLabel} type=${activity.type} actor=$verifiedSignerActorId",
-                failure,
-            )
             return InboxResult.TemporarilyUnavailable(failure)
         }
 
-        val handling = handled.getOrThrow()
-        if (handling is InboxHandling.Ignored) {
-            logger.info("inbox で受け付けなかった: ${recipient.logLabel} type=${activity.type} 理由:${handling.reason}")
-        }
-        return InboxResult.Accepted(handling)
+        return InboxResult.Accepted(handled.getOrThrow())
     }
 
     /**

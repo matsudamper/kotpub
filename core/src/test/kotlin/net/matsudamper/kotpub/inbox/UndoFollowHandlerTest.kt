@@ -3,6 +3,8 @@ package net.matsudamper.kotpub.inbox
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import net.matsudamper.kotpub.FakeFollowerStore
@@ -43,9 +45,9 @@ class UndoFollowHandlerTest {
         json: String,
         verifiedSignerActorId: String = TestRemoteActor.ACTOR_ID,
         inbox: InboxRecipient = InboxRecipient.Account(recipient),
-    ) {
+    ): InboxHandling? {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
-        UndoFollowHandler(directory = TestLocalActor.directory, followers = store).handle(
+        return UndoFollowHandler(directory = TestLocalActor.directory, followers = store).handle(
             recipient = inbox,
             verifiedSignerActorId = verifiedSignerActorId,
             activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),
@@ -56,7 +58,7 @@ class UndoFollowHandlerTest {
     fun `object に Follow が埋まっていれば解除する`() = runBlocking {
         val store = followers()
 
-        handle(
+        val handling = handle(
             store,
             """
             {"id":"https://remote.example/activities/2","type":"Undo",
@@ -66,6 +68,7 @@ class UndoFollowHandlerTest {
             """.trimIndent(),
         )
 
+        assertEquals(InboxHandling.Handled, handling)
         assertEquals(0, store.count(TestLocalActor.USERNAME))
     }
 
@@ -90,7 +93,7 @@ class UndoFollowHandlerTest {
 
         // Undo{Like} などが id だけで来た場合。何のアクティビティだったのかは
         // こちらの記録と突き合わせるしか判断材料が無い
-        handle(
+        val handling = handle(
             store,
             """
             {"id":"https://remote.example/activities/2","type":"Undo",
@@ -98,6 +101,8 @@ class UndoFollowHandlerTest {
             """.trimIndent(),
         )
 
+        // まだ届いていない Like などの取り消しかもしれないので、何もしなかったとは決めない
+        assertNull(handling)
         assertEquals(1, store.count(TestLocalActor.USERNAME))
     }
 
@@ -105,7 +110,7 @@ class UndoFollowHandlerTest {
     fun `対象が Follow でなければ解除しない`() = runBlocking {
         val store = followers()
 
-        handle(
+        val handling = handle(
             store,
             """
             {"id":"https://remote.example/activities/2","type":"Undo",
@@ -115,6 +120,7 @@ class UndoFollowHandlerTest {
             """.trimIndent(),
         )
 
+        assertIs<InboxHandling.Ignored>(handling)
         assertEquals(1, store.count(TestLocalActor.USERNAME))
     }
 
@@ -124,7 +130,7 @@ class UndoFollowHandlerTest {
 
         // 署名の持ち主とは別の相手のフォローを消そうとする形。
         // object の中身ではなく署名者で絞るので消えない
-        handle(
+        val handling = handle(
             store,
             """
             {"id":"https://remote.example/activities/2","type":"Undo",
@@ -135,6 +141,7 @@ class UndoFollowHandlerTest {
             verifiedSignerActorId = "https://remote.example/users/mallory",
         )
 
+        assertIs<InboxHandling.Ignored>(handling)
         assertEquals(1, store.count(TestLocalActor.USERNAME))
     }
 

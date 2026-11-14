@@ -27,22 +27,24 @@ class UndoFollowHandler(
     private val logger = LoggerFactory.getLogger(UndoFollowHandler::class.java)
 
     /**
-     * @return フォローを解除しなかったら null。取り消しの対象が他にあるかもしれないので、何もしなかったとは決めない
+     * id だけの `object` は、記録にあるフォローを解除できなかったら null を返す。
+     * まだ届いていない別のアクティビティの取り消しかもしれないので、何もしなかったとは決めない。
+     * 埋め込まれた `object` は、ここまでで他の取り消しに当たらなかったものなので、結果を必ず返す
      */
     suspend fun handle(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         activity: InboxActivity,
-    ): InboxHandling.Handled? {
+    ): InboxHandling? {
         val undoneFollow = when (val undoObject = activity.target) {
-            null -> {
-                logger.warn("Undo に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
-                return null
-            }
+            null -> return InboxHandling.Ignored("Undo に object が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
 
             is LinkOrObject.Link -> linkedFollow(recipient, verifiedSignerActorId, undoObject.href) ?: return null
 
-            is LinkOrObject.Embedded -> embeddedFollow(recipient, verifiedSignerActorId, undoObject.json) ?: return null
+            is LinkOrObject.Embedded -> when (val embedded = embeddedFollow(recipient, verifiedSignerActorId, undoObject.json)) {
+                is EmbeddedFollow.Found -> embedded.follow
+                is EmbeddedFollow.NotApplicable -> return InboxHandling.Ignored(embedded.reason)
+            }
         }
         val followee = undoneFollow.followee
 
@@ -56,12 +58,14 @@ class UndoFollowHandler(
 
         if (removed) {
             logger.info("フォローを解除した: ${followee.acct} ← $verifiedSignerActorId")
-        } else {
-            // 記録が無いのは異常ではない。こちらが Accept を返せなかったフォローや、
-            // 既に Delete で消えた相手からも Undo は届く
-            logger.info("解除するフォローが記録に無い: ${followee.acct} ← $verifiedSignerActorId")
+            return InboxHandling.Handled
         }
-        return InboxHandling.Handled.takeIf { removed }
+        // 記録が無いのは異常ではない。こちらが Accept を返せなかったフォローや、
+        // 既に Delete で消えた相手からも Undo は届く
+        return when (activity.target) {
+            is LinkOrObject.Embedded -> InboxHandling.Ignored("解除するフォローが記録に無い: ${followee.acct} ← $verifiedSignerActorId")
+            else -> null
+        }
     }
 
     private fun linkedFollow(
@@ -84,8 +88,8 @@ class UndoFollowHandler(
     /**
      * 埋め込まれた `object` を `Follow` として読み、その id と宛先のアカウントを返す。
      *
-     * `Follow` でなければ null を返して呼び出し側に何もさせない。
-     * `Follow` だと分かっていて id が無い場合も null になるが、そのときは
+     * `Follow` でなければ [EmbeddedFollow.NotApplicable] を返して呼び出し側に何もさせない。
+     * `Follow` だと分かっていて id が無い場合も同じになるが、そのときは
      * [FollowerStore.remove] に null を渡して id を問わずに消す、とは区別が付かない。
      * 区別が要るほどの実装差は見ていないので、id が無ければ消さない方を選ぶ。
      */
@@ -93,24 +97,21 @@ class UndoFollowHandler(
         recipient: InboxRecipient,
         verifiedSignerActorId: String,
         embeddedObjectJson: JsonObject,
-    ): UndoneFollow? {
+    ): EmbeddedFollow {
         val embeddedFollowActivity =
             runCatching { AppJson.decodeFromJsonElement(InboxActivity.serializer(), embeddedObjectJson) }.getOrNull()
-        if (embeddedFollowActivity == null) {
-            logger.warn("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId")
-            return null
-        }
+                ?: return EmbeddedFollow.NotApplicable("Undo の object を読めなかった: ${recipient.logLabel} ← $verifiedSignerActorId")
 
         // Undo{Like} などをフォロー解除として扱わない
         if (embeddedFollowActivity.type != FOLLOW_TYPE) {
-            logger.info(
+            return EmbeddedFollow.NotApplicable(
                 "Undo の対象が Follow ではないので何もしない: type=${embeddedFollowActivity.type} " +
                     "${recipient.logLabel} ← $verifiedSignerActorId",
             )
-            return null
         }
 
-        val followActivityUri = embeddedFollowActivity.id ?: return null
+        val followActivityUri = embeddedFollowActivity.id
+            ?: return EmbeddedFollow.NotApplicable("Undo の対象の Follow に id が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
 
         val followTarget = embeddedFollowActivity.target?.id
         val followee = when (recipient) {
@@ -118,8 +119,7 @@ class UndoFollowHandler(
                 // 別のアクター宛の Follow を取り消す Undo は、こちらのフォローとは関係が無い
                 val resolvedTarget = followTarget?.let { directory.resolveActorId(it) }
                 if (followTarget != null && resolvedTarget?.actorId != recipient.urls.actorId) {
-                    logger.info("Undo の対象が別のアクターへの Follow: object=$followTarget 宛先=${recipient.urls.actorId}")
-                    return null
+                    return EmbeddedFollow.NotApplicable("Undo の対象が別のアクターへの Follow: object=$followTarget 宛先=${recipient.urls.actorId}")
                 }
                 recipient.urls
             }
@@ -127,11 +127,16 @@ class UndoFollowHandler(
             InboxRecipient.Shared -> followTarget?.let { directory.resolveActorId(it) }
         }
         if (followee == null) {
-            logger.info("Undo の対象がこちらのアカウントへの Follow ではない: object=$followTarget ${recipient.logLabel}")
-            return null
+            return EmbeddedFollow.NotApplicable("Undo の対象がこちらのアカウントへの Follow ではない: object=$followTarget ${recipient.logLabel}")
         }
 
-        return UndoneFollow(followee = followee, followActivityUri = followActivityUri)
+        return EmbeddedFollow.Found(UndoneFollow(followee = followee, followActivityUri = followActivityUri))
+    }
+
+    private sealed interface EmbeddedFollow {
+        data class Found(val follow: UndoneFollow) : EmbeddedFollow
+
+        data class NotApplicable(val reason: String) : EmbeddedFollow
     }
 
     private data class UndoneFollow(
