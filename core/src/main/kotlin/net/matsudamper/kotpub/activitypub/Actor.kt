@@ -49,6 +49,11 @@ data class Actor(
     val followers: String,
     @SerialName("following")
     val following: String,
+    /**
+     * いいねした投稿の一覧。公開していなければ null にして、キーごと出さない
+     */
+    @SerialName("liked")
+    val liked: String? = null,
     /** プロフィールから開くリンク。Mastodon は無ければ id を使う */
     @SerialName("url")
     val url: String? = null,

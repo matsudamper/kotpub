@@ -59,6 +59,7 @@ object TestLocalActor {
             STORED_USERNAME to ActorProfile(
                 displayName = "アカウント 1",
                 summary = "1 つ目のアカウント\n<b>タグ</b>",
+                likedPublic = true,
             ),
         ),
     )

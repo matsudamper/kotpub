@@ -75,6 +75,7 @@ internal fun actorDocument(
         featured = urls.featured,
         followers = urls.followers,
         following = urls.following,
+        liked = if (profile.likedPublic) urls.liked else null,
         url = webPages?.profile(urls.username),
         attachment = linkAttachments(appearance.links),
         icon = appearance.iconVersion?.let { Actor.Image(url = urls.icon(it)) },
