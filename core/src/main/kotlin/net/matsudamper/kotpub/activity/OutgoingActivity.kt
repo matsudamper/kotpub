@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.activitypub.StringListSerializer
+import net.matsudamper.kotpub.emoji.EmojiObject
 
 /**
  * こちらから相手の inbox に送るアクティビティ。
@@ -32,6 +33,15 @@ data class OutgoingActivity(
     /** `object` は Kotlin の予約語なので名前を変えて持つ */
     @SerialName("object")
     val target: LinkOrObject,
+    /** リアクションの `Like` で、付けた絵文字。Pleroma 系はこちらを読む */
+    @SerialName("content")
+    val content: String? = null,
+    /** リアクションの `Like` で、付けた絵文字。Misskey 系はこちらを読む */
+    @SerialName("_misskey_reaction")
+    val misskeyReaction: String? = null,
+    /** リアクションの `Like` で、カスタム絵文字の画像 */
+    @SerialName("tag")
+    val tag: List<EmojiObject>? = null,
 ) {
     companion object {
         const val TYPE_ACCEPT: String = "Accept"
