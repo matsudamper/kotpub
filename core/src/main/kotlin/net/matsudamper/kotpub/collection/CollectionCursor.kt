@@ -26,7 +26,6 @@ internal data class CollectionCursor(
 
             val epochSecond = parts[0].toLongOrNull() ?: return null
             val nano = parts[1].toLongOrNull() ?: return null
-            if (parts[2].isEmpty()) return null
 
             return runCatching {
                 CollectionCursor(at = Instant.ofEpochSecond(epochSecond, nano), key = parts[2])

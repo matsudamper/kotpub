@@ -66,6 +66,14 @@ class LikedEndpointTest {
     }
 
     @Test
+    fun `key が空の位置も続きとして読む`() {
+        val position = LikedPosition(at = Instant.parse("2026-11-01T00:00:00Z"), key = "")
+        endpoint(listOf()).get(username = TestLocalActor.STORED_USERNAME, accept = null, cursor = "${position.at.epochSecond}_${position.at.nano}_")
+
+        assertEquals(listOf<LikedPosition?>(position), requestedAfter)
+    }
+
+    @Test
     fun `公開していないアカウントは 404`() {
         assertEquals(HttpStatusCodes.NOT_FOUND, endpoint(listOf(liked(1))).get(username = TestLocalActor.USERNAME, accept = null, cursor = null).status)
     }
