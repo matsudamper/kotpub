@@ -85,6 +85,20 @@ class ActorDocumentTest {
         assertEquals("<p>1 つ目のアカウント<br>&lt;b&gt;タグ&lt;/b&gt;</p>", actor.summary)
     }
 
+    @Test
+    fun `いいねを公開していればlikedを出す`() {
+        val actor = actorDocumentOf(TestLocalActor.STORED_USERNAME)
+
+        assertEquals("https://example.com/users/${TestLocalActor.STORED_USERNAME}/liked", actor.liked)
+    }
+
+    @Test
+    fun `いいねを公開していなければlikedを出さない`() {
+        val actor = actorDocumentOf(TestLocalActor.USERNAME)
+
+        assertNull(actor.liked)
+    }
+
     private fun actorDocumentOf(username: String): Actor {
         val urls = assertNotNull(TestLocalActor.directory.resolve(username))
         return actorDocument(

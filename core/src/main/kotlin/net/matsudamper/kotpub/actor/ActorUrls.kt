@@ -35,6 +35,7 @@ data class ActorUrls(
     val featured: String = "$actorId/collections/featured"
     val followers: String = "$actorId/followers"
     val following: String = "$actorId/following"
+    val liked: String = "$actorId/liked"
 
     /**
      * プロフィール画像。画像はこちらのパスから返す（[ActorIconEndpoint]）。

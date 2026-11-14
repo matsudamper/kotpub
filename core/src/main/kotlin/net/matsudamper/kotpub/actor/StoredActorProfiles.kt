@@ -20,12 +20,14 @@ interface StoredActorProfiles {
  *
  * @param displayName Actor の `name` に出す表示名。未設定なら null
  * @param summary Actor の `summary` に出す説明文。プレーンテキストで持つ。未設定なら null
+ * @param likedPublic いいねした投稿の一覧を Actor の `liked` で公開するか
  */
 data class ActorProfile(
     val displayName: String?,
     val summary: String?,
+    val likedPublic: Boolean,
 ) {
     companion object {
-        val EMPTY: ActorProfile = ActorProfile(displayName = null, summary = null)
+        val EMPTY: ActorProfile = ActorProfile(displayName = null, summary = null, likedPublic = false)
     }
 }

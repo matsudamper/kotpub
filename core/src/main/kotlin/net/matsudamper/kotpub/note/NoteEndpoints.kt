@@ -1,6 +1,5 @@
 package net.matsudamper.kotpub.note
 
-import java.time.Instant
 import kotlinx.serialization.json.JsonElement
 import net.matsudamper.kotpub.activity.ActivityStreamsIri
 import net.matsudamper.kotpub.activity.AnnounceActivity
@@ -11,6 +10,7 @@ import net.matsudamper.kotpub.actor.ActorDirectory
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.collection.COLLECTION_CURSOR_PARAM
 import net.matsudamper.kotpub.collection.COLLECTION_PAGE_SIZE
+import net.matsudamper.kotpub.collection.CollectionCursor
 import net.matsudamper.kotpub.collection.FEATURED_COLLECTION_SIZE
 import net.matsudamper.kotpub.collection.OrderedCollection
 import net.matsudamper.kotpub.collection.OrderedCollectionPage
@@ -207,28 +207,10 @@ private fun pageUrl(
     after: OutboxPosition?,
 ): String = "${urls.outbox}?$COLLECTION_CURSOR_PARAM=${after?.let { QueryParameter.encode(it.encodeCursor()) }.orEmpty()}"
 
-/**
- * 相手が辿るだけの値なので、読める形にしておく必要は無い。
- * 区切りは `_`。key は最後に置くので、key に `_` が入っていても読める
- */
-private fun OutboxPosition.encodeCursor(): String = "${at.epochSecond}_${at.nano}_$key"
+private fun OutboxPosition.encodeCursor(): String = CollectionCursor(at = at, key = key).encode()
 
-/**
- * 読めない形なら null。壊れた cursor は先頭のページとして扱う。
- * 相手に教えても直しようが無いので、拒否はしない
- */
-private fun decodeCursor(raw: String): OutboxPosition? {
-    val parts = raw.split('_', limit = 3)
-    if (parts.size != 3) return null
-
-    val epochSecond = parts[0].toLongOrNull() ?: return null
-    val nano = parts[1].toLongOrNull() ?: return null
-    if (parts[2].isEmpty()) return null
-
-    return runCatching {
-        OutboxPosition(at = Instant.ofEpochSecond(epochSecond, nano), key = parts[2])
-    }.getOrNull()
-}
+private fun decodeCursor(raw: String): OutboxPosition? =
+    CollectionCursor.decode(raw)?.let { OutboxPosition(at = it.at, key = it.key) }
 
 /**
  * 保存した投稿を返す形に直す。
