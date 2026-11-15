@@ -16,6 +16,10 @@ data class ReceivedNote(
     val to: List<String>,
     val cc: List<String>,
     val inReplyTo: String?,
+    /**
+     * 引用した投稿の id。引用でなければ null
+     */
+    val quote: String?,
     val summary: String?,
     val sensitive: Boolean,
     val visibility: NoteVisibility,

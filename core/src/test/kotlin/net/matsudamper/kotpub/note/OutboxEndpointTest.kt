@@ -114,6 +114,7 @@ class OutboxEndpointTest {
         publishedAt = Instant.parse(publishedAt),
         attachments = listOf(),
         inReplyTo = null,
+        quote = null,
         mentions = listOf(),
     )
 

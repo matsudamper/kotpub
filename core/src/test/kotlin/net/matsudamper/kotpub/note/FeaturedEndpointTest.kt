@@ -27,6 +27,7 @@ class FeaturedEndpointTest {
         publishedAt = Instant.parse("2026-08-10T00:00:00Z"),
         attachments = listOf(),
         inReplyTo = null,
+        quote = null,
         mentions = listOf(),
     )
 

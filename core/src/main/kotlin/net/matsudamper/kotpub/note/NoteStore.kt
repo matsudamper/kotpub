@@ -90,6 +90,7 @@ data class NotePosition(
  * @param publishedAt 相手に見せる公開日時
  * @param attachments 付けた画像。付けた順
  * @param inReplyTo 返信先の投稿の id。返信でなければ null
+ * @param quote 引用した投稿の id。引用でなければ null
  * @param mentions 宛てたアカウント。配り直しでも同じ宛先にするため、投稿と一緒に記録する
  */
 data class StoredNote(
@@ -99,6 +100,7 @@ data class StoredNote(
     val publishedAt: Instant,
     val attachments: List<NoteAttachment>,
     val inReplyTo: String?,
+    val quote: String?,
     val mentions: List<NoteMention>,
 ) {
     /**

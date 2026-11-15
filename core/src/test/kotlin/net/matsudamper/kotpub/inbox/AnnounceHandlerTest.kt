@@ -36,6 +36,7 @@ class AnnounceHandlerTest {
             to = listOf(),
             cc = listOf(),
             inReplyTo = null,
+            quote = null,
             summary = null,
             sensitive = false,
             visibility = visibility,

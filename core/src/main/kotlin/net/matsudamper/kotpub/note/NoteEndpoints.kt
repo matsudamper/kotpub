@@ -238,6 +238,9 @@ private fun noteDocument(
         url = webPages?.note(username = urls.username, publicId = note.publicId),
         attachment = note.attachments.toNoteDocuments(),
         inReplyTo = note.inReplyTo,
+        quote = note.quote,
+        quoteUrl = note.quote,
+        misskeyQuote = note.quote,
         tag = note.mentions.toNoteMentionTags(),
     )
 }
