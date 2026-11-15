@@ -1,8 +1,14 @@
 package net.matsudamper.kotpub.note
 
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonContentPolymorphicSerializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import net.matsudamper.kotpub.activity.CreateNoteActivity
+import net.matsudamper.kotpub.emoji.EmojiObject
 import net.matsudamper.kotpub.entity.ActivityPubId
 
 /**
@@ -79,10 +85,11 @@ data class Note(
     @SerialName("_misskey_quote")
     val misskeyQuote: String?,
     /**
-     * Mastodon はここの `Mention` を見て、宛てられたアカウントに通知する。本文のリンクだけでは通知しない
+     * Mastodon はここの `Mention` を見て、宛てられたアカウントに通知する。本文のリンクだけでは通知しない。
+     * 本文の `:name:` は、ここの `Emoji` に同じ名前があるものだけ画像に置き換えられる
      */
     @SerialName("tag")
-    val tag: List<NoteMentionTag>,
+    val tag: List<NoteTag>,
 ) {
     /**
      * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
@@ -110,6 +117,18 @@ data class NoteDocument(
     val type: String = "Document"
 }
 
+@Serializable(with = NoteTagSerializer::class)
+sealed interface NoteTag {
+    val type: String
+}
+
+internal object NoteTagSerializer : JsonContentPolymorphicSerializer<NoteTag>(NoteTag::class) {
+    override fun selectDeserializer(element: JsonElement): DeserializationStrategy<NoteTag> {
+        val type = (element.jsonObject["type"] as? JsonPrimitive)?.content
+        return if (type == EmojiObject.TYPE_EMOJI) NoteEmojiTag.serializer() else NoteMentionTag.serializer()
+    }
+}
+
 /**
  * 投稿で宛てたアカウント
  *
@@ -122,9 +141,27 @@ data class NoteMentionTag(
     val href: String,
     @SerialName("name")
     val name: String,
-) {
+) : NoteTag {
     @SerialName("type")
-    val type: String = "Mention"
+    override val type: String = "Mention"
+}
+
+/**
+ * 本文に入れた、こちらのサーバーのカスタム絵文字。[EmojiObject] と同じ形で載せる
+ *
+ * @param name `:name:` の形
+ */
+@Serializable
+data class NoteEmojiTag(
+    @SerialName("id")
+    val id: String,
+    @SerialName("name")
+    val name: String,
+    @SerialName("icon")
+    val icon: EmojiObject.Icon,
+) : NoteTag {
+    @SerialName("type")
+    override val type: String = EmojiObject.TYPE_EMOJI
 }
 
 internal fun List<NoteAttachment>.toNoteDocuments(): List<NoteDocument> =
@@ -132,8 +169,9 @@ internal fun List<NoteAttachment>.toNoteDocuments(): List<NoteDocument> =
         NoteDocument(mediaType = attachment.mediaType, url = attachment.url, name = attachment.description)
     }
 
-internal fun List<NoteMention>.toNoteMentionTags(): List<NoteMentionTag> =
-    map { mention -> NoteMentionTag(href = mention.actorId, name = "@${mention.acct}") }
+internal fun StoredNote.toNoteTags(): List<NoteTag> =
+    mentions.map { mention -> NoteMentionTag(href = mention.actorId, name = "@${mention.acct}") } +
+        emojis.map { emoji -> NoteEmojiTag(id = emoji.id, name = emoji.name, icon = emoji.icon) }
 
 /**
  * 宛てたアクターを `cc` に入れないと、Mastodon は通知もせず、宛てた相手の画面にも出さない

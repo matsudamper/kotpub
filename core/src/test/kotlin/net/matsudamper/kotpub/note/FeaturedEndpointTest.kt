@@ -29,6 +29,7 @@ class FeaturedEndpointTest {
         inReplyTo = null,
         quote = null,
         mentions = listOf(),
+        emojis = listOf(),
     )
 
     @Test

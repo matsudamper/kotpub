@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import net.matsudamper.kotpub.emoji.EmojiObject
 import net.matsudamper.kotpub.entity.PublicNoteId
 
 /**
@@ -92,6 +93,7 @@ data class NotePosition(
  * @param inReplyTo 返信先の投稿の id。返信でなければ null
  * @param quote 引用した投稿の id。引用でなければ null
  * @param mentions 宛てたアカウント。配り直しでも同じ宛先にするため、投稿と一緒に記録する
+ * @param emojis 本文に `:name:` の形で入っている、こちらのサーバーのカスタム絵文字
  */
 data class StoredNote(
     val publicId: PublicNoteId,
@@ -102,6 +104,7 @@ data class StoredNote(
     val inReplyTo: String?,
     val quote: String?,
     val mentions: List<NoteMention>,
+    val emojis: List<EmojiObject>,
 ) {
     /**
      * この投稿を「直前のページの最後」として指す位置

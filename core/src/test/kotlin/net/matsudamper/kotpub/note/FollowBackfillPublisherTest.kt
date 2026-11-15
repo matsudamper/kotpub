@@ -46,6 +46,7 @@ class FollowBackfillPublisherTest {
                     inReplyTo = null,
                     quote = null,
                     mentions = listOf(),
+                    emojis = listOf(),
                 ),
             )
         }
@@ -118,6 +119,7 @@ class FollowBackfillPublisherTest {
                     inReplyTo = null,
                     quote = null,
                     mentions = listOf(),
+                    emojis = listOf(),
                 ),
             )
         }
@@ -143,6 +145,7 @@ class FollowBackfillPublisherTest {
                         inReplyTo = null,
                         quote = null,
                         mentions = listOf(),
+                        emojis = listOf(),
                     ),
                 )
             }

@@ -42,7 +42,7 @@ internal object CreateNoteActivityFactory {
                 quote = note.quote,
                 quoteUrl = note.quote,
                 misskeyQuote = note.quote,
-                tag = note.mentions.toNoteMentionTags(),
+                tag = note.toNoteTags(),
             ),
         )
     }
