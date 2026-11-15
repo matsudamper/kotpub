@@ -6,6 +6,7 @@ import net.matsudamper.kotpub.activity.CreateNoteActivity
 import net.matsudamper.kotpub.activity.DeleteNoteActivity
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.crypto.UuidV7
+import net.matsudamper.kotpub.emoji.EmojiObject
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.url.WebPageUrls
@@ -29,6 +30,7 @@ class NotePublisher(
      * @param inReplyTo 返信先の投稿の id。返信でなければ null
      * @param quote 引用する投稿の id。引用でなければ null
      * @param mentions 宛てるアカウント。宛てた相手の inbox へ積むのは呼び出し側
+     * @param emojis 本文に `:name:` の形で入れた、こちらのサーバーのカスタム絵文字。相手は画像に置き換えて出す
      */
     fun prepare(
         sender: ActorUrls,
@@ -37,6 +39,7 @@ class NotePublisher(
         inReplyTo: String?,
         quote: String?,
         mentions: List<NoteMention>,
+        emojis: List<EmojiObject>,
     ): PreparedNote {
         val publishedAt = Instant.now()
         val note = StoredNote(
@@ -48,6 +51,7 @@ class NotePublisher(
             inReplyTo = inReplyTo,
             quote = quote,
             mentions = mentions,
+            emojis = emojis,
         )
 
         return note.toPrepared(sender)
