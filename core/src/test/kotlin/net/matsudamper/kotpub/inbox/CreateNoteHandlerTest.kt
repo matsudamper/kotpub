@@ -136,6 +136,8 @@ class CreateNoteHandlerTest {
             saved.add(note)
         }
 
+        override suspend fun update(note: ReceivedNote) = Unit
+
         override suspend fun delete(actorId: String, objectId: String) = Unit
     }
 

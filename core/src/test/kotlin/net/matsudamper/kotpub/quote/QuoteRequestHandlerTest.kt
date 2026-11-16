@@ -71,6 +71,7 @@ class QuoteRequestHandlerTest {
                     attributedTo = attributedTo,
                     content = "<p>quoting</p>",
                     published = null,
+                    updated = null,
                     to = listOf(),
                     cc = listOf(),
                     inReplyTo = null,

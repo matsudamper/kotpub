@@ -5,6 +5,13 @@ import net.matsudamper.kotpub.emoji.CustomEmoji
 
 interface RemoteNoteStore {
     suspend fun save(note: ReceivedNote)
+
+    /**
+     * 投稿者が編集した投稿が届いた。保存していない投稿なら何もしない。
+     *
+     * 配送は順番どおりとは限らないので、[ReceivedNote.updated] が保存済みのものより古ければ捨てる
+     */
+    suspend fun update(note: ReceivedNote)
     suspend fun delete(actorId: String, objectId: String)
 }
 
@@ -13,6 +20,10 @@ data class ReceivedNote(
     val attributedTo: String,
     val content: String,
     val published: Instant?,
+    /**
+     * 投稿者が最後に編集した時刻。編集していないか、送り手が付けていなければ null
+     */
+    val updated: Instant?,
     val to: List<String>,
     val cc: List<String>,
     val inReplyTo: String?,

@@ -25,7 +25,8 @@ internal object ReceivedNoteJson {
             id = id,
             attributedTo = attributedTo,
             content = note["content"].string() ?: return null,
-            published = note["published"].string()?.let { runCatching { Instant.parse(it) }.getOrNull() },
+            published = note["published"].instant(),
+            updated = note["updated"].instant(),
             to = to,
             cc = cc,
             inReplyTo = note["inReplyTo"].string(),
@@ -95,6 +96,8 @@ internal object ReceivedNoteJson {
     private fun String.isHttpUrl(): Boolean = HttpUrl.parse(this)?.scheme in setOf("http", "https")
 
     private class AttachmentLink(val href: String, val mediaType: String?)
+
+    private fun JsonElement?.instant(): Instant? = string()?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
     private fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 

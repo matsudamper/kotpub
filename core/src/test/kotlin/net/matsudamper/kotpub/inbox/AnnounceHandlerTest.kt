@@ -33,6 +33,7 @@ class AnnounceHandlerTest {
             attributedTo = "https://other.example/users/bob",
             content = "<p>hello</p>",
             published = null,
+            updated = null,
             to = listOf(),
             cc = listOf(),
             inReplyTo = null,
