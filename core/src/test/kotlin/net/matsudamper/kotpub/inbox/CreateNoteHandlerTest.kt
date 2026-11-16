@@ -137,7 +137,7 @@ class CreateNoteHandlerTest {
                 """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","to":["$PUBLIC"],$content}""",
             )
         }
-        assertEquals(listOf("ja", "zh-TW", "en", null, null, null, null), store.saved.map { it.language })
+        assertEquals(listOf("ja", "zh-TW", "en", null, null, null, null), store.saved.map { it.language?.toLanguageTag() })
     }
 
     @Test

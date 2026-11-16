@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -638,9 +639,9 @@ data class RemoteOutboxNote(
     val id: String,
     val contentHtml: String,
     /**
-     * BCP 47 の言語タグ。送り手が付けていないか、言語タグとして読めなければ null
+     * 送り手が付けていないか、言語タグとして読めなければ null
      */
-    val language: String?,
+    val language: Locale?,
     val publishedAt: String,
     val summary: String?,
     val sensitive: Boolean,

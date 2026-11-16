@@ -28,7 +28,7 @@ internal object ReceivedNoteJson {
             id = id,
             attributedTo = attributedTo,
             content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: return null,
-            language = contentMap?.keys?.firstOrNull()?.let { languageTagOrNull(it) },
+            language = contentMap?.keys?.firstOrNull()?.let { languageOrNull(it) },
             published = note["published"].instant(),
             updated = note["updated"].instant(),
             to = to,
@@ -57,8 +57,8 @@ internal object ReceivedNoteJson {
      * 投稿の言語を表す専用のプロパティは無く、Mastodon などは `contentMap` のキーで伝える。
      * 複数の言語が入っていても、Mastodon と同じく先頭だけを見る
      */
-    private fun languageTagOrNull(contentMapKey: String): String? = try {
-        Locale.Builder().setLanguageTag(contentMapKey).build().toLanguageTag().takeIf { it != UNDETERMINED_LANGUAGE }
+    private fun languageOrNull(contentMapKey: String): Locale? = try {
+        Locale.Builder().setLanguageTag(contentMapKey).build().takeIf { it.toLanguageTag() != UNDETERMINED_LANGUAGE }
     } catch (_: IllformedLocaleException) {
         null
     }
