@@ -434,6 +434,7 @@ class HttpRemoteOutbox(
         return RemoteOutboxNote(
             id = id,
             contentHtml = content,
+            language = received.language,
             publishedAt = publishedAt,
             summary = received.summary,
             sensitive = received.sensitive,
@@ -636,6 +637,10 @@ data class RemoteOutboxCursor(
 data class RemoteOutboxNote(
     val id: String,
     val contentHtml: String,
+    /**
+     * BCP 47 の言語タグ。送り手が付けていないか、言語タグとして読めなければ null
+     */
+    val language: String?,
     val publishedAt: String,
     val summary: String?,
     val sensitive: Boolean,
