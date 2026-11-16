@@ -9,6 +9,7 @@ import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
+import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.inbox.InboxActivityHandler
@@ -114,7 +115,11 @@ class QuoteRequestHandler(
     }
 
     private fun RemoteFetchFailure.isTemporary(): Boolean =
-        this is RemoteFetchFailure.Throttled || this is RemoteFetchFailure.RequestFailed
+        when (this) {
+            is RemoteFetchFailure.Throttled, is RemoteFetchFailure.RequestFailed -> true
+            is RemoteFetchFailure.UnsuccessfulStatus -> status == HttpStatusCodes.TOO_MANY_REQUESTS || status >= HttpStatusCodes.INTERNAL_SERVER_ERROR
+            else -> false
+        }
 
     companion object {
         const val TYPE: String = "QuoteRequest"

@@ -158,6 +158,19 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
+    fun `引用した相手のサーバーが 429 や 5xx を返したら送り直してもらう`() = runBlocking {
+        listOf(HttpStatusCodes.TOO_MANY_REQUESTS, HttpStatusCodes.SERVICE_UNAVAILABLE).forEach { status ->
+            assertFailsWith<IllegalStateException> {
+                handle(
+                    FakeQuoteApprovals(),
+                    quoteRequestJson(),
+                    remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, status)),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() = runBlocking {
         val approvals = FakeQuoteApprovals()
 
