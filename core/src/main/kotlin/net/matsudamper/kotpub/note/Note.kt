@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import net.matsudamper.kotpub.activity.ActivityStreamsIri
 import net.matsudamper.kotpub.activity.CreateNoteActivity
 import net.matsudamper.kotpub.emoji.EmojiObject
 import net.matsudamper.kotpub.entity.ActivityPubId
@@ -90,6 +91,11 @@ data class Note(
      */
     @SerialName("tag")
     val tag: List<NoteTag>,
+    /**
+     * 誰がこの投稿を引用できるか。FEP-044f の名前で、Mastodon 4.5 以降はこれが無いと引用させない
+     */
+    @SerialName("interactionPolicy")
+    val interactionPolicy: InteractionPolicy,
 ) {
     /**
      * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
@@ -97,6 +103,34 @@ data class Note(
     @SerialName("type")
     val type: String = "Note"
 }
+
+/**
+ * 投稿への操作を誰に許すか。GoToSocial が決めた形を FEP-044f が引用に使っている
+ */
+@Serializable
+data class InteractionPolicy(
+    @SerialName("canQuote")
+    val canQuote: InteractionRule,
+) {
+    companion object {
+        /**
+         * 誰でも承認を待たずに引用できる。こちらの投稿は全て公開なので、引用も誰にでも許す。
+         * 引用した側から `QuoteRequest` が届き、`Accept` を返して初めて相手の画面で引用が成立する
+         */
+        val QUOTABLE_BY_ANYONE: InteractionPolicy = InteractionPolicy(
+            canQuote = InteractionRule(automaticApproval = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE)),
+        )
+    }
+}
+
+/**
+ * @param automaticApproval 承認を待たずに許す相手。アクターの id、フォロワーのコレクション、公開を表す URI のどれか
+ */
+@Serializable
+data class InteractionRule(
+    @SerialName("automaticApproval")
+    val automaticApproval: List<String>,
+)
 
 /**
  * 投稿に付けた画像。Mastodon は `Document` の `mediaType` が画像なら画像として並べる

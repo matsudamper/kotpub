@@ -42,6 +42,9 @@ data class OutgoingActivity(
     /** リアクションの `Like` で、カスタム絵文字の画像 */
     @SerialName("tag")
     val tag: List<EmojiObject>? = null,
+    /** 引用を承認した `Accept` で、承認の `QuoteAuthorization` の id。相手はここを取得して引用を確かめる */
+    @SerialName("result")
+    val result: String? = null,
 ) {
     companion object {
         const val TYPE_ACCEPT: String = "Accept"

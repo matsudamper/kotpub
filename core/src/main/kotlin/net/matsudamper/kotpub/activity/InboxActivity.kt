@@ -28,6 +28,9 @@ data class InboxActivity(
     val target: LinkOrObject? = null,
     @SerialName("content")
     val content: String? = null,
+    /** `QuoteRequest` で、引用した側の投稿 */
+    @SerialName("instrument")
+    val instrument: LinkOrObject? = null,
 ) {
     /** 実行した相手のアクター id。取得できなければ null */
     val actorId: String?

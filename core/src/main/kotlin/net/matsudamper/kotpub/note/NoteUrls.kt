@@ -33,8 +33,16 @@ data class NoteUrls(
      */
     val deleteId: ActivityPubId = ActivityPubId("$noteUrl#delete")
 
+    /**
+     * この投稿の引用を認めた `QuoteAuthorization` の id。相手は引用を確かめるときにここを取得しに来る
+     *
+     * @param token 引用した相手と投稿を入れて署名した値
+     */
+    fun quoteAuthorizationUrl(token: String): String = "$noteUrl$QUOTE_AUTHORIZATIONS_PATH$token"
+
     companion object {
         private const val NOTES_PATH = "/notes/"
+        private const val QUOTE_AUTHORIZATIONS_PATH = "/quote_authorizations/"
 
         /**
          * こちらのドメインの投稿の URL でなければ null

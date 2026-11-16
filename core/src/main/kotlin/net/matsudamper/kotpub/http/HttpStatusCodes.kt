@@ -13,6 +13,7 @@ object HttpStatusCodes {
     const val GONE = 410
     const val PAYLOAD_TOO_LARGE = 413
     const val TOO_MANY_REQUESTS = 429
+    const val INTERNAL_SERVER_ERROR = 500
     const val NOT_IMPLEMENTED = 501
     const val SERVICE_UNAVAILABLE = 503
 
