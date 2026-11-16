@@ -6,7 +6,6 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activity.OutgoingActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.activitypub.id
-import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.http.HttpStatusCodes
@@ -27,7 +26,7 @@ import net.matsudamper.kotpub.note.NoteUrls
  * `Accept` が返るまで引用を保留にする。`Accept` の `result` に入れた [QuoteAuthorization] を
  * 取得して確かめられたら、相手の画面で引用が成立する。
  *
- * こちらの投稿は誰にでも引用を許しているので、こちらの投稿への要求なら全て承認する
+ * こちらの投稿は誰にでも引用を許しているので、ブロックした相手でなければ全て承認する
  */
 class QuoteRequestHandler(
     private val domain: String,
@@ -79,24 +78,33 @@ class QuoteRequestHandler(
             }
         }
 
-        val author = ActorUrls(domain = domain, username = note.username)
+        if (approvals.refuses(username = note.username, quoterActorId = verifiedSignerActorId)) {
+            InboxSpan.outcome("quote_request.refused")
+            return InboxHandling.Ignored("引用を認めない相手からの QuoteRequest: ${note.username} ← $verifiedSignerActorId")
+        }
+        val author = approvals.findAuthor(note.username)
+        if (author == null) {
+            InboxSpan.outcome("quote_request.author_not_found")
+            return InboxHandling.Ignored("引用された投稿の持ち主のアカウントが無い: ${note.username}")
+        }
+
+        val noteUrls = NoteUrls(domain = domain, publicId = note.publicId)
+        val token = QuoteAuthorizationToken(quoterActorId = quoter.actorId, interactingObject = quotingNoteId)
+            .encode(author = author, interactionTarget = noteUrls.noteUrl)
         val accept = OutgoingActivity(
-            id = "${author.actorId}#accepts/quote_requests/${UUID.randomUUID()}",
+            id = "${author.urls.actorId}#accepts/quote_requests/${UUID.randomUUID()}",
             type = OutgoingActivity.TYPE_ACCEPT,
-            actor = author.actorId,
+            actor = author.urls.actorId,
             target = LinkOrObject.Embedded(rawActivityJson),
-            result = NoteUrls(domain = domain, publicId = note.publicId).quoteAuthorizationUrl(quotingNoteId),
+            result = noteUrls.quoteAuthorizationUrl(token),
         )
-        val enqueued = approvals.enqueueAccept(
+        approvals.enqueueAccept(
             username = note.username,
             quoter = quoter,
             acceptBody = AppJson.encodeToString(OutgoingActivity.serializer(), accept),
         )
 
-        InboxSpan.outcome(if (enqueued) "quote_request.accepted" else "quote_request.refused")
-        if (!enqueued) {
-            return InboxHandling.Ignored("受け付けない相手からの QuoteRequest: ${note.username} ← $verifiedSignerActorId")
-        }
+        InboxSpan.outcome("quote_request.accepted")
         return InboxHandling.Handled
     }
 

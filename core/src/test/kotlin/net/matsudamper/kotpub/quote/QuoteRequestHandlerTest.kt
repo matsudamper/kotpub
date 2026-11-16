@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.quote
 
 import java.time.Instant
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -19,6 +20,7 @@ import net.matsudamper.kotpub.activity.OutgoingActivity
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.entity.PublicNoteId
+import net.matsudamper.kotpub.http.EndpointResponse
 import net.matsudamper.kotpub.http.HttpStatusCodes
 import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.inbox.InboxHandling
@@ -89,7 +91,7 @@ class QuoteRequestHandlerTest {
         val accept = AppJson.decodeFromString(OutgoingActivity.serializer(), enqueued.acceptBody)
         assertEquals(OutgoingActivity.TYPE_ACCEPT, accept.type)
         assertEquals(TestLocalActor.urls.actorId, accept.actor)
-        assertEquals(noteUrls.quoteAuthorizationUrl(QUOTING_NOTE), accept.result)
+        assertTrue(accept.result.orEmpty().startsWith("${noteUrls.noteUrl}/quote_authorizations/"))
     }
 
     @Test
@@ -201,12 +203,11 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `承認の id から、引用の組を示す QuoteAuthorization を返す`() = runBlocking {
-        val authorizationUrl = noteUrls.quoteAuthorizationUrl(QUOTING_NOTE)
-        val token = authorizationUrl.substringAfterLast('/')
+    fun `Accept の result の URL から、引用の組を示す QuoteAuthorization を返す`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+        val authorizationUrl = acceptedAuthorizationUrl(approvals)
 
-        val response = QuoteAuthorizationEndpoint(domain = TestLocalActor.DOMAIN, notes = notes)
-            .get(publicId = PUBLIC_ID, token = token, accept = null)
+        val response = getAuthorization(approvals, authorizationUrl.substringAfterLast('/'))
 
         assertEquals(HttpStatusCodes.OK, response.status)
         val json = AppJson.parseToJsonElement(response.body.decodeToString()).jsonObject
@@ -218,15 +219,43 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `投稿が消えたら承認も返さない`() = runBlocking {
-        val token = noteUrls.quoteAuthorizationUrl(QUOTING_NOTE).substringAfterLast('/')
-        notes.delete(PublicNoteId(PUBLIC_ID))
+    fun `書き換えた URL には承認を返さない`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+        val (quoter, _, signature) = acceptedAuthorizationUrl(approvals).substringAfterLast('/').split('.')
+        val otherNote = Base64.getUrlEncoder().withoutPadding().encodeToString("https://remote.example/notes/other".toByteArray())
 
-        val response = QuoteAuthorizationEndpoint(domain = TestLocalActor.DOMAIN, notes = notes)
-            .get(publicId = PUBLIC_ID, token = token, accept = null)
+        val response = getAuthorization(approvals, "$quoter.$otherNote.$signature")
 
         assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
     }
+
+    @Test
+    fun `承認した後にブロックした相手には承認を返さない`() = runBlocking {
+        val token = acceptedAuthorizationUrl(FakeQuoteApprovals()).substringAfterLast('/')
+
+        val response = getAuthorization(FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID)), token)
+
+        assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `投稿が消えたら承認も返さない`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+        val token = acceptedAuthorizationUrl(approvals).substringAfterLast('/')
+        notes.delete(PublicNoteId(PUBLIC_ID))
+
+        assertEquals(HttpStatusCodes.NOT_FOUND, getAuthorization(approvals, token).status)
+    }
+
+    private suspend fun acceptedAuthorizationUrl(approvals: FakeQuoteApprovals): String {
+        handle(approvals, quoteRequestJson())
+        val accept = AppJson.decodeFromString(OutgoingActivity.serializer(), approvals.enqueued.single().acceptBody)
+        return checkNotNull(accept.result)
+    }
+
+    private suspend fun getAuthorization(approvals: QuoteApprovals, token: String): EndpointResponse =
+        QuoteAuthorizationEndpoint(domain = TestLocalActor.DOMAIN, notes = notes, approvals = approvals)
+            .get(publicId = PUBLIC_ID, token = token, accept = null)
 
     private companion object {
         const val PUBLIC_ID = "quoted1"

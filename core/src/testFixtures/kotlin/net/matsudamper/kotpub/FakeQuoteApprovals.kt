@@ -1,26 +1,33 @@
 package net.matsudamper.kotpub
 
+import net.matsudamper.kotpub.actor.LocalActor
 import net.matsudamper.kotpub.actor.RemoteActor
 import net.matsudamper.kotpub.quote.QuoteApprovals
 
 /**
- * 引用の承認の配信先の差し替え。登録された `Accept` をオンメモリで持つ
+ * 引用の承認の差し替え。[TestLocalActor] だけをこちらのアカウントとして持ち、登録された `Accept` をオンメモリで持つ
  *
- * @param refusedActorIds 受け付けない相手
+ * @param refusedActorIds 引用を認めない相手
  */
 class FakeQuoteApprovals(
     private val refusedActorIds: Set<String> = setOf(),
 ) : QuoteApprovals {
     val enqueued: MutableList<Enqueued> = mutableListOf()
 
+    override fun findAuthor(username: String): LocalActor? =
+        TestLocalActor.actor.takeIf { username == TestLocalActor.USERNAME }
+
+    override fun refuses(
+        username: String,
+        quoterActorId: String,
+    ): Boolean = quoterActorId in refusedActorIds
+
     override fun enqueueAccept(
         username: String,
         quoter: RemoteActor,
         acceptBody: String,
-    ): Boolean {
-        if (quoter.actorId in refusedActorIds) return false
+    ) {
         enqueued += Enqueued(username = username, inbox = quoter.inbox, acceptBody = acceptBody)
-        return true
     }
 
     data class Enqueued(
