@@ -123,6 +123,31 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
+    fun `attributedTo がオブジェクトでも別のアクターなら承認しない`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+
+        val handling = handle(
+            approvals,
+            quoteRequestJson(instrument = """{"id":"$QUOTING_NOTE","attributedTo":{"id":"https://remote.example/users/bob"}}"""),
+        )
+
+        assertIs<InboxHandling.Ignored>(handling)
+        assertTrue(approvals.enqueued.isEmpty())
+    }
+
+    @Test
+    fun `attributedTo がオブジェクトで署名した相手なら承認する`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+
+        val handling = handle(
+            approvals,
+            quoteRequestJson(instrument = """{"id":"$QUOTING_NOTE","attributedTo":{"id":"${TestRemoteActor.ACTOR_ID}"}}"""),
+        )
+
+        assertEquals(InboxHandling.Handled, handling)
+    }
+
+    @Test
     fun `引用した相手のアクター文書を一時的に取得できなければ送り直してもらう`() = runBlocking {
         val approvals = FakeQuoteApprovals()
 

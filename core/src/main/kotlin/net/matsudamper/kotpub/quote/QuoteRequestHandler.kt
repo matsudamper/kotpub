@@ -2,7 +2,6 @@ package net.matsudamper.kotpub.quote
 
 import java.util.UUID
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activity.OutgoingActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
@@ -109,8 +108,9 @@ class QuoteRequestHandler(
         val signerUrl = HttpUrl.parse(signerActorId) ?: return false
         if (!noteUrl.isHttps || !noteUrl.isSameHost(signerUrl)) return false
 
-        val attributedTo = (instrument as? LinkOrObject.Embedded)?.json?.get("attributedTo") as? JsonPrimitive
-        return attributedTo == null || attributedTo.content == signerActorId
+        val attributedTo = (instrument as? LinkOrObject.Embedded)?.json?.get("attributedTo") ?: return true
+        val attributedActorId = runCatching { AppJson.decodeFromJsonElement(LinkOrObject.serializer(), attributedTo).id }.getOrNull()
+        return attributedActorId == signerActorId
     }
 
     private fun RemoteFetchFailure.isTemporary(): Boolean =
