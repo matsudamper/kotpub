@@ -1,12 +1,16 @@
 package net.matsudamper.kotpub.note
 
-import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import net.matsudamper.kotpub.activity.ActivityStreamsIri
 import net.matsudamper.kotpub.activity.CreateNoteActivity
 import net.matsudamper.kotpub.emoji.EmojiObject
@@ -156,10 +160,26 @@ sealed interface NoteTag {
     val type: String
 }
 
-internal object NoteTagSerializer : JsonContentPolymorphicSerializer<NoteTag>(NoteTag::class) {
-    override fun selectDeserializer(element: JsonElement): DeserializationStrategy<NoteTag> {
-        val type = (element.jsonObject["type"] as? JsonPrimitive)?.content
-        return if (type == EmojiObject.TYPE_EMOJI) NoteEmojiTag.serializer() else NoteMentionTag.serializer()
+/**
+ * 実際の型のシリアライザを型から引くとリフレクションが要り、GraalVM のネイティブイメージでは見つからない。
+ * 型ごとのシリアライザをここで直接選ぶ
+ */
+internal object NoteTagSerializer : KSerializer<NoteTag> {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("net.matsudamper.kotpub.note.NoteTag")
+
+    override fun serialize(encoder: Encoder, value: NoteTag) {
+        when (value) {
+            is NoteMentionTag -> encoder.encodeSerializableValue(NoteMentionTag.serializer(), value)
+            is NoteEmojiTag -> encoder.encodeSerializableValue(NoteEmojiTag.serializer(), value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): NoteTag {
+        val jsonDecoder = decoder as? JsonDecoder ?: throw SerializationException("NoteTag は JSON からだけ読める")
+        val element = jsonDecoder.decodeJsonElement()
+        val type = ((element as? JsonObject)?.get("type") as? JsonPrimitive)?.content
+        val serializer = if (type == EmojiObject.TYPE_EMOJI) NoteEmojiTag.serializer() else NoteMentionTag.serializer()
+        return jsonDecoder.json.decodeFromJsonElement(serializer, element)
     }
 }
 
