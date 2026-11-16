@@ -1,6 +1,7 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -434,6 +435,7 @@ class HttpRemoteOutbox(
         return RemoteOutboxNote(
             id = id,
             contentHtml = content,
+            language = received.language,
             publishedAt = publishedAt,
             summary = received.summary,
             sensitive = received.sensitive,
@@ -636,6 +638,10 @@ data class RemoteOutboxCursor(
 data class RemoteOutboxNote(
     val id: String,
     val contentHtml: String,
+    /**
+     * 送り手が付けていないか、言語タグとして読めなければ null
+     */
+    val language: Locale?,
     val publishedAt: String,
     val summary: String?,
     val sensitive: Boolean,
