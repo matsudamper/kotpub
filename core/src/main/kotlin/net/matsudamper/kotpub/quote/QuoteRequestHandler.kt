@@ -9,7 +9,6 @@ import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.http.HttpStatusCodes
-import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.inbox.InboxActivityHandler
 import net.matsudamper.kotpub.inbox.InboxHandling
@@ -18,6 +17,8 @@ import net.matsudamper.kotpub.inbox.InboxSpan
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteStore
 import net.matsudamper.kotpub.note.NoteUrls
+import net.matsudamper.kotpub.note.RemoteNoteLookup
+import net.matsudamper.kotpub.note.RemoteNotes
 
 /**
  * `QuoteRequest` を受けて、引用を承認する `Accept` を返す。FEP-044f の流れ。
@@ -32,6 +33,7 @@ class QuoteRequestHandler(
     private val domain: String,
     private val notes: NoteStore,
     private val remoteActors: RemoteActors,
+    private val remoteNotes: RemoteNotes,
     private val approvals: QuoteApprovals,
 ) : InboxActivityHandler {
     override val type: String = TYPE
@@ -59,10 +61,24 @@ class QuoteRequestHandler(
             InboxSpan.outcome("quote_request.no_instrument")
             return InboxHandling.Ignored("QuoteRequest に引用した投稿が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
-        // 他人の投稿を引用元として承認させると、その投稿がこちらの投稿を引用したことにされる
-        if (!isPostedBySigner(instrument = activity.instrument, quotingNoteId = quotingNoteId, signerActorId = verifiedSignerActorId)) {
-            InboxSpan.outcome("quote_request.foreign_instrument")
-            return InboxHandling.Ignored("署名した相手の投稿ではないので承認しない: instrument=$quotingNoteId ← $verifiedSignerActorId")
+        // 他人の投稿を引用元として承認させると、その投稿がこちらの投稿を引用したことにされる。
+        // 要求に埋め込まれた attributedTo は要求した側が書けるので、引用元の投稿を取得して投稿者を確かめる
+        when (val lookup = remoteNotes.find(quotingNoteId)) {
+            is RemoteNoteLookup.Found -> {
+                if (lookup.note.attributedTo != verifiedSignerActorId) {
+                    InboxSpan.outcome("quote_request.foreign_instrument")
+                    return InboxHandling.Ignored("署名した相手の投稿ではないので承認しない: instrument=$quotingNoteId ← $verifiedSignerActorId")
+                }
+            }
+
+            is RemoteNoteLookup.NotFound -> {
+                InboxSpan.outcome("quote_request.instrument_not_found")
+                return InboxHandling.Ignored("引用した投稿を取得できないので承認しない: instrument=$quotingNoteId 理由=${lookup.failure}")
+            }
+
+            is RemoteNoteLookup.Unavailable -> {
+                throw IllegalStateException("引用した投稿を一時的に取得できない: instrument=$quotingNoteId 理由=${lookup.failure}")
+            }
         }
 
         val quoter = when (val lookup = remoteActors.findActor(verifiedSignerActorId)) {
@@ -106,20 +122,6 @@ class QuoteRequestHandler(
 
         InboxSpan.outcome("quote_request.accepted")
         return InboxHandling.Handled
-    }
-
-    private fun isPostedBySigner(
-        instrument: LinkOrObject,
-        quotingNoteId: String,
-        signerActorId: String,
-    ): Boolean {
-        val noteUrl = HttpUrl.parse(quotingNoteId) ?: return false
-        val signerUrl = HttpUrl.parse(signerActorId) ?: return false
-        if (!noteUrl.isHttps || !noteUrl.isSameHost(signerUrl)) return false
-
-        val attributedTo = (instrument as? LinkOrObject.Embedded)?.json?.get("attributedTo") ?: return true
-        val attributedActorId = runCatching { AppJson.decodeFromJsonElement(LinkOrObject.serializer(), attributedTo).id }.getOrNull()
-        return attributedActorId == signerActorId
     }
 
     private fun RemoteFetchFailure.isTemporary(): Boolean =

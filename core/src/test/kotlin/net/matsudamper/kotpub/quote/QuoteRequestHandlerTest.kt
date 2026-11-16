@@ -27,6 +27,10 @@ import net.matsudamper.kotpub.inbox.InboxHandling
 import net.matsudamper.kotpub.inbox.InboxRecipient
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteUrls
+import net.matsudamper.kotpub.note.NoteVisibility
+import net.matsudamper.kotpub.note.ReceivedNote
+import net.matsudamper.kotpub.note.RemoteNoteLookup
+import net.matsudamper.kotpub.note.RemoteNotes
 import net.matsudamper.kotpub.note.StoredNote
 
 class QuoteRequestHandlerTest {
@@ -47,12 +51,38 @@ class QuoteRequestHandlerTest {
     }
     private val noteUrls = NoteUrls(domain = TestLocalActor.DOMAIN, publicId = PublicNoteId(PUBLIC_ID))
 
-    private fun handler(approvals: QuoteApprovals, remoteActors: RemoteActors): QuoteRequestHandler = QuoteRequestHandler(
+    private fun handler(
+        approvals: QuoteApprovals,
+        remoteActors: RemoteActors,
+        remoteNotes: RemoteNotes,
+    ): QuoteRequestHandler = QuoteRequestHandler(
         domain = TestLocalActor.DOMAIN,
         notes = notes,
         remoteActors = remoteActors,
+        remoteNotes = remoteNotes,
         approvals = approvals,
     )
+
+    private fun remoteNotesPostedBy(attributedTo: String): RemoteNotes =
+        RemoteNotes { noteId ->
+            RemoteNoteLookup.Found(
+                ReceivedNote(
+                    id = noteId,
+                    attributedTo = attributedTo,
+                    content = "<p>quoting</p>",
+                    published = null,
+                    to = listOf(),
+                    cc = listOf(),
+                    inReplyTo = null,
+                    quote = noteUrls.noteUrl,
+                    summary = null,
+                    sensitive = false,
+                    visibility = NoteVisibility.Public,
+                    attachments = listOf(),
+                    emojis = listOf(),
+                ),
+            )
+        }
 
     private fun remoteActorsFailingWith(failure: RemoteFetchFailure): RemoteActors =
         object : RemoteActors by TestRemoteActor.remoteActors() {
@@ -63,9 +93,10 @@ class QuoteRequestHandlerTest {
         approvals: QuoteApprovals,
         json: String,
         remoteActors: RemoteActors = TestRemoteActor.remoteActors(),
+        remoteNotes: RemoteNotes = remoteNotesPostedBy(TestRemoteActor.ACTOR_ID),
     ): InboxHandling {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
-        return handler(approvals, remoteActors).handle(
+        return handler(approvals, remoteActors, remoteNotes).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
             verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
             activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),
@@ -102,22 +133,13 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `署名した相手と別のホストの投稿を引用元にした要求は承認しない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-
-        val handling = handle(approvals, quoteRequestJson(instrument = "\"https://other.example/notes/1\""))
-
-        assertIs<InboxHandling.Ignored>(handling)
-        assertTrue(approvals.enqueued.isEmpty())
-    }
-
-    @Test
-    fun `署名した相手と別のアクターの投稿を引用元にした要求は承認しない`() = runBlocking {
+    fun `取得した引用元の投稿者が署名した相手と違えば、埋め込みで名乗っていても承認しない`() = runBlocking {
         val approvals = FakeQuoteApprovals()
 
         val handling = handle(
             approvals,
-            quoteRequestJson(instrument = """{"id":"$QUOTING_NOTE","attributedTo":"https://remote.example/users/bob"}"""),
+            quoteRequestJson(),
+            remoteNotes = remoteNotesPostedBy("https://remote.example/users/bob"),
         )
 
         assertIs<InboxHandling.Ignored>(handling)
@@ -125,12 +147,13 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `attributedTo がオブジェクトでも別のアクターなら承認しない`() = runBlocking {
+    fun `引用元の投稿を取得できなければ承認しない`() = runBlocking {
         val approvals = FakeQuoteApprovals()
 
         val handling = handle(
             approvals,
-            quoteRequestJson(instrument = """{"id":"$QUOTING_NOTE","attributedTo":{"id":"https://remote.example/users/bob"}}"""),
+            quoteRequestJson(),
+            remoteNotes = { RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(QUOTING_NOTE, HttpStatusCodes.NOT_FOUND)) },
         )
 
         assertIs<InboxHandling.Ignored>(handling)
@@ -138,15 +161,14 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `attributedTo がオブジェクトで署名した相手なら承認する`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-
-        val handling = handle(
-            approvals,
-            quoteRequestJson(instrument = """{"id":"$QUOTING_NOTE","attributedTo":{"id":"${TestRemoteActor.ACTOR_ID}"}}"""),
-        )
-
-        assertEquals(InboxHandling.Handled, handling)
+    fun `引用元の投稿を一時的に取得できなければ送り直してもらう`() = runBlocking {
+        assertFailsWith<IllegalStateException> {
+            handle(
+                FakeQuoteApprovals(),
+                quoteRequestJson(),
+                remoteNotes = { RemoteNoteLookup.Unavailable(RemoteFetchFailure.Throttled(QUOTING_NOTE)) },
+            )
+        }
     }
 
     @Test

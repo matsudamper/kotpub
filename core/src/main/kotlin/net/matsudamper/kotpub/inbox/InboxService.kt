@@ -214,7 +214,7 @@ class InboxService(
          *   消えた相手の公開鍵の参照先にもなる
          * @param stamps スタンプの記録。[favourites] と同じく、消えた相手の公開鍵の参照先にもなる
          * @param boosts ブーストの記録。[favourites] と同じく、消えた相手の公開鍵の参照先にもなる
-         * @param remoteNotes 他のサーバーの投稿がブーストされたときの、投稿の取得元
+         * @param remoteNotes 他のサーバーの投稿がブーストされたときと、引用されたときの、投稿の取得元
          * @param domainBlocks 受信を止めるドメインと、署名付きのリクエストが届いたことの記録先
          */
         fun default(
@@ -281,7 +281,13 @@ class InboxService(
                         boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
                         follows = UndoFollowHandler(directory = directory, followers = followers),
                     ),
-                    QuoteRequestHandler(domain = domain, notes = notes, remoteActors = remoteActors, approvals = quoteApprovals),
+                    QuoteRequestHandler(
+                        domain = domain,
+                        notes = notes,
+                        remoteActors = remoteActors,
+                        remoteNotes = remoteNotes,
+                        approvals = quoteApprovals,
+                    ),
                     UpdateActorHandler(followers),
                     DeleteActorHandler(followers = followers, favourites = favourites, stamps = stamps, boosts = boosts),
                 ),
