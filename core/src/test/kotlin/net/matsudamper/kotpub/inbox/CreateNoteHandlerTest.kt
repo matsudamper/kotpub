@@ -119,6 +119,43 @@ class CreateNoteHandlerTest {
         )
     }
 
+    @Test
+    fun languageIsReadFromFirstContentMapKey() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        listOf(
+            """"content":"<p>q</p>","contentMap":{"ja":"<p>q</p>"}""",
+            """"content":"<p>q</p>","contentMap":{"zh-tw":"<p>q</p>","en":"<p>q</p>"}""",
+            """"content":"<p>q</p>","contentMap":{"en":"<p>q</p>","ja":"<p>q</p>"}""",
+            """"content":"<p>q</p>","contentMap":{"not a language":"<p>q</p>","ja":"<p>q</p>"}""",
+            """"content":"<p>q</p>","contentMap":{"und":"<p>q</p>"}""",
+            """"content":"<p>q</p>","contentMap":{}""",
+            """"content":"<p>q</p>"""",
+        ).forEach { content ->
+            receive(
+                handler,
+                """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","to":["$PUBLIC"],$content}""",
+            )
+        }
+        assertEquals(listOf("ja", "zh-TW", "en", null, null, null, null), store.saved.map { it.language })
+    }
+
+    @Test
+    fun contentPrefersContentOverContentMap() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        listOf(
+            """"content":"<p>content</p>","contentMap":{"ja":"<p>map</p>"}""",
+            """"contentMap":{"ja":"<p>first</p>","en":"<p>second</p>"}""",
+        ).forEach { content ->
+            receive(
+                handler,
+                """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","to":["$PUBLIC"],$content}""",
+            )
+        }
+        assertEquals(listOf("<p>content</p>", "<p>first</p>"), store.saved.map { it.content })
+    }
+
     private suspend fun receive(handler: CreateNoteHandler, target: String) {
         val raw = AppJson.parseToJsonElement("""{"type":"Create","actor":"$ACTOR","object":$target}""").jsonObject
         handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)

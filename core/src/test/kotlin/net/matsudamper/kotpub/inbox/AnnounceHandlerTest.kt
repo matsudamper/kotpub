@@ -32,6 +32,7 @@ class AnnounceHandlerTest {
             id = remoteNoteId,
             attributedTo = "https://other.example/users/bob",
             content = "<p>hello</p>",
+            language = null,
             published = null,
             updated = null,
             to = listOf(),

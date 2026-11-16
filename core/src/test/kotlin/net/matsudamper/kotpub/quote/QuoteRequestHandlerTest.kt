@@ -70,6 +70,7 @@ class QuoteRequestHandlerTest {
                     id = noteId,
                     attributedTo = attributedTo,
                     content = "<p>quoting</p>",
+                    language = null,
                     published = null,
                     updated = null,
                     to = listOf(),

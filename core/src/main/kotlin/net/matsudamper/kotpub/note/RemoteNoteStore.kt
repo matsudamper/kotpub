@@ -19,6 +19,10 @@ data class ReceivedNote(
     val id: String,
     val attributedTo: String,
     val content: String,
+    /**
+     * BCP 47 の言語タグ。送り手が付けていないか、言語タグとして読めなければ null
+     */
+    val language: String?,
     val published: Instant?,
     /**
      * 投稿者が最後に編集した時刻。編集していないか、送り手が付けていなければ null

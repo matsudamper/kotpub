@@ -1,6 +1,8 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import java.util.IllformedLocaleException
+import java.util.Locale
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -21,10 +23,12 @@ internal object ReceivedNoteJson {
         val attributedTo = note["attributedTo"].string() ?: return null
         val to = note["to"].strings()
         val cc = note["cc"].strings()
+        val contentMap = note["contentMap"] as? JsonObject
         return ReceivedNote(
             id = id,
             attributedTo = attributedTo,
-            content = note["content"].string() ?: return null,
+            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: return null,
+            language = contentMap?.keys?.firstOrNull()?.let { languageTagOrNull(it) },
             published = note["published"].instant(),
             updated = note["updated"].instant(),
             to = to,
@@ -47,6 +51,16 @@ internal object ReceivedNoteJson {
         PUBLIC in cc -> NoteVisibility.Unlisted
         (to + cc).any { it == "$actorId/followers" } -> NoteVisibility.Followers
         else -> NoteVisibility.Direct
+    }
+
+    /**
+     * 投稿の言語を表す専用のプロパティは無く、Mastodon などは `contentMap` のキーで伝える。
+     * 複数の言語が入っていても、Mastodon と同じく先頭だけを見る
+     */
+    private fun languageTagOrNull(contentMapKey: String): String? = try {
+        Locale.Builder().setLanguageTag(contentMapKey).build().toLanguageTag().takeIf { it != UNDETERMINED_LANGUAGE }
+    } catch (_: IllformedLocaleException) {
+        null
     }
 
     /**
@@ -102,6 +116,8 @@ internal object ReceivedNoteJson {
     private fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     private val QUOTE_KEYS = listOf("quote", "quoteUrl", "quoteUri", "_misskey_quote")
+
+    private const val UNDETERMINED_LANGUAGE = "und"
 
     private const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 }
