@@ -242,5 +242,6 @@ private fun noteDocument(
         quoteUrl = note.quote,
         misskeyQuote = note.quote,
         tag = note.toNoteTags(),
+        interactionPolicy = InteractionPolicy.QUOTABLE_BY_ANYONE,
     )
 }

@@ -13,7 +13,10 @@ import net.matsudamper.kotpub.httpsignature.HttpSignatureResult
 import net.matsudamper.kotpub.httpsignature.HttpSignatureVerifier
 import net.matsudamper.kotpub.httpsignature.SignedRequest
 import net.matsudamper.kotpub.json.AppJson
+import net.matsudamper.kotpub.note.NoteStore
 import net.matsudamper.kotpub.note.RemoteNotes
+import net.matsudamper.kotpub.quote.QuoteApprovals
+import net.matsudamper.kotpub.quote.QuoteRequestHandler
 import net.matsudamper.kotpub.stamp.StampStore
 import org.slf4j.LoggerFactory
 
@@ -224,6 +227,8 @@ class InboxService(
             remoteNotes: RemoteNotes,
             earlyUndoneLikes: EarlyUndoneLikes,
             domainBlocks: InboxDomainBlocks,
+            notes: NoteStore,
+            quoteApprovals: QuoteApprovals,
             domain: String,
         ): InboxService =
             InboxService(
@@ -276,6 +281,7 @@ class InboxService(
                         boosts = UndoBoostHandler(boosts = boosts, earlyUndone = earlyUndoneLikes),
                         follows = UndoFollowHandler(directory = directory, followers = followers),
                     ),
+                    QuoteRequestHandler(domain = domain, notes = notes, remoteActors = remoteActors, approvals = quoteApprovals),
                     UpdateActorHandler(followers),
                     DeleteActorHandler(followers = followers, favourites = favourites, stamps = stamps, boosts = boosts),
                 ),

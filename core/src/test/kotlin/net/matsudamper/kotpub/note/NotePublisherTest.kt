@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import net.matsudamper.kotpub.FakeFollowerStore
@@ -154,5 +155,17 @@ class NotePublisherTest {
 
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
         assertEquals(listOf(), listOf("quote", "quoteUrl", "_misskey_quote").filter { it in note })
+    }
+
+    @Test
+    fun `誰でも引用できることを interactionPolicy で示す`() {
+        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(), null, null, listOf(), listOf())
+
+        val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
+        val automaticApproval = note.getValue("interactionPolicy").jsonObject
+            .getValue("canQuote").jsonObject
+            .getValue("automaticApproval").jsonArray
+            .map { it.jsonPrimitive.content }
+        assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE), automaticApproval)
     }
 }

@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.note
 
+import java.util.Base64
 import net.matsudamper.kotpub.entity.ActivityPubId
 import net.matsudamper.kotpub.entity.PublicNoteId
 
@@ -33,8 +34,31 @@ data class NoteUrls(
      */
     val deleteId: ActivityPubId = ActivityPubId("$noteUrl#delete")
 
+    /**
+     * この投稿の引用を認めた `QuoteAuthorization` の id。相手は引用を確かめるときにここを取得しに来る。
+     *
+     * 承認は記録せず、引用した投稿の id を URL に入れて、取得されたときに組み立て直す。
+     * 投稿は誰にでも引用を許しているので、記録が無くても認めた内容は変わらない。
+     * 投稿を消せば取得できなくなり、相手は引用の承認が取り消されたと扱う
+     *
+     * @param interactingObject 引用した投稿の id
+     */
+    fun quoteAuthorizationUrl(interactingObject: String): String =
+        "$noteUrl$QUOTE_AUTHORIZATIONS_PATH${quoteTokenEncoder.encodeToString(interactingObject.toByteArray(Charsets.UTF_8))}"
+
     companion object {
         private const val NOTES_PATH = "/notes/"
+        private const val QUOTE_AUTHORIZATIONS_PATH = "/quote_authorizations/"
+
+        private val quoteTokenEncoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
+
+        /**
+         * [quoteAuthorizationUrl] の末尾から、引用した投稿の id を読み戻す。読めなければ null
+         */
+        fun interactingObjectOf(quoteAuthorizationToken: String): String? =
+            runCatching { Base64.getUrlDecoder().decode(quoteAuthorizationToken).toString(Charsets.UTF_8) }
+                .getOrNull()
+                ?.takeIf { it.startsWith("https://") }
 
         /**
          * こちらのドメインの投稿の URL でなければ null
