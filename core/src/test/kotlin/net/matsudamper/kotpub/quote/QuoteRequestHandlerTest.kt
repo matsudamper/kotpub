@@ -3,6 +3,7 @@ package net.matsudamper.kotpub.quote
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -15,8 +16,11 @@ import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activity.OutgoingActivity
+import net.matsudamper.kotpub.actor.RemoteActorLookup
+import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.inbox.InboxHandling
 import net.matsudamper.kotpub.inbox.InboxRecipient
 import net.matsudamper.kotpub.json.AppJson
@@ -41,16 +45,25 @@ class QuoteRequestHandlerTest {
     }
     private val noteUrls = NoteUrls(domain = TestLocalActor.DOMAIN, publicId = PublicNoteId(PUBLIC_ID))
 
-    private fun handler(approvals: QuoteApprovals): QuoteRequestHandler = QuoteRequestHandler(
+    private fun handler(approvals: QuoteApprovals, remoteActors: RemoteActors): QuoteRequestHandler = QuoteRequestHandler(
         domain = TestLocalActor.DOMAIN,
         notes = notes,
-        remoteActors = TestRemoteActor.remoteActors(),
+        remoteActors = remoteActors,
         approvals = approvals,
     )
 
-    private suspend fun handle(approvals: QuoteApprovals, json: String): InboxHandling {
+    private fun remoteActorsFailingWith(failure: RemoteFetchFailure): RemoteActors =
+        object : RemoteActors by TestRemoteActor.remoteActors() {
+            override suspend fun findActor(actorId: String): RemoteActorLookup = RemoteActorLookup.Unavailable(failure)
+        }
+
+    private suspend fun handle(
+        approvals: QuoteApprovals,
+        json: String,
+        remoteActors: RemoteActors = TestRemoteActor.remoteActors(),
+    ): InboxHandling {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
-        return handler(approvals).handle(
+        return handler(approvals, remoteActors).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
             verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
             activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),
@@ -107,6 +120,29 @@ class QuoteRequestHandlerTest {
 
         assertIs<InboxHandling.Ignored>(handling)
         assertTrue(approvals.enqueued.isEmpty())
+    }
+
+    @Test
+    fun `引用した相手のアクター文書を一時的に取得できなければ送り直してもらう`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+
+        assertFailsWith<IllegalStateException> {
+            handle(approvals, quoteRequestJson(), remoteActorsFailingWith(RemoteFetchFailure.Throttled(TestRemoteActor.ACTOR_ID)))
+        }
+        assertTrue(approvals.enqueued.isEmpty())
+    }
+
+    @Test
+    fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() = runBlocking {
+        val approvals = FakeQuoteApprovals()
+
+        val handling = handle(
+            approvals,
+            quoteRequestJson(),
+            remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, HttpStatusCodes.NOT_FOUND)),
+        )
+
+        assertIs<InboxHandling.Ignored>(handling)
     }
 
     @Test

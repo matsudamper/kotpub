@@ -11,6 +11,7 @@ import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.http.HttpUrl
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.inbox.InboxActivityHandler
 import net.matsudamper.kotpub.inbox.InboxHandling
 import net.matsudamper.kotpub.inbox.InboxRecipient
@@ -69,6 +70,10 @@ class QuoteRequestHandler(
             is RemoteActorLookup.Found -> lookup.actor
 
             RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                // 承認が返らないと相手の引用は保留のまま残るので、一時的な失敗なら送り直してもらう
+                if (lookup is RemoteActorLookup.Unavailable && lookup.failure.isTemporary()) {
+                    throw IllegalStateException("引用した相手のアクター文書を一時的に取得できない: $verifiedSignerActorId 理由=$lookup")
+                }
                 InboxSpan.outcome("quote_request.actor_unavailable")
                 return InboxHandling.Ignored("引用した相手のアクター文書を取得できないので承認を返せない: $verifiedSignerActorId 理由=$lookup")
             }
@@ -107,6 +112,9 @@ class QuoteRequestHandler(
         val attributedTo = (instrument as? LinkOrObject.Embedded)?.json?.get("attributedTo") as? JsonPrimitive
         return attributedTo == null || attributedTo.content == signerActorId
     }
+
+    private fun RemoteFetchFailure.isTemporary(): Boolean =
+        this is RemoteFetchFailure.Throttled || this is RemoteFetchFailure.RequestFailed
 
     companion object {
         const val TYPE: String = "QuoteRequest"
