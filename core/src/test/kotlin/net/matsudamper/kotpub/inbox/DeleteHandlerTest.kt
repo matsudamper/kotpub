@@ -20,6 +20,7 @@ class DeleteHandlerTest {
         val deleted = mutableListOf<String>()
         val notes = object : RemoteNoteStore {
             override suspend fun save(note: ReceivedNote) = Unit
+            override suspend fun update(note: ReceivedNote) = Unit
             override suspend fun delete(actorId: String, objectId: String) {
                 deleted.add(objectId)
             }
