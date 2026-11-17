@@ -3,13 +3,12 @@ package net.matsudamper.kotpub.httpsignature
 import java.net.URI
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import net.matsudamper.kotpub.TestActorPrivateKey
 import net.matsudamper.kotpub.TestRemoteActors
-import net.matsudamper.kotpub.actor.ActorUrls
-import net.matsudamper.kotpub.actor.LocalActor
+import net.matsudamper.kotpub.actor.InstanceActor
+import net.matsudamper.kotpub.actor.InstanceActorUrls
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
@@ -17,8 +16,8 @@ import net.matsudamper.kotpub.http.RequestHeaders
 import net.matsudamper.kotpub.http.ResponseBody
 
 class SignedFetchActivityPubHttpClientTest {
-    private val actor = LocalActor(
-        urls = ActorUrls(domain = "example.com", username = "admin"),
+    private val actor = InstanceActor(
+        urls = InstanceActorUrls(domain = "example.com"),
         privateKey = TestActorPrivateKey.value,
     )
     private val remoteActors = TestRemoteActors.of(
@@ -30,7 +29,7 @@ class SignedFetchActivityPubHttpClientTest {
     @Test
     fun `GETの署名が相手側の検証を通る`() {
         val recording = RecordingClient()
-        val client = SignedFetchActivityPubHttpClient(recording, { actor }, HttpSignatureSigner())
+        val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
 
         runBlocking { client.get("https://remote.example/users/alice/statuses/1?page=1", mapOf("Accept" to "application/activity+json"), 1024) { _, _ -> false } }
 
@@ -52,23 +51,12 @@ class SignedFetchActivityPubHttpClientTest {
     @Test
     fun `渡したヘッダの同名のものは大文字小文字を問わず署名したものに置き換える`() {
         val recording = RecordingClient()
-        val client = SignedFetchActivityPubHttpClient(recording, { actor }, HttpSignatureSigner())
+        val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
 
         runBlocking { client.get("https://remote.example/users/alice", mapOf("date" to "old", "host" to "other.example"), 1024) { _, _ -> false } }
 
         assertEquals(setOf("Host", "Date", "Signature"), recording.headers.keys)
         assertEquals("remote.example", recording.headers["Host"])
-    }
-
-    @Test
-    fun `署名に使うアクターが居なければ署名しない`() {
-        val recording = RecordingClient()
-        val client = SignedFetchActivityPubHttpClient(recording, { null }, HttpSignatureSigner())
-
-        runBlocking { client.get("https://remote.example/users/alice", mapOf("Accept" to "application/activity+json"), 1024) { _, _ -> false } }
-
-        assertEquals(mapOf("Accept" to "application/activity+json"), recording.headers)
-        assertFalse("Signature" in recording.headers)
     }
 
     private class RecordingClient : ActivityPubHttpClient {
