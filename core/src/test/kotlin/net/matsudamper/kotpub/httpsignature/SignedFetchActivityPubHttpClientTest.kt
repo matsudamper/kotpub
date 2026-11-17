@@ -50,6 +50,17 @@ class SignedFetchActivityPubHttpClientTest {
     }
 
     @Test
+    fun `渡したヘッダの同名のものは大文字小文字を問わず署名したものに置き換える`() {
+        val recording = RecordingClient()
+        val client = SignedFetchActivityPubHttpClient(recording, { actor }, HttpSignatureSigner())
+
+        runBlocking { client.get("https://remote.example/users/alice", mapOf("date" to "old", "host" to "other.example"), 1024) { _, _ -> false } }
+
+        assertEquals(setOf("Host", "Date", "Signature"), recording.headers.keys)
+        assertEquals("remote.example", recording.headers["Host"])
+    }
+
+    @Test
     fun `署名に使うアクターが居なければ署名しない`() {
         val recording = RecordingClient()
         val client = SignedFetchActivityPubHttpClient(recording, { null }, HttpSignatureSigner())

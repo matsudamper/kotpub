@@ -40,7 +40,9 @@ class SignedFetchActivityPubHttpClient(
             host = SignedRequestLine.hostHeader(parsedUrl),
             body = ByteArray(0),
         )
-        return client.get(url = url, headers = headers + signedHeaders, maxBodyBytes = maxBodyBytes, readsBody = readsBody)
+        // 大文字小文字だけ違う同名のヘッダが残ると、署名していない値も一緒に送られて検証が落ちる
+        val unsignedHeaders = headers.filterKeys { name -> signedHeaders.keys.none { it.equals(name, ignoreCase = true) } }
+        return client.get(url = url, headers = unsignedHeaders + signedHeaders, maxBodyBytes = maxBodyBytes, readsBody = readsBody)
     }
 
     override suspend fun post(
