@@ -82,6 +82,33 @@ class SignedFetchActivityPubHttpClientTest {
     }
 
     @Test
+    fun `別のホストへのリダイレクトではAuthorizationを外す`() {
+        val recording = RecordingClient(
+            redirects = mapOf(
+                "https://remote.example/a" to "/b",
+                "https://remote.example/b" to "https://other.example/c",
+                "https://other.example/c" to "https://remote.example/d",
+            ),
+        )
+        val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
+
+        runBlocking { client.get("https://remote.example/a", mapOf("authorization" to "Bearer secret"), 1024) { _, _ -> false } }
+
+        assertEquals(listOf("Bearer secret", "Bearer secret", null, null), recording.requests.map { it.headers["authorization"] })
+    }
+
+    @Test
+    fun `httpsからhttpへのリダイレクトは追わない`() {
+        val recording = RecordingClient(redirects = mapOf("https://remote.example/a" to "http://remote.example/a"))
+        val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
+
+        assertFailsWith<IOException> {
+            runBlocking { client.get("https://remote.example/a", mapOf(), 1024) { _, _ -> false } }
+        }
+        assertEquals(listOf("https://remote.example/a"), recording.requests.map { it.url })
+    }
+
+    @Test
     fun `リダイレクトが続くと諦める`() {
         val recording = RecordingClient(redirects = mapOf("https://remote.example/loop" to "/loop"))
         val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())

@@ -36,16 +36,25 @@ class SignedFetchActivityPubHttpClient(
         readsBody: (status: Int, finalUrl: String) -> Boolean,
     ): ActivityPubClientResponse {
         var currentUrl = url
+        var currentHeaders = headers
         repeat(MAX_REDIRECTS + 1) {
             val response = client.getSingleHop(
                 url = currentUrl,
-                headers = signedHeaders(currentUrl, headers),
+                headers = signedHeaders(currentUrl, currentHeaders),
                 maxBodyBytes = maxBodyBytes,
                 readsBody = readsBody,
             )
             when (response) {
                 is SingleHopGetResponse.Final -> return response.response
-                is SingleHopGetResponse.Redirect -> currentUrl = resolveLocation(currentUrl, response.location)
+
+                is SingleHopGetResponse.Redirect -> {
+                    val nextUrl = resolveLocation(currentUrl, response.location)
+                    requireNoHttpsDowngrade(currentUrl, nextUrl)
+                    if (!isSameOrigin(currentUrl, nextUrl)) {
+                        currentHeaders = currentHeaders.filterKeys { !it.equals(AUTHORIZATION_HEADER, ignoreCase = true) }
+                    }
+                    currentUrl = nextUrl
+                }
             }
         }
         throw IOException("リダイレクトが多すぎる: $url")
@@ -103,8 +112,34 @@ class SignedFetchActivityPubHttpClient(
             throw IOException("リダイレクト先の URL を読めない: $location", exception)
         }
 
+    /**
+     * https から http へ移ると、応答を盗み見られたり書き換えられたりする。署名は応答を守らないので追わない
+     */
+    private fun requireNoHttpsDowngrade(
+        currentUrl: String,
+        nextUrl: String,
+    ) {
+        if (HttpUrl.parseHttps(currentUrl) != null && HttpUrl.parseHttps(nextUrl) == null) {
+            throw IOException("https から https 以外へのリダイレクトは追わない: $currentUrl -> $nextUrl")
+        }
+    }
+
+    /**
+     * OkHttp や Ktor が自分で追うときと同じく、移り先のホスト・ポート・スキームが変わったら
+     * 渡された `Authorization` を外す。別の相手に資格情報を渡さない
+     */
+    private fun isSameOrigin(
+        currentUrl: String,
+        nextUrl: String,
+    ): Boolean {
+        val current = HttpUrl.parse(currentUrl) ?: return false
+        val next = HttpUrl.parse(nextUrl) ?: return false
+        return current.scheme == next.scheme && current.host.equals(next.host, ignoreCase = true) && current.port == next.port
+    }
+
     private companion object {
         // OkHttp や Ktor が自分で追うときの上限に合わせる
         const val MAX_REDIRECTS = 20
+        const val AUTHORIZATION_HEADER = "Authorization"
     }
 }
