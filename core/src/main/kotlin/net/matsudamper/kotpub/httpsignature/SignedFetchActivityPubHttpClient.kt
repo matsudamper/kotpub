@@ -92,7 +92,8 @@ class SignedFetchActivityPubHttpClient(
         try {
             val base = URI(currentUrl)
             if (location.startsWith("?")) {
-                URI(base.scheme, base.rawAuthority, base.rawPath, null, null).toString() + location
+                // URI の複数引数のコンストラクタは % をもう一度エスケープするので、raw の値を繋ぐ
+                "${base.scheme}://${base.rawAuthority}${base.rawPath}$location"
             } else {
                 base.resolve(location).toString()
             }
