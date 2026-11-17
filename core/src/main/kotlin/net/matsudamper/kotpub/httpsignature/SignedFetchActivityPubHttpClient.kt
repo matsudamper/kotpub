@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.httpsignature
 
 import java.io.IOException
 import java.net.URI
+import java.net.URISyntaxException
 import net.matsudamper.kotpub.actor.InstanceActor
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
@@ -79,15 +80,25 @@ class SignedFetchActivityPubHttpClient(
     }
 
     /**
-     * `Location` は相対 URL のことがあるので、今の URL を基準に解決する
+     * `Location` は相対 URL のことがあるので、今の URL を基準に解決する。
+     *
+     * [URI.resolve] は RFC 2396 のままで、`?page=2` のようなクエリだけの参照ではパスの末尾を落とす。
+     * RFC 3986 ではパスを保つので、その場合だけ自分で組み立てる
      */
     private fun resolveLocation(
         currentUrl: String,
         location: String,
     ): String =
         try {
-            URI(currentUrl).resolve(location).toString()
+            val base = URI(currentUrl)
+            if (location.startsWith("?")) {
+                URI(base.scheme, base.rawAuthority, base.rawPath, null, null).toString() + location
+            } else {
+                base.resolve(location).toString()
+            }
         } catch (exception: IllegalArgumentException) {
+            throw IOException("リダイレクト先の URL を読めない: $location", exception)
+        } catch (exception: URISyntaxException) {
             throw IOException("リダイレクト先の URL を読めない: $location", exception)
         }
 

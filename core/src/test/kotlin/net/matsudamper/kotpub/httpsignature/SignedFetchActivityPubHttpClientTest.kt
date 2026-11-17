@@ -63,6 +63,16 @@ class SignedFetchActivityPubHttpClientTest {
     }
 
     @Test
+    fun `クエリだけのリダイレクトは今のパスを保つ`() {
+        val recording = RecordingClient(redirects = mapOf("https://remote.example/users/alice?page=1" to "?page=2"))
+        val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
+
+        runBlocking { client.get("https://remote.example/users/alice?page=1", mapOf(), 1024) { _, _ -> false } }
+
+        assertEquals("https://remote.example/users/alice?page=2", recording.requests.last().url)
+    }
+
+    @Test
     fun `リダイレクトが続くと諦める`() {
         val recording = RecordingClient(redirects = mapOf("https://remote.example/loop" to "/loop"))
         val client = SignedFetchActivityPubHttpClient(recording, actor, HttpSignatureSigner())
