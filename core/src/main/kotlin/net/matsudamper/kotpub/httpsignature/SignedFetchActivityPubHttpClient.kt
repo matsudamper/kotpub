@@ -1,10 +1,15 @@
 package net.matsudamper.kotpub.httpsignature
 
+import java.io.IOException
+import java.net.URI
+import java.net.URISyntaxException
 import net.matsudamper.kotpub.actor.InstanceActor
 import net.matsudamper.kotpub.http.ActivityPubClientResponse
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
 import net.matsudamper.kotpub.http.HttpUrl
+import net.matsudamper.kotpub.http.SingleHopActivityPubHttpClient
+import net.matsudamper.kotpub.http.SingleHopGetResponse
 
 /**
  * GET に HTTP Signatures を付けて [client] に渡す。
@@ -12,12 +17,15 @@ import net.matsudamper.kotpub.http.HttpUrl
  * Mastodon の AUTHORIZED_FETCH のように、署名の無い GET には投稿もアクターも 401 で返すサーバーがある。
  * 署名しないと、そのサーバーの投稿のブーストや、そこのアカウントからの配送の公開鍵が取れない。
  *
- * サーバー自身のアクター（[InstanceActor]）で署名する。POST は署名済みで渡ってくるのでそのまま通す
+ * サーバー自身のアクター（[InstanceActor]）で署名する。POST は署名済みで渡ってくるのでそのまま通す。
+ *
+ * リダイレクトはここで追い、移り先ごとに署名し直す。[client] に追わせると、最初の URL の署名のまま
+ * 移り先へ送られ、`(request-target)` が食い違って拒まれる
  *
  * @param client 閉じるのはこのクラスの [close] が受け持つ
  */
 class SignedFetchActivityPubHttpClient(
-    private val client: ActivityPubHttpClient,
+    private val client: SingleHopActivityPubHttpClient,
     private val signingActor: InstanceActor,
     private val signer: HttpSignatureSigner,
 ) : ActivityPubHttpClient {
@@ -27,21 +35,29 @@ class SignedFetchActivityPubHttpClient(
         maxBodyBytes: Int,
         readsBody: (status: Int, finalUrl: String) -> Boolean,
     ): ActivityPubClientResponse {
-        val parsedUrl = HttpUrl.parse(url)
-        if (parsedUrl == null) {
-            return client.get(url = url, headers = headers, maxBodyBytes = maxBodyBytes, readsBody = readsBody)
+        var currentUrl = url
+        var currentHeaders = headers
+        repeat(MAX_REDIRECTS + 1) {
+            val response = client.getSingleHop(
+                url = currentUrl,
+                headers = signedHeaders(currentUrl, currentHeaders),
+                maxBodyBytes = maxBodyBytes,
+                readsBody = readsBody,
+            )
+            when (response) {
+                is SingleHopGetResponse.Final -> return response.response
+
+                is SingleHopGetResponse.Redirect -> {
+                    val nextUrl = resolveLocation(currentUrl, response.location)
+                    requireNoHttpsDowngrade(currentUrl, nextUrl)
+                    if (!isSameOrigin(currentUrl, nextUrl)) {
+                        currentHeaders = currentHeaders.filterKeys { !it.equals(AUTHORIZATION_HEADER, ignoreCase = true) }
+                    }
+                    currentUrl = nextUrl
+                }
+            }
         }
-        val signedHeaders = signer.sign(
-            keyId = signingActor.urls.publicKeyId,
-            privateKey = signingActor.privateKey.privateKey,
-            method = "GET",
-            requestTarget = SignedRequestLine.requestTarget(parsedUrl),
-            host = SignedRequestLine.hostHeader(parsedUrl),
-            body = ByteArray(0),
-        )
-        // 大文字小文字だけ違う同名のヘッダが残ると、署名していない値も一緒に送られて検証が落ちる
-        val unsignedHeaders = headers.filterKeys { name -> signedHeaders.keys.none { it.equals(name, ignoreCase = true) } }
-        return client.get(url = url, headers = unsignedHeaders + signedHeaders, maxBodyBytes = maxBodyBytes, readsBody = readsBody)
+        throw IOException("リダイレクトが多すぎる: $url")
     }
 
     override suspend fun post(
@@ -52,5 +68,78 @@ class SignedFetchActivityPubHttpClient(
 
     override fun close() {
         client.close()
+    }
+
+    private fun signedHeaders(
+        url: String,
+        headers: Map<String, String>,
+    ): Map<String, String> {
+        val parsedUrl = HttpUrl.parse(url) ?: return headers
+        val signedHeaders = signer.sign(
+            keyId = signingActor.urls.publicKeyId,
+            privateKey = signingActor.privateKey.privateKey,
+            method = "GET",
+            requestTarget = SignedRequestLine.requestTarget(parsedUrl),
+            host = SignedRequestLine.hostHeader(parsedUrl),
+            body = ByteArray(0),
+        )
+        // 大文字小文字だけ違う同名のヘッダが残ると、署名していない値も一緒に送られて検証が落ちる
+        val unsignedHeaders = headers.filterKeys { name -> signedHeaders.keys.none { it.equals(name, ignoreCase = true) } }
+        return unsignedHeaders + signedHeaders
+    }
+
+    /**
+     * `Location` は相対 URL のことがあるので、今の URL を基準に解決する。
+     *
+     * [URI.resolve] は RFC 2396 のままで、`?page=2` のようなクエリだけの参照ではパスの末尾を落とす。
+     * RFC 3986 ではパスを保つので、その場合だけ自分で組み立てる
+     */
+    private fun resolveLocation(
+        currentUrl: String,
+        location: String,
+    ): String =
+        try {
+            val base = URI(currentUrl)
+            if (location.startsWith("?")) {
+                // URI の複数引数のコンストラクタは % をもう一度エスケープするので、raw の値を繋ぐ
+                "${base.scheme}://${base.rawAuthority}${base.rawPath}$location"
+            } else {
+                base.resolve(location).toString()
+            }
+        } catch (exception: IllegalArgumentException) {
+            throw IOException("リダイレクト先の URL を読めない: $location", exception)
+        } catch (exception: URISyntaxException) {
+            throw IOException("リダイレクト先の URL を読めない: $location", exception)
+        }
+
+    /**
+     * https から http へ移ると、応答を盗み見られたり書き換えられたりする。署名は応答を守らないので追わない
+     */
+    private fun requireNoHttpsDowngrade(
+        currentUrl: String,
+        nextUrl: String,
+    ) {
+        if (HttpUrl.parseHttps(currentUrl) != null && HttpUrl.parseHttps(nextUrl) == null) {
+            throw IOException("https から https 以外へのリダイレクトは追わない: $currentUrl -> $nextUrl")
+        }
+    }
+
+    /**
+     * OkHttp や Ktor が自分で追うときと同じく、移り先のホスト・ポート・スキームが変わったら
+     * 渡された `Authorization` を外す。別の相手に資格情報を渡さない
+     */
+    private fun isSameOrigin(
+        currentUrl: String,
+        nextUrl: String,
+    ): Boolean {
+        val current = HttpUrl.parse(currentUrl) ?: return false
+        val next = HttpUrl.parse(nextUrl) ?: return false
+        return current.scheme == next.scheme && current.host.equals(next.host, ignoreCase = true) && current.port == next.port
+    }
+
+    private companion object {
+        // OkHttp や Ktor が自分で追うときの上限に合わせる
+        const val MAX_REDIRECTS = 20
+        const val AUTHORIZATION_HEADER = "Authorization"
     }
 }

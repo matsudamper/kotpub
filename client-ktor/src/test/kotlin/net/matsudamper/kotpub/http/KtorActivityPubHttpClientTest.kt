@@ -149,6 +149,48 @@ class KtorActivityPubHttpClientTest {
     }
 
     @Test
+    fun `1回分のGETはリダイレクトを追わずに移り先を返す`() {
+        val server =
+            embeddedServer(CIO, port = 0, host = "127.0.0.1") {
+                routing {
+                    get("/old") {
+                        call.respondRedirect("/new")
+                    }
+                    get("/new") {
+                        call.respondText("new")
+                    }
+                }
+            }.start(wait = false)
+
+        try {
+            loopbackClient().use { client ->
+                runBlocking {
+                    val port = server.engine.resolvedConnectors().first().port
+                    val redirect = client.getSingleHop(
+                        url = "http://127.0.0.1:$port/old",
+                        headers = mapOf(),
+                        maxBodyBytes = 1024,
+                        readsBody = { _, _ -> true },
+                    )
+                    assertEquals("/new", assertIs<SingleHopGetResponse.Redirect>(redirect).location)
+
+                    val final = client.getSingleHop(
+                        url = "http://127.0.0.1:$port/new",
+                        headers = mapOf(),
+                        maxBodyBytes = 1024,
+                        readsBody = { _, _ -> true },
+                    )
+                    val response = assertIs<SingleHopGetResponse.Final>(final).response
+                    assertEquals(200, response.status)
+                    assertEquals("new", assertIs<ResponseBody.Read>(response.body).bytes.decodeToString())
+                }
+            }
+        } finally {
+            server.stop(gracePeriodMillis = 0, timeoutMillis = 1_000)
+        }
+    }
+
+    @Test
     fun `リダイレクト先も名前解決で検査する`() {
         val resolvedHosts = mutableListOf<String>()
         val server =
