@@ -34,18 +34,21 @@ class WebFingerEndpoint(
             )
         }
 
+        // ドメインと同じ名前のアカウントが既にあれば、今までどおりそのアカウントを返す
+        val urls = directory.resolveResource(resource)
+        if (urls != null) {
+            return found(acct = urls.acct, actorId = urls.actorId)
+        }
+
         if (isInstanceActor(resource)) {
             return found(acct = instanceActor.acct, actorId = instanceActor.actorId)
         }
 
-        val urls = directory.resolveResource(resource)
-            ?: return EndpointResponse.text(
-                status = HttpStatusCodes.NOT_FOUND,
-                text = "該当する resource が無い: $resource",
-                headers = mapOf(),
-            )
-
-        return found(acct = urls.acct, actorId = urls.actorId)
+        return EndpointResponse.text(
+            status = HttpStatusCodes.NOT_FOUND,
+            text = "該当する resource が無い: $resource",
+            headers = mapOf(),
+        )
     }
 
     private fun isInstanceActor(resource: String): Boolean {

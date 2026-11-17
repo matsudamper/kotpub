@@ -28,6 +28,19 @@ class WebFingerEndpointTest {
     }
 
     @Test
+    fun `ドメインと同じ名前のアカウントがあればアカウントを返す`() {
+        val endpoint = WebFingerEndpoint(
+            directory = ActorDirectory(domain = "example.com", stored = FakeStoredActorNames(mutableListOf("example.com"))),
+            instanceActor = InstanceActorUrls(domain = "example.com"),
+        )
+
+        val response = runBlocking { endpoint.get("acct:example.com@example.com") }
+
+        val body = AppJson.decodeFromString(WebFingerResponse.serializer(), response.body.decodeToString())
+        assertEquals(listOf("https://example.com/users/example.com"), body.links.map { it.href })
+    }
+
+    @Test
     fun `アカウントは今までどおり引ける`() {
         val response = runBlocking { endpoint.get("acct:admin@example.com") }
 
