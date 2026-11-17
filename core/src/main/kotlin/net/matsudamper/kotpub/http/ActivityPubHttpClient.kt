@@ -85,3 +85,33 @@ sealed interface ResponseBody {
 class ActivityPubPostResponse(
     val status: Int,
 )
+
+/**
+ * リダイレクトを追わない 1 回分の GET もできる [ActivityPubHttpClient]。
+ *
+ * 署名した GET はリダイレクトの移り先ごとに署名を作り直さないと、移り先の `(request-target)` と
+ * 署名が食い違って拒まれる。クライアントが自分で追うと作り直す機会が無いので、追う側に任せる
+ */
+interface SingleHopActivityPubHttpClient : ActivityPubHttpClient {
+    /**
+     * リダイレクトを追わずに 1 回だけ GET する。宛先を公開アドレスに限るのは [ActivityPubHttpClient.get] と同じ。
+     *
+     * 応答がリダイレクトなら本文を読まずに [SingleHopGetResponse.Redirect] を返す。
+     * それ以外は [ActivityPubHttpClient.get] と同じく [readsBody] に従って本文を読む
+     */
+    suspend fun getSingleHop(
+        url: String,
+        headers: Map<String, String>,
+        maxBodyBytes: Int,
+        readsBody: (status: Int, finalUrl: String) -> Boolean,
+    ): SingleHopGetResponse
+}
+
+sealed interface SingleHopGetResponse {
+    /**
+     * @param location `Location` ヘッダそのまま。相対 URL のこともあるので、解決は追う側がする
+     */
+    data class Redirect(val location: String) : SingleHopGetResponse
+
+    class Final(val response: ActivityPubClientResponse) : SingleHopGetResponse
+}

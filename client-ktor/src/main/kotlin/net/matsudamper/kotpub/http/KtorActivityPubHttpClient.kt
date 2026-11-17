@@ -9,8 +9,10 @@ import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.request
+import io.ktor.http.HttpHeaders
 import io.ktor.utils.io.readRemaining
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.instrumentation.ktor.v3_0.KtorClientTelemetry
@@ -18,7 +20,7 @@ import io.opentelemetry.instrumentation.ktor.v3_0.KtorClientTelemetry
 /**
  * Ktor の CIO で相手のサーバーと話す [ActivityPubHttpClient]。
  *
- * GET と POST でリダイレクトの扱いが違うので、クライアントを分けて持つ。
+ * リダイレクトを追う GET と、追わない GET・POST とでクライアントを分けて持つ。
  * 使わない側は作らない。
  *
  * 接続のたびに [PublicAddressDnsResolver] で宛先を公開アドレスに限る。
@@ -29,10 +31,10 @@ import io.opentelemetry.instrumentation.ktor.v3_0.KtorClientTelemetry
 class KtorActivityPubHttpClient internal constructor(
     private val openTelemetry: OpenTelemetry?,
     private val resolveAddress: suspend (hostname: String) -> List<String>,
-) : ActivityPubHttpClient {
+) : SingleHopActivityPubHttpClient {
     constructor(openTelemetry: OpenTelemetry?) : this(openTelemetry, PublicAddressDnsResolver::resolve)
     private val getClient = lazy { createClient(followRedirects = true) }
-    private val postClient = lazy { createClient(followRedirects = false) }
+    private val noRedirectClient = lazy { createClient(followRedirects = false) }
 
     override suspend fun get(
         url: String,
@@ -45,25 +47,24 @@ class KtorActivityPubHttpClient internal constructor(
         getClient.value
             .prepareGet(url) {
                 headers.forEach { (name, value) -> header(name, value) }
+            }.execute { response -> response.toActivityPubClientResponse(maxBodyBytes, readsBody) }
+
+    override suspend fun getSingleHop(
+        url: String,
+        headers: Map<String, String>,
+        maxBodyBytes: Int,
+        readsBody: (status: Int, finalUrl: String) -> Boolean,
+    ): SingleHopGetResponse =
+        noRedirectClient.value
+            .prepareGet(url) {
+                headers.forEach { (name, value) -> header(name, value) }
             }.execute { response ->
-                val status = response.status.value
-                val finalUrl = response.request.url.toString()
-                ActivityPubClientResponse(
-                    status = status,
-                    finalUrl = finalUrl,
-                    body =
-                    if (readsBody(status, finalUrl)) {
-                        try {
-                            ResponseBody.Read(response.bodyAsChannel().readRemaining(maxBodyBytes + 1L).readByteArray())
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            ResponseBody.Unreadable(e)
-                        }
-                    } else {
-                        ResponseBody.NotRead
-                    },
-                )
+                val location = response.headers[HttpHeaders.Location]
+                if (response.status.value in REDIRECT_STATUSES && location != null) {
+                    SingleHopGetResponse.Redirect(location)
+                } else {
+                    SingleHopGetResponse.Final(response.toActivityPubClientResponse(maxBodyBytes, readsBody))
+                }
             }
 
     override suspend fun post(
@@ -72,7 +73,7 @@ class KtorActivityPubHttpClient internal constructor(
         body: ByteArray,
     ): ActivityPubPostResponse =
         // execute の中で status だけ読む。ブロックを抜けると本文は読まずに捨てられる
-        postClient.value
+        noRedirectClient.value
             .preparePost(url) {
                 headers.forEach { (name, value) -> header(name, value) }
                 setBody(body)
@@ -80,7 +81,31 @@ class KtorActivityPubHttpClient internal constructor(
 
     override fun close() {
         if (getClient.isInitialized()) getClient.value.close()
-        if (postClient.isInitialized()) postClient.value.close()
+        if (noRedirectClient.isInitialized()) noRedirectClient.value.close()
+    }
+
+    private suspend fun HttpResponse.toActivityPubClientResponse(
+        maxBodyBytes: Int,
+        readsBody: (status: Int, finalUrl: String) -> Boolean,
+    ): ActivityPubClientResponse {
+        val status = status.value
+        val finalUrl = request.url.toString()
+        return ActivityPubClientResponse(
+            status = status,
+            finalUrl = finalUrl,
+            body =
+            if (readsBody(status, finalUrl)) {
+                try {
+                    ResponseBody.Read(bodyAsChannel().readRemaining(maxBodyBytes + 1L).readByteArray())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    ResponseBody.Unreadable(e)
+                }
+            } else {
+                ResponseBody.NotRead
+            },
+        )
     }
 
     private fun createClient(followRedirects: Boolean): HttpClient =
@@ -105,4 +130,9 @@ class KtorActivityPubHttpClient internal constructor(
                 dnsResolver = resolveAddress
             }
         }
+
+    private companion object {
+        // Ktor が自分で追うときと同じ。GET なので 303 も同じ要求で追う
+        val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
+    }
 }
