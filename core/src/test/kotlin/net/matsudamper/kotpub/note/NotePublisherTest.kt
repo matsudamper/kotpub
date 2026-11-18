@@ -215,6 +215,17 @@ class NotePublisherTest {
     }
 
     @Test
+    fun `閲覧注意の投稿を書き換えても sensitive を保つ`() {
+        val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = null).copy(sensitive = true)) }
+
+        val prepared = NotePublisher(notes, TestWebPageUrls).prepareUpdate(sender, PublicNoteId("note-1"), "<p>本文</p>", listOf())
+
+        assertNotNull(prepared)
+        val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
+        assertEquals(true, note.getValue("sensitive").jsonPrimitive.content.toBooleanStrict())
+    }
+
+    @Test
     fun `別のアカウントの投稿は書き換えられない`() {
         val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = null).copy(username = "other")) }
 
@@ -235,5 +246,6 @@ class NotePublisherTest {
         quote = null,
         mentions = listOf(),
         emojis = listOf(),
+        sensitive = false,
     )
 }
