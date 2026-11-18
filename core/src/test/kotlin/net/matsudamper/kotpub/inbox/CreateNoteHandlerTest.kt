@@ -246,10 +246,19 @@ class CreateNoteHandlerTest {
         val attachments = """[
             {"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"},
             {"type":"PropertyValue","name":"a","value":"b"},
-            {"type":"PropertyValue","name":"c","value":"d"}
+            {"type":"PropertyValue","name":"c","value":"d"},
+            {"type":["Document","https://example.org/CustomMedia"],"url":"https://remote.example/b.png"}
         ]"""
         receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "", attachment = attachments))
-        assertEquals(listOf("PropertyValue"), store.saved.single().unknownTypes)
+        assertEquals(listOf("PropertyValue", "https://example.org/CustomMedia"), store.saved.single().unknownTypes)
+    }
+
+    @Test
+    fun actorObjectIsNotSavedAsPost() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        receive(handler, """{"type":"Person","id":"https://remote.example/people/1","attributedTo":"$ACTOR","content":"<p>hi</p>"}""")
+        assertTrue(store.saved.isEmpty())
     }
 
     @Test

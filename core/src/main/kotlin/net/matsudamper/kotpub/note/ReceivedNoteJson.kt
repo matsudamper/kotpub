@@ -19,7 +19,7 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        val type = note["type"].string() ?: return null
+        val type = note["type"].string()?.takeIf { it !in ACTOR_TYPES } ?: return null
         val linkHref = if (type == LINK_TYPE) note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null else null
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
@@ -163,7 +163,7 @@ internal object ReceivedNoteJson {
             is JsonArray -> this
             else -> listOfNotNull(this)
         }
-        return elements.filterIsInstance<JsonObject>().mapNotNull { it["type"].string() }
+        return elements.filterIsInstance<JsonObject>().flatMap { it["type"].strings() }
     }
 
     private fun JsonElement?.mentions(): List<String> {
@@ -225,6 +225,11 @@ internal object ReceivedNoteJson {
     private const val LINK_TYPE = "Link"
 
     private const val CREATE_TYPE = "Create"
+
+    /**
+     * 投稿として受け取らない型。知らない型は投稿として受け取るが、アクターは投稿ではない
+     */
+    val ACTOR_TYPES = setOf("Person", "Service", "Application", "Group", "Organization")
 
     private val KNOWN_OBJECT_TYPES = NOTE_TYPES + LINK_TYPE
 
