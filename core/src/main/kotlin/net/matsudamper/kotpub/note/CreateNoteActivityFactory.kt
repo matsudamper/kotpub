@@ -35,6 +35,7 @@ internal object CreateNoteActivityFactory {
                 summary = note.summary,
                 sensitive = note.summary != null,
                 published = published,
+                updated = note.updatedAt?.toActivityPubPublished(),
                 to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
                 cc = cc,
                 url = webPages?.note(username = sender.username, publicId = note.publicId),

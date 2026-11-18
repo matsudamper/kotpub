@@ -113,6 +113,7 @@ class OutboxEndpointTest {
         contentHtml = "<p>$publicId</p>",
         summary = null,
         publishedAt = Instant.parse(publishedAt),
+        updatedAt = null,
         attachments = listOf(),
         inReplyTo = null,
         quote = null,

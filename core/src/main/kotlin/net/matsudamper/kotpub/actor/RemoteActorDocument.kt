@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.matsudamper.kotpub.activitypub.ActorAttachment
 import net.matsudamper.kotpub.emoji.CustomEmojiTags
 import net.matsudamper.kotpub.http.HttpUrl
 
@@ -64,6 +65,11 @@ internal data class RemoteActorDocument(
     val summary: JsonElement? = null,
     @SerialName("tag")
     val tag: JsonElement? = null,
+    /**
+     * プロフィールの補足情報。配列のことも、1 つだけオブジェクトで置かれることもある
+     */
+    @SerialName("attachment")
+    val attachment: JsonElement? = null,
 ) {
     /**
      * 一覧に出すためだけの部分。
@@ -85,6 +91,7 @@ internal data class RemoteActorDocument(
             headerUrl = image.firstHttpsUrl(),
             summary = summary.firstText(),
             emojis = CustomEmojiTags.read(tag),
+            fields = attachment.profileFields(),
         )
 }
 
@@ -142,5 +149,24 @@ private fun JsonElement?.firstHttpsUrl(): String? =
         is JsonArray -> firstNotNullOfOrNull { it.firstHttpsUrl() }
         is JsonObject -> this["href"].firstHttpsUrl() ?: this["url"].firstHttpsUrl()
     }
+
+/**
+ * `attachment` から `PropertyValue` だけを読む。見出しか内容が文字列で無いものは飛ばす。
+ *
+ * 画像など、補足情報でないものも同じ `attachment` に並ぶことがある
+ */
+private fun JsonElement?.profileFields(): List<RemoteActorProfileField> =
+    when (this) {
+        null, JsonNull, is JsonPrimitive -> listOf()
+        is JsonObject -> listOfNotNull(profileField())
+        is JsonArray -> mapNotNull { (it as? JsonObject)?.profileField() }
+    }
+
+private fun JsonObject.profileField(): RemoteActorProfileField? {
+    if (this["type"].firstText() != ActorAttachment.TYPE_PROPERTY_VALUE) return null
+    val name = this["name"].firstText() ?: return null
+    val htmlValue = this["value"].firstText() ?: return null
+    return RemoteActorProfileField(name = name, htmlValue = htmlValue)
+}
 
 private fun String.isHttpsUrl(): Boolean = HttpUrl.parseHttps(this) != null

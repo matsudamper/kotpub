@@ -234,6 +234,7 @@ private fun noteDocument(
         summary = note.summary,
         sensitive = note.summary != null,
         published = note.publishedAt.toActivityPubPublished(),
+        updated = note.updatedAt?.toActivityPubPublished(),
         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
         cc = note.ccWith(urls.followers),
         atomUri = noteUrls.noteUrl,

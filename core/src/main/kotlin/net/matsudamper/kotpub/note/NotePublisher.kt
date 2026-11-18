@@ -1,9 +1,11 @@
 package net.matsudamper.kotpub.note
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import net.matsudamper.kotpub.activity.ActivityStreamsIri
 import net.matsudamper.kotpub.activity.CreateNoteActivity
 import net.matsudamper.kotpub.activity.DeleteNoteActivity
+import net.matsudamper.kotpub.activity.UpdateNoteActivity
 import net.matsudamper.kotpub.actor.ActorUrls
 import net.matsudamper.kotpub.crypto.UuidV7
 import net.matsudamper.kotpub.emoji.EmojiObject
@@ -12,7 +14,7 @@ import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.url.WebPageUrls
 
 /**
- * 投稿の `Create{Note}` と、投稿を消す `Delete{Note}` を組み立てる。
+ * 投稿の `Create{Note}` と、書き換える `Update{Note}`、消す `Delete{Note}` を組み立てる。
  *
  * どれも DB を触らず HTTP も出さない。記録と配信キューへの登録は利用側のアプリが
  * 1 トランザクションにまとめる。記録と配信をここで続けて行うと、
@@ -50,6 +52,7 @@ class NotePublisher(
             contentHtml = contentHtml,
             summary = summary,
             publishedAt = publishedAt,
+            updatedAt = null,
             attachments = attachments,
             inReplyTo = inReplyTo,
             quote = quote,
@@ -76,6 +79,52 @@ class NotePublisher(
             ?: return null
 
         return note.toPrepared(sender)
+    }
+
+    /**
+     * 記録済みの投稿の本文を書き換えた `Update{Note}` を組み立てる。
+     * 画像・返信先・引用・宛先は記録のまま変えない。
+     *
+     * 記録を書き換えるのは呼び出し側で、配信キューへの登録と同じトランザクションになる。
+     * 分けると、こちらでは変わったのに相手には古いまま残る
+     *
+     * @param contentHtml 書き換えた本文。サニタイズ済みの HTML を渡すこと。ここでは中身を検査しない
+     * @param emojis 書き換えた本文に `:name:` の形で入れた、こちらのサーバーのカスタム絵文字
+     * @return 記録が無いか、別のアカウントの投稿なら null
+     */
+    fun prepareUpdate(
+        sender: ActorUrls,
+        publicId: PublicNoteId,
+        contentHtml: String,
+        emojis: List<EmojiObject>,
+    ): PreparedNoteUpdate? {
+        // 他のアカウントの投稿を publicId だけで書き換えられないようにする
+        val recorded = notes.find(publicId)?.takeIf { it.username.equals(sender.username, ignoreCase = true) }
+            ?: return null
+        // 相手は秒までしか比べないので、同じ秒に 2 度書き換えると 2 度目を古いものとして捨てる。秒を必ず進める
+        val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
+        val previous = recorded.updatedAt ?: recorded.publishedAt
+        val updatedAt = if (now.isAfter(previous)) now else previous.truncatedTo(ChronoUnit.SECONDS).plusSeconds(1)
+        val note = recorded.copy(contentHtml = contentHtml, emojis = emojis, updatedAt = updatedAt)
+        val created = CreateNoteActivityFactory.create(sender = sender, note = note, webPages = webPages)
+        val urls = NoteUrls(domain = sender.domain, publicId = publicId)
+
+        return PreparedNoteUpdate(
+            publicId = publicId,
+            contentHtml = contentHtml,
+            updatedAt = updatedAt,
+            activityJson = AppJson.encodeToString(
+                UpdateNoteActivity.serializer(),
+                UpdateNoteActivity(
+                    id = urls.updateId(updatedAt),
+                    actor = sender.actorId,
+                    published = updatedAt.toActivityPubPublished(),
+                    to = created.to,
+                    cc = created.cc,
+                    target = created.target,
+                ),
+            ),
+        )
     }
 
     /**
@@ -135,6 +184,19 @@ class NotePublisher(
         target = DeleteNoteActivity.Tombstone(id = urls.noteId),
     )
 }
+
+/**
+ * 組み立てた投稿の書き換え。
+ *
+ * @param updatedAt 記録する書き換えた日時。`Update` の中の `updated` と同じ値
+ * @param activityJson 署名対象になる JSON。宛先が何件でも同じものを送る
+ */
+data class PreparedNoteUpdate(
+    val publicId: PublicNoteId,
+    val contentHtml: String,
+    val updatedAt: Instant,
+    val activityJson: String,
+)
 
 data class DeletedNote(
     val publicId: PublicNoteId,

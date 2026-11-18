@@ -51,6 +51,11 @@ data class Note(
      */
     @SerialName("published")
     val published: String,
+    /**
+     * ISO 8601。最後に書き換えた日時。書き換えていなければ null。Mastodon は新しくなっていない `Update` を捨てる
+     */
+    @SerialName("updated")
+    val updated: String? = null,
     @SerialName("to")
     val to: List<String>,
     @SerialName("cc")
