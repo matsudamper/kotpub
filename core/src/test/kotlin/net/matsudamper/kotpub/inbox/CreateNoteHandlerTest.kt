@@ -188,6 +188,43 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun linkTakesAuthorAndAddressingFromCreate() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/1","type":"Create","actor":"$ACTOR","to":["$PUBLIC"],"cc":[],
+                "object":{"type":"Link","href":"https://example.com/"}}""",
+        ).jsonObject
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+        val saved = store.saved.single()
+        assertEquals("https://example.com/", saved.linkHref)
+        assertEquals("https://remote.example/activities/1", saved.id)
+        assertEquals(ACTOR, saved.attributedTo)
+        assertEquals(NoteVisibility.Public, saved.visibility)
+        assertEquals("", saved.content)
+    }
+
+    @Test
+    fun linkTakesAuthorFromEmbeddedActor() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/1","type":"Create","actor":{"id":"$ACTOR","type":"Person"},
+                "object":{"type":"Link","href":"https://example.com/"}}""",
+        ).jsonObject
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+        assertEquals(ACTOR, store.saved.single().attributedTo)
+    }
+
+    @Test
+    fun linkWithoutHttpHrefIsIgnored() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        receive(handler, """{"type":"Link","id":"https://remote.example/links/1","attributedTo":"$ACTOR","href":"javascript:alert(1)"}""")
+        assertTrue(store.saved.isEmpty())
+    }
+
+    @Test
     fun questionIsSavedWithPoll() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store, RecordingVotes())

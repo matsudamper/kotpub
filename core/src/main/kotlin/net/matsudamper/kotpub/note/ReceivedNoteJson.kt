@@ -19,7 +19,11 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        if (note["type"].string() !in NOTE_TYPES) return null
+        val linkHref = when (note["type"].string()) {
+            in NOTE_TYPES -> null
+            LINK_TYPE -> note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null
+            else -> return null
+        }
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
         val to = note["to"].strings()
@@ -28,7 +32,7 @@ internal object ReceivedNoteJson {
         return ReceivedNote(
             id = id,
             attributedTo = attributedTo,
-            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: return null,
+            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: if (linkHref == null) return null else "",
             language = contentMap?.keys?.firstOrNull()?.let { languageOrNull(it) },
             published = note["published"].instant(),
             updated = note["updated"].instant(),
@@ -43,6 +47,7 @@ internal object ReceivedNoteJson {
             emojis = CustomEmojiTags.read(note["tag"]),
             mentions = note["tag"].mentions(),
             poll = note.poll(),
+            linkHref = linkHref,
         )
     }
 
@@ -59,6 +64,26 @@ internal object ReceivedNoteJson {
             questionId = note["inReplyTo"].idOrString() ?: return null,
             choice = note["name"].string() ?: return null,
         )
+    }
+
+    /**
+     * `Link` は投稿者や宛先を持たない型なので、無いものは包んでいるアクティビティから補う。
+     * `Note` はアクティビティを見ずに [read] と同じに読む。
+     *
+     * id は `Create` のときだけ補う。`Update` の id は作ったときの `Create` の id と違い、保存した投稿を指せない
+     */
+    fun read(note: JsonObject, activity: JsonObject): ReceivedNote? {
+        if (note["type"].string() != LINK_TYPE) return read(note)
+        val inherited = buildMap {
+            ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
+                activity[activityKey]?.let { put(noteKey, it) }
+            }
+            activity["actor"].actorId()?.let { put("attributedTo", JsonPrimitive(it)) }
+            if (activity["type"].string() == CREATE_TYPE) {
+                activity["id"]?.let { put("id", it) }
+            }
+        }
+        return read(JsonObject(inherited + note))
     }
 
     /**
@@ -88,6 +113,12 @@ internal object ReceivedNoteJson {
         QUOTE_KEYS.firstNotNullOfOrNull { key -> this[key].idOrString() }
 
     // Link オブジェクトで来ることもあるので、その場合は href を使う
+    // InboxActivity.actorId と同じく、埋め込まれたアクターは href ではなく id で見る
+    private fun JsonElement?.actorId(): String? = when (this) {
+        is JsonObject -> this["id"].string()
+        else -> string()
+    }
+
     private fun JsonElement?.idOrString(): String? = when (this) {
         is JsonObject -> this["href"].string() ?: this["id"].string()
         is JsonArray -> firstNotNullOfOrNull { it.idOrString() }
@@ -178,6 +209,16 @@ internal object ReceivedNoteJson {
     private const val MENTION_TYPE = "Mention"
 
     private val NOTE_TYPES = setOf(Note.NOTE_TYPE, Note.QUESTION_TYPE)
+
+    private const val LINK_TYPE = "Link"
+
+    private const val CREATE_TYPE = "Create"
+
+    private val ACTIVITY_KEYS_FOR_LINK = listOf(
+        "to" to "to",
+        "cc" to "cc",
+        "published" to "published",
+    )
 
     private const val UNDETERMINED_LANGUAGE = "und"
 

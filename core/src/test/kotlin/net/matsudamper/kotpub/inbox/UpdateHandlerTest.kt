@@ -31,6 +31,19 @@ class UpdateHandlerTest {
     }
 
     @Test
+    fun `id の無い Link の Update は Update の id を投稿の id にしない`() = runBlocking {
+        val notes = RecordingNotes()
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/2","type":"Update","actor":"$ACTOR","object":{"type":"Link","href":"https://example.com/"}}""",
+        ).jsonObject
+
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+
+        assertTrue(notes.updated.isEmpty())
+    }
+
+    @Test
     fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() = runBlocking {
         val notes = RecordingNotes()
         val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)

@@ -29,7 +29,7 @@ class CreateNoteHandler(
         val actor = activity.actorId ?: return InboxHandling.Ignored("Create に actor が無い: $verifiedSignerActorId")
         val vote = ReceivedNoteJson.readVote(json)
         if (vote != null) return handleVote(vote = vote, actor = actor, verifiedSignerActorId = verifiedSignerActorId)
-        val note = ReceivedNoteJson.read(json)
+        val note = ReceivedNoteJson.read(json, rawActivityJson)
             ?: return InboxHandling.Ignored("Create の object を投稿として読めない: $verifiedSignerActorId")
         if (actor != verifiedSignerActorId || note.attributedTo != actor) {
             return InboxHandling.Ignored("Create の actor か投稿者が署名者と違う: actor=$actor 投稿者=${note.attributedTo} 署名者=$verifiedSignerActorId")

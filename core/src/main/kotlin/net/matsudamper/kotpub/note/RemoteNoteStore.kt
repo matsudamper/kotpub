@@ -49,6 +49,10 @@ data class ReceivedNote(
      * `Question` で届いた投稿の投票。投票でなければ null
      */
     val poll: ReceivedPoll?,
+    /**
+     * `type` が `Link` で届いた投稿のリンク先。`Note` と `Question` なら null
+     */
+    val linkHref: String?,
 )
 
 /**

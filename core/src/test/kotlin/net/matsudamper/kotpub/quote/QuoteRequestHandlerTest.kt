@@ -88,6 +88,7 @@ class QuoteRequestHandlerTest {
                     emojis = listOf(),
                     mentions = listOf(),
                     poll = null,
+                    linkHref = null,
                 ),
             )
         }
