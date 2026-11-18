@@ -29,7 +29,7 @@ class DeleteHandler(
         val embedded = activity.target as? LinkOrObject.Embedded
         if (embedded != null) {
             val objectType = (embedded.json["type"] as? JsonPrimitive)?.content
-            if (objectType !in listOf("Note", "Link", "Tombstone")) return InboxHandling.Ignored("Delete の対象が投稿ではない: type=$objectType object=$objectId")
+            if (objectType !in listOf("Note", "Question", "Link", "Tombstone")) return InboxHandling.Ignored("Delete の対象が投稿ではない: type=$objectType object=$objectId")
         }
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Delete の actor を URL として読めない: $actor")
         val objectUrl = HttpUrl.parse(objectId) ?: return InboxHandling.Ignored("Delete の object を URL として読めない: $objectId")
