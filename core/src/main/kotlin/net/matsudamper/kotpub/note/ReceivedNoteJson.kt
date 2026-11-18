@@ -78,7 +78,7 @@ internal object ReceivedNoteJson {
             ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
                 activity[activityKey]?.let { put(noteKey, it) }
             }
-            activity["actor"].idOrString()?.let { put("attributedTo", JsonPrimitive(it)) }
+            activity["actor"].actorId()?.let { put("attributedTo", JsonPrimitive(it)) }
             if (activity["type"].string() == CREATE_TYPE) {
                 activity["id"]?.let { put("id", it) }
             }
@@ -113,6 +113,12 @@ internal object ReceivedNoteJson {
         QUOTE_KEYS.firstNotNullOfOrNull { key -> this[key].idOrString() }
 
     // Link オブジェクトで来ることもあるので、その場合は href を使う
+    // InboxActivity.actorId と同じく、埋め込まれたアクターは href ではなく id で見る
+    private fun JsonElement?.actorId(): String? = when (this) {
+        is JsonObject -> this["id"].string()
+        else -> string()
+    }
+
     private fun JsonElement?.idOrString(): String? = when (this) {
         is JsonObject -> this["href"].string() ?: this["id"].string()
         is JsonArray -> firstNotNullOfOrNull { it.idOrString() }
