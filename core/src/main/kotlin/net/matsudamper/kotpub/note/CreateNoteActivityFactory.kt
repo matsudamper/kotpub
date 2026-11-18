@@ -47,6 +47,10 @@ internal object CreateNoteActivityFactory {
                 misskeyQuote = note.quote,
                 tag = note.toNoteTags(),
                 interactionPolicy = InteractionPolicy.QUOTABLE_BY_ANYONE,
+                oneOf = note.poll?.takeUnless { it.multipleChoice }?.toQuestionOptions(),
+                anyOf = note.poll?.takeIf { it.multipleChoice }?.toQuestionOptions(),
+                endTime = note.poll?.endsAt?.toActivityPubPublished(),
+                votersCount = note.poll?.votersCount,
             ),
         )
     }

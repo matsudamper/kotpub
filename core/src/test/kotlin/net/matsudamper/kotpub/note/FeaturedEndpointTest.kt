@@ -33,6 +33,7 @@ class FeaturedEndpointTest {
         mentions = listOf(),
         emojis = listOf(),
         sensitive = false,
+        poll = null,
     )
 
     @Test

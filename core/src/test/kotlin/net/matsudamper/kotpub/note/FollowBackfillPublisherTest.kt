@@ -50,6 +50,7 @@ class FollowBackfillPublisherTest {
                     mentions = listOf(),
                     emojis = listOf(),
                     sensitive = false,
+                    poll = null,
                 ),
             )
         }
@@ -126,6 +127,7 @@ class FollowBackfillPublisherTest {
                     mentions = listOf(),
                     emojis = listOf(),
                     sensitive = false,
+                    poll = null,
                 ),
             )
         }
@@ -155,6 +157,7 @@ class FollowBackfillPublisherTest {
                         mentions = listOf(),
                         emojis = listOf(),
                         sensitive = false,
+                        poll = null,
                     ),
                 )
             }

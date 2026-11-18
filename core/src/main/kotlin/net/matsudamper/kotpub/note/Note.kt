@@ -113,12 +113,37 @@ data class Note(
      */
     @SerialName("interactionPolicy")
     val interactionPolicy: InteractionPolicy,
+    /**
+     * 1 つだけ選ばせる投票の選択肢。投票でないか、複数選べる投票なら null
+     */
+    @SerialName("oneOf")
+    val oneOf: List<QuestionOption>? = null,
+    /**
+     * 複数選べる投票の選択肢。投票でないか、1 つだけ選ばせる投票なら null
+     */
+    @SerialName("anyOf")
+    val anyOf: List<QuestionOption>? = null,
+    /**
+     * ISO 8601。投票の締め切り。投票でなければ null
+     */
+    @SerialName("endTime")
+    val endTime: String? = null,
+    /**
+     * 投票した人数。投票でなければ null
+     */
+    @SerialName("votersCount")
+    val votersCount: Int? = null,
 ) {
     /**
-     * 相手はこの値を見て投稿だと判断する。`Note` 以外は入らない
+     * 相手はこの値を見て投稿だと判断する。投票付きの投稿は Mastodon に合わせて `Question` にする
      */
     @SerialName("type")
-    val type: String = "Note"
+    val type: String = if (oneOf != null || anyOf != null) QUESTION_TYPE else NOTE_TYPE
+
+    companion object {
+        internal const val NOTE_TYPE = "Note"
+        internal const val QUESTION_TYPE = "Question"
+    }
 }
 
 /**

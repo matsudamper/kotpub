@@ -20,7 +20,7 @@ class UpdateHandlerTest {
         receive(handler, """"https://remote.example/notes/1"""")
         receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
         receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
-        receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>"}""")
+        receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
         assertTrue(notes.updated.isEmpty())
 
         receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
@@ -28,6 +28,17 @@ class UpdateHandlerTest {
         val updated = notes.updated.single()
         assertEquals("<p>edited</p>", updated.content)
         assertEquals(Instant.parse("2026-08-10T01:00:00Z"), updated.updated)
+    }
+
+    @Test
+    fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() = runBlocking {
+        val notes = RecordingNotes()
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val options = """[{"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":2}}]"""
+
+        receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>","oneOf":$options}""")
+
+        assertEquals(listOf(2), notes.updated.single().poll?.options?.map { it.votesCount })
     }
 
     @Test
