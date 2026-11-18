@@ -47,11 +47,12 @@ internal object ReceivedNoteJson {
     }
 
     /**
-     * 本文が無く `name` と `inReplyTo` を持つ `Note` を、投票への票として読む。投稿として読めるものは票にしない
+     * 本文が無く `name` と `inReplyTo` を持つ `Note` を、投票への票として読む。
+     * `content` が無くても `contentMap` に本文があれば [read] が投稿として読むので、票にしない
      */
     fun readVote(note: JsonObject): ReceivedPollVote? {
         if (note["type"].string() != Note.NOTE_TYPE) return null
-        if (note["content"].string() != null) return null
+        if (note["content"].string() != null || note["contentMap"] is JsonObject) return null
         return ReceivedPollVote(
             id = note["id"].string() ?: return null,
             voterActorId = note["attributedTo"].string() ?: return null,

@@ -234,6 +234,11 @@ class CreateNoteHandlerTest {
         receive(handler, vote(author = "https://other.example/actor", id = "https://remote.example/votes/2"))
         receive(handler, vote(author = ACTOR, id = "https://other.example/votes/3"))
         assertTrue(store.saved.isEmpty())
+        receive(
+            handler,
+            """{"type":"Note","id":"https://remote.example/notes/4","attributedTo":"$ACTOR","name":"題","inReplyTo":"https://local.example/notes/1","contentMap":{"ja":"<p>返信</p>"}}""",
+        )
+        assertEquals(listOf("<p>返信</p>"), store.saved.map { it.content })
         assertEquals(
             listOf(
                 ReceivedPollVote(
