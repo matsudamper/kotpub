@@ -111,6 +111,7 @@ class OutboxEndpointTest {
         publicId = PublicNoteId(publicId),
         username = TestLocalActor.USERNAME,
         contentHtml = "<p>$publicId</p>",
+        summary = null,
         publishedAt = Instant.parse(publishedAt),
         updatedAt = null,
         attachments = listOf(),

@@ -32,6 +32,8 @@ internal object CreateNoteActivityFactory {
                 id = urls.noteId,
                 attributedTo = sender.actorId,
                 content = note.contentHtml,
+                summary = note.summary,
+                sensitive = note.sensitive || note.summary != null,
                 published = published,
                 updated = note.updatedAt?.toActivityPubPublished(),
                 to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
@@ -44,7 +46,6 @@ internal object CreateNoteActivityFactory {
                 quoteUrl = note.quote,
                 misskeyQuote = note.quote,
                 tag = note.toNoteTags(),
-                sensitive = note.sensitive,
                 interactionPolicy = InteractionPolicy.QUOTABLE_BY_ANYONE,
             ),
         )

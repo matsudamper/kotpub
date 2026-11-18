@@ -231,6 +231,8 @@ private fun noteDocument(
         id = noteUrls.noteId,
         attributedTo = urls.actorId,
         content = note.contentHtml,
+        summary = note.summary,
+        sensitive = note.sensitive || note.summary != null,
         published = note.publishedAt.toActivityPubPublished(),
         updated = note.updatedAt?.toActivityPubPublished(),
         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
@@ -243,7 +245,6 @@ private fun noteDocument(
         quoteUrl = note.quote,
         misskeyQuote = note.quote,
         tag = note.toNoteTags(),
-        sensitive = note.sensitive,
         interactionPolicy = InteractionPolicy.QUOTABLE_BY_ANYONE,
     )
 }

@@ -41,6 +41,10 @@ data class ReceivedNote(
     val visibility: NoteVisibility,
     val attachments: List<ReceivedNoteAttachment>,
     val emojis: List<CustomEmoji>,
+    /**
+     * `tag` の `Mention` が指すアクターの id。宛先に入っていても `Mention` が無いアカウントは含めない
+     */
+    val mentions: List<String>,
 )
 
 /**
