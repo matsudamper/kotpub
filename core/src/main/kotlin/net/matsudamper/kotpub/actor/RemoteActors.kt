@@ -84,6 +84,7 @@ data class RemoteActor(
  * @param iconUrl アイコンの取得元。別ドメインの CDN を指すことがある
  * @param headerUrl ヘッダー画像の取得元。ActivityStreams の `image`。別ドメインの CDN を指すことがある
  * @param emojis 表示名や自己紹介に `:name:` で入るカスタム絵文字
+ * @param fields プロフィールの補足情報。`attachment` の `PropertyValue`。相手が並べた順
  */
 data class RemoteActorProfile(
     val preferredUsername: String?,
@@ -93,4 +94,15 @@ data class RemoteActorProfile(
     val headerUrl: String?,
     val summary: String? = null,
     val emojis: List<CustomEmoji>,
+    val fields: List<RemoteActorProfileField> = listOf(),
+)
+
+/**
+ * プロフィールの補足情報の 1 項目。Mastodon では見出しと内容の組を 4 つまで載せられる
+ *
+ * @param htmlValue 相手が書いた HTML のまま。リンクのことも、ただの文字のこともある
+ */
+data class RemoteActorProfileField(
+    val name: String,
+    val htmlValue: String,
 )

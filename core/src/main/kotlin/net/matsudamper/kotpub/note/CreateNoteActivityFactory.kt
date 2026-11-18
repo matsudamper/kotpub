@@ -33,6 +33,7 @@ internal object CreateNoteActivityFactory {
                 attributedTo = sender.actorId,
                 content = note.contentHtml,
                 published = published,
+                updated = note.updatedAt?.toActivityPubPublished(),
                 to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
                 cc = cc,
                 url = webPages?.note(username = sender.username, publicId = note.publicId),

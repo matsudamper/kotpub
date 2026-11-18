@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.note
 
+import java.time.Instant
 import net.matsudamper.kotpub.entity.ActivityPubId
 import net.matsudamper.kotpub.entity.PublicNoteId
 
@@ -32,6 +33,12 @@ data class NoteUrls(
      * `Delete` 自身の id。[createId] と同じ理由でフラグメントを付ける
      */
     val deleteId: ActivityPubId = ActivityPubId("$noteUrl#delete")
+
+    /**
+     * `Update` 自身の id。書き換えるたびに別の id にしないと、相手は 2 度目からを重複として捨てる。
+     * [createId] と同じ理由でフラグメントを付ける
+     */
+    fun updateId(updatedAt: Instant): ActivityPubId = ActivityPubId("$noteUrl#updates/${updatedAt.toEpochMilli()}")
 
     /**
      * この投稿の引用を認めた `QuoteAuthorization` の id。相手は引用を確かめるときにここを取得しに来る
