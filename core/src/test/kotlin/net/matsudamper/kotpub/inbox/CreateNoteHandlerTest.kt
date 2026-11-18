@@ -182,6 +182,31 @@ class CreateNoteHandlerTest {
         assertEquals(listOf("<p>content</p>", "<p>first</p>"), store.saved.map { it.content })
     }
 
+    @Test
+    fun linkTakesAuthorAndAddressingFromCreate() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/1","type":"Create","actor":"$ACTOR","to":["$PUBLIC"],"cc":[],
+                "object":{"type":"Link","href":"https://example.com/"}}""",
+        ).jsonObject
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+        val saved = store.saved.single()
+        assertEquals("https://example.com/", saved.linkHref)
+        assertEquals("https://remote.example/activities/1", saved.id)
+        assertEquals(ACTOR, saved.attributedTo)
+        assertEquals(NoteVisibility.Public, saved.visibility)
+        assertEquals("", saved.content)
+    }
+
+    @Test
+    fun linkWithoutHttpHrefIsIgnored() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        receive(handler, """{"type":"Link","id":"https://remote.example/links/1","attributedTo":"$ACTOR","href":"javascript:alert(1)"}""")
+        assertTrue(store.saved.isEmpty())
+    }
+
     private suspend fun receive(handler: CreateNoteHandler, target: String) {
         val raw = AppJson.parseToJsonElement("""{"type":"Create","actor":"$ACTOR","object":$target}""").jsonObject
         handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)

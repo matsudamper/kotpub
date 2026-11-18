@@ -20,7 +20,7 @@ class CreateNoteHandler(
     ): InboxHandling {
         val json = (activity.target as? LinkOrObject.Embedded)?.json
             ?: return InboxHandling.Ignored("Create に投稿が埋め込まれていない: $verifiedSignerActorId")
-        val note = ReceivedNoteJson.read(json)
+        val note = ReceivedNoteJson.read(json, rawActivityJson)
             ?: return InboxHandling.Ignored("Create の object を投稿として読めない: $verifiedSignerActorId")
         val actor = activity.actorId ?: return InboxHandling.Ignored("Create に actor が無い: $verifiedSignerActorId")
         if (actor != verifiedSignerActorId || note.attributedTo != actor) {

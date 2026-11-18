@@ -35,7 +35,7 @@ class UpdateHandler(
         }
         val json = (target as? LinkOrObject.Embedded)?.json
             ?: return InboxHandling.Ignored("Update に中身が埋め込まれていない: $verifiedSignerActorId")
-        val note = ReceivedNoteJson.read(json)
+        val note = ReceivedNoteJson.read(json, rawActivityJson)
             ?: return InboxHandling.Ignored("Update の object を投稿として読めない: $verifiedSignerActorId")
         val actor = activity.actorId ?: return InboxHandling.Ignored("Update に actor が無い: $verifiedSignerActorId")
         if (actor != verifiedSignerActorId || note.attributedTo != actor) {

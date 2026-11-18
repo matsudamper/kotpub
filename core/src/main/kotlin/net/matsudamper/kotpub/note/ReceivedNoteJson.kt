@@ -18,7 +18,11 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        if (note["type"].string() != "Note") return null
+        val linkHref = when (note["type"].string()) {
+            NOTE_TYPE -> null
+            LINK_TYPE -> note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null
+            else -> return null
+        }
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
         val to = note["to"].strings()
@@ -27,7 +31,7 @@ internal object ReceivedNoteJson {
         return ReceivedNote(
             id = id,
             attributedTo = attributedTo,
-            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: return null,
+            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: if (linkHref == null) return null else "",
             language = contentMap?.keys?.firstOrNull()?.let { languageOrNull(it) },
             published = note["published"].instant(),
             updated = note["updated"].instant(),
@@ -41,7 +45,22 @@ internal object ReceivedNoteJson {
             attachments = note["attachment"].attachments(),
             emojis = CustomEmojiTags.read(note["tag"]),
             mentions = note["tag"].mentions(),
+            linkHref = linkHref,
         )
+    }
+
+    /**
+     * `Link` は投稿者や宛先を持たない型なので、無いものは包んでいるアクティビティから補う。
+     * `Note` はアクティビティを見ずに [read] と同じに読む
+     */
+    fun read(note: JsonObject, activity: JsonObject): ReceivedNote? {
+        if (note["type"].string() != LINK_TYPE) return read(note)
+        val inherited = buildMap {
+            ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
+                activity[activityKey]?.let { put(noteKey, it) }
+            }
+        }
+        return read(JsonObject(inherited + note))
     }
 
     /**
@@ -130,6 +149,18 @@ internal object ReceivedNoteJson {
     private val QUOTE_KEYS = listOf("quote", "quoteUrl", "quoteUri", "_misskey_quote")
 
     private const val MENTION_TYPE = "Mention"
+
+    private const val NOTE_TYPE = "Note"
+
+    private const val LINK_TYPE = "Link"
+
+    private val ACTIVITY_KEYS_FOR_LINK = listOf(
+        "id" to "id",
+        "actor" to "attributedTo",
+        "to" to "to",
+        "cc" to "cc",
+        "published" to "published",
+    )
 
     private const val UNDETERMINED_LANGUAGE = "und"
 

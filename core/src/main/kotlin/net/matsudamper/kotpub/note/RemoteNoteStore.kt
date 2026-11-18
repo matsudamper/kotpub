@@ -45,6 +45,10 @@ data class ReceivedNote(
      * `tag` の `Mention` が指すアクターの id。宛先に入っていても `Mention` が無いアカウントは含めない
      */
     val mentions: List<String>,
+    /**
+     * `type` が `Link` で届いた投稿のリンク先。`Note` なら null
+     */
+    val linkHref: String?,
 )
 
 /**
