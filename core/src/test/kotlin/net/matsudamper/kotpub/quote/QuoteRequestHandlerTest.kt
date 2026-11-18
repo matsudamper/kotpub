@@ -84,6 +84,7 @@ class QuoteRequestHandlerTest {
                     visibility = NoteVisibility.Public,
                     attachments = listOf(),
                     emojis = listOf(),
+                    mentions = listOf(),
                 ),
             )
         }
