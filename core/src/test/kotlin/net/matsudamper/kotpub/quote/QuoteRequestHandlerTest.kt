@@ -46,6 +46,7 @@ class QuoteRequestHandlerTest {
                 quote = null,
                 mentions = listOf(),
                 emojis = listOf(),
+                sensitive = false,
             ),
         )
     }

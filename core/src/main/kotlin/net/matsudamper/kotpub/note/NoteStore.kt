@@ -105,6 +105,7 @@ data class StoredNote(
     val quote: String?,
     val mentions: List<NoteMention>,
     val emojis: List<EmojiObject>,
+    val sensitive: Boolean,
 ) {
     /**
      * この投稿を「直前のページの最後」として指す位置
