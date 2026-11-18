@@ -51,13 +51,18 @@ internal object ReceivedNoteJson {
 
     /**
      * `Link` は投稿者や宛先を持たない型なので、無いものは包んでいるアクティビティから補う。
-     * `Note` はアクティビティを見ずに [read] と同じに読む
+     * `Note` はアクティビティを見ずに [read] と同じに読む。
+     *
+     * id は `Create` のときだけ補う。`Update` の id は作ったときの `Create` の id と違い、保存した投稿を指せない
      */
     fun read(note: JsonObject, activity: JsonObject): ReceivedNote? {
         if (note["type"].string() != LINK_TYPE) return read(note)
         val inherited = buildMap {
             ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
                 activity[activityKey]?.let { put(noteKey, it) }
+            }
+            if (activity["type"].string() == CREATE_TYPE) {
+                activity["id"]?.let { put("id", it) }
             }
         }
         return read(JsonObject(inherited + note))
@@ -154,8 +159,9 @@ internal object ReceivedNoteJson {
 
     private const val LINK_TYPE = "Link"
 
+    private const val CREATE_TYPE = "Create"
+
     private val ACTIVITY_KEYS_FOR_LINK = listOf(
-        "id" to "id",
         "actor" to "attributedTo",
         "to" to "to",
         "cc" to "cc",
