@@ -1,8 +1,10 @@
 package net.matsudamper.kotpub.note
 
+import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.jsonArray
@@ -15,7 +17,9 @@ import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestWebPageUrls
 import net.matsudamper.kotpub.activity.ActivityStreamsIri
 import net.matsudamper.kotpub.activity.CreateNoteActivity
+import net.matsudamper.kotpub.activity.UpdateNoteActivity
 import net.matsudamper.kotpub.emoji.EmojiObject
+import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.json.AppJson
 
 // フォロワーに送る Create{Note} を組み立てるところ。
@@ -168,4 +172,57 @@ class NotePublisherTest {
             .map { it.jsonPrimitive.content }
         assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE), automaticApproval)
     }
+
+    @Test
+    fun `書き換えた本文を Update に包み、元の公開日時と書き換えた日時を載せる`() {
+        val publishedAt = Instant.parse("2026-01-01T00:00:00Z")
+        val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = publishedAt, updatedAt = null)) }
+
+        val prepared = NotePublisher(notes, TestWebPageUrls).prepareUpdate(sender, PublicNoteId("note-1"), "<p>書き換えた</p>", listOf())
+
+        assertNotNull(prepared)
+        val activity = AppJson.decodeFromString(UpdateNoteActivity.serializer(), prepared.activityJson)
+        assertEquals("Update", activity.type)
+        assertEquals("https://example.com/notes/note-1", activity.target.id.value)
+        assertEquals("<p>書き換えた</p>", activity.target.content)
+        assertEquals(publishedAt.toActivityPubPublished(), activity.target.published)
+        assertEquals(prepared.updatedAt.toActivityPubPublished(), activity.target.updated)
+        assertEquals(listOf(sender.followers), activity.cc)
+    }
+
+    @Test
+    fun `同じ秒に書き換えても updated と id を前より進める`() {
+        val previousUpdatedAt = Instant.now().plusSeconds(60)
+        val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = previousUpdatedAt)) }
+
+        val prepared = NotePublisher(notes, TestWebPageUrls).prepareUpdate(sender, PublicNoteId("note-1"), "<p>本文</p>", listOf())
+
+        assertNotNull(prepared)
+        assertTrue(prepared.updatedAt.isAfter(previousUpdatedAt))
+        val activity = AppJson.decodeFromString(UpdateNoteActivity.serializer(), prepared.activityJson)
+        assertEquals("https://example.com/notes/note-1#updates/${prepared.updatedAt.toEpochMilli()}", activity.id.value)
+    }
+
+    @Test
+    fun `別のアカウントの投稿は書き換えられない`() {
+        val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = null).copy(username = "other")) }
+
+        assertNull(NotePublisher(notes, TestWebPageUrls).prepareUpdate(sender, PublicNoteId("note-1"), "<p>本文</p>", listOf()))
+    }
+
+    private fun recordedNote(
+        publishedAt: Instant,
+        updatedAt: Instant?,
+    ): StoredNote = StoredNote(
+        publicId = PublicNoteId("note-1"),
+        username = TestLocalActor.USERNAME,
+        contentHtml = "<p>元の本文</p>",
+        publishedAt = publishedAt,
+        updatedAt = updatedAt,
+        attachments = listOf(),
+        inReplyTo = null,
+        quote = null,
+        mentions = listOf(),
+        emojis = listOf(),
+    )
 }

@@ -112,6 +112,7 @@ class OutboxEndpointTest {
         username = TestLocalActor.USERNAME,
         contentHtml = "<p>$publicId</p>",
         publishedAt = Instant.parse(publishedAt),
+        updatedAt = null,
         attachments = listOf(),
         inReplyTo = null,
         quote = null,
