@@ -40,6 +40,7 @@ internal object ReceivedNoteJson {
             visibility = visibilityOf(actorId = attributedTo, to = to, cc = cc),
             attachments = note["attachment"].attachments(),
             emojis = CustomEmojiTags.read(note["tag"]),
+            mentions = note["tag"].mentions(),
         )
     }
 
@@ -74,6 +75,17 @@ internal object ReceivedNoteJson {
         is JsonObject -> this["href"].string() ?: this["id"].string()
         is JsonArray -> firstNotNullOfOrNull { it.idOrString() }
         else -> string()
+    }
+
+    private fun JsonElement?.mentions(): List<String> {
+        val tags = when (this) {
+            is JsonArray -> this
+            else -> listOfNotNull(this)
+        }
+        return tags.filterIsInstance<JsonObject>()
+            .filter { it["type"].string() == MENTION_TYPE }
+            .mapNotNull { it["href"].string() }
+            .distinct()
     }
 
     fun JsonElement?.strings(): List<String> = when (this) {
@@ -116,6 +128,8 @@ internal object ReceivedNoteJson {
     private fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     private val QUOTE_KEYS = listOf("quote", "quoteUrl", "quoteUri", "_misskey_quote")
+
+    private const val MENTION_TYPE = "Mention"
 
     private const val UNDETERMINED_LANGUAGE = "und"
 

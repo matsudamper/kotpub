@@ -88,6 +88,32 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun mentionsAreReadFromTag() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        val tag = """[
+            {"type":"Mention","href":"https://local.example/users/alice","name":"@alice@local.example"},
+            {"type":"Hashtag","name":"#kotlin"},
+            {"type":"Mention","href":"https://local.example/users/alice","name":"@alice"}
+        ]"""
+        val target =
+            """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>@alice</p>","to":["$PUBLIC"],"tag":$tag}"""
+        receive(handler, target)
+        assertEquals(listOf("https://local.example/users/alice"), store.saved.single().mentions)
+    }
+
+    @Test
+    fun singleMentionTagObjectIsRead() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        val tag = """{"type":"Mention","href":"https://local.example/users/alice"}"""
+        val target =
+            """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>@alice</p>","to":["$PUBLIC"],"tag":$tag}"""
+        receive(handler, target)
+        assertEquals(listOf("https://local.example/users/alice"), store.saved.single().mentions)
+    }
+
+    @Test
     fun quoteIsReadFromEachImplementationsKey() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store)
