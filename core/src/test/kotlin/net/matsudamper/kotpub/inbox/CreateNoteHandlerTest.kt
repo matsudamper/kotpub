@@ -200,6 +200,18 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun linkTakesAuthorFromEmbeddedActor() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store)
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/1","type":"Create","actor":{"id":"$ACTOR","type":"Person"},
+                "object":{"type":"Link","href":"https://example.com/"}}""",
+        ).jsonObject
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+        assertEquals(ACTOR, store.saved.single().attributedTo)
+    }
+
+    @Test
     fun linkWithoutHttpHrefIsIgnored() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store)

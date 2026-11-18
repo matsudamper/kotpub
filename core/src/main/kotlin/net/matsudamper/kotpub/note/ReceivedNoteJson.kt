@@ -61,6 +61,7 @@ internal object ReceivedNoteJson {
             ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
                 activity[activityKey]?.let { put(noteKey, it) }
             }
+            activity["actor"].idOrString()?.let { put("attributedTo", JsonPrimitive(it)) }
             if (activity["type"].string() == CREATE_TYPE) {
                 activity["id"]?.let { put("id", it) }
             }
@@ -162,7 +163,6 @@ internal object ReceivedNoteJson {
     private const val CREATE_TYPE = "Create"
 
     private val ACTIVITY_KEYS_FOR_LINK = listOf(
-        "actor" to "attributedTo",
         "to" to "to",
         "cc" to "cc",
         "published" to "published",
