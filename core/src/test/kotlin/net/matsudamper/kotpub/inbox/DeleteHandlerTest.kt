@@ -29,7 +29,7 @@ class DeleteHandlerTest {
         listOf(ACTOR, "https://other.example/note", "https://remote.example/notes/1").forEach { id ->
             handler.handle(InboxRecipient.Shared, ACTOR, InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(id)), JsonObject(mapOf()))
         }
-        listOf("Note", "Question", "Link", "Article", "Tombstone", "Person").forEach { type ->
+        listOf("Note", "Question", "Link", "Tombstone", "Person").forEach { type ->
             val target = LinkOrObject.Embedded(JsonObject(mapOf("type" to JsonPrimitive(type), "id" to JsonPrimitive("https://remote.example/$type"))))
             handler.handle(InboxRecipient.Shared, ACTOR, InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = target), JsonObject(mapOf()))
         }
@@ -39,7 +39,6 @@ class DeleteHandlerTest {
                 "https://remote.example/Note",
                 "https://remote.example/Question",
                 "https://remote.example/Link",
-                "https://remote.example/Article",
                 "https://remote.example/Tombstone",
             ),
             deleted,

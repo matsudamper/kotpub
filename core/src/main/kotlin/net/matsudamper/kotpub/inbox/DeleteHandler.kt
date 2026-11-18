@@ -6,7 +6,6 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.http.HttpUrl
-import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.RemoteNoteStore
 
 class DeleteHandler(
@@ -30,8 +29,7 @@ class DeleteHandler(
         val embedded = activity.target as? LinkOrObject.Embedded
         if (embedded != null) {
             val objectType = (embedded.json["type"] as? JsonPrimitive)?.content
-            // 知らない型も投稿として受け取るので、投稿として受け取らないアクターだけを除く
-            if (objectType in ReceivedNoteJson.ACTOR_TYPES) return InboxHandling.Ignored("Delete の対象が投稿ではない: type=$objectType object=$objectId")
+            if (objectType !in listOf("Note", "Question", "Link", "Tombstone")) return InboxHandling.Ignored("Delete の対象が投稿ではない: type=$objectType object=$objectId")
         }
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Delete の actor を URL として読めない: $actor")
         val objectUrl = HttpUrl.parse(objectId) ?: return InboxHandling.Ignored("Delete の object を URL として読めない: $objectId")

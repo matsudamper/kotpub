@@ -8,13 +8,16 @@ import net.matsudamper.kotpub.note.PollVoteStore
 import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.ReceivedPollVote
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.UnknownTypeStore
 
 /**
- * 投稿と、こちらの投票への票はどちらも `Create{Note}` で届く。本文の無い `Note` は票として [pollVotes] に渡す
+ * 投稿と、こちらの投票への票はどちらも `Create{Note}` で届く。本文の無い `Note` は票として [pollVotes] に渡す。
+ * 読み方を知らない型は投稿として受け取らず、[unknownTypes] に記録する
  */
 class CreateNoteHandler(
     private val notes: RemoteNoteStore,
     private val pollVotes: PollVoteStore,
+    private val unknownTypes: UnknownTypeStore,
 ) : InboxActivityHandler {
     override val type: String = "Create"
 
@@ -30,7 +33,7 @@ class CreateNoteHandler(
         val vote = ReceivedNoteJson.readVote(json)
         if (vote != null) return handleVote(vote = vote, actor = actor, verifiedSignerActorId = verifiedSignerActorId)
         val note = ReceivedNoteJson.read(json, rawActivityJson)
-            ?: return InboxHandling.Ignored("Create の object を投稿として読めない: $verifiedSignerActorId")
+            ?: return unknownTypes.recordIfUnknownObject(json, rawActivityJson, actor, verifiedSignerActorId, activityType = type)
         if (actor != verifiedSignerActorId || note.attributedTo != actor) {
             return InboxHandling.Ignored("Create の actor か投稿者が署名者と違う: actor=$actor 投稿者=${note.attributedTo} 署名者=$verifiedSignerActorId")
         }
@@ -38,6 +41,7 @@ class CreateNoteHandler(
         val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
         if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
         notes.save(note)
+        if (note.unknownTypes.isNotEmpty()) unknownTypes.record(note.unknownTypes, note.id)
         return InboxHandling.Handled
     }
 

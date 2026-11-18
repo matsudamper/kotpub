@@ -11,12 +11,13 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.ReceivedNote
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.UnknownTypeStore
 
 class UpdateHandlerTest {
     @Test
     fun `編集された投稿は署名者と同じホストの署名者の投稿だけを渡す`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
         receive(handler, """"https://remote.example/notes/1"""")
         receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
         receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
@@ -31,19 +32,21 @@ class UpdateHandlerTest {
     }
 
     @Test
-    fun `知らない型の Update も型の名前を付けて投稿の編集として渡す`() = runBlocking {
+    fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val recorded = mutableListOf<Pair<List<String>, String>>()
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { types, sourceUrl -> recorded.add(types to sourceUrl) })
 
         receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
 
-        assertEquals(listOf("Article"), notes.updated.single().unknownTypes)
+        assertTrue(notes.updated.isEmpty())
+        assertEquals(listOf(listOf("Article") to "https://remote.example/notes/1"), recorded)
     }
 
     @Test
     fun `id の無い Link の Update は Update の id を投稿の id にしない`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
         val raw = AppJson.parseToJsonElement(
             """{"id":"https://remote.example/activities/2","type":"Update","actor":"$ACTOR","object":{"type":"Link","href":"https://example.com/"}}""",
         ).jsonObject
@@ -56,7 +59,7 @@ class UpdateHandlerTest {
     @Test
     fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
         val options = """[{"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":2}}]"""
 
         receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>","oneOf":$options}""")
@@ -67,7 +70,7 @@ class UpdateHandlerTest {
     @Test
     fun `送り主自身の Update はプロフィールの編集として扱う`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
 
         val handling = receive(handler, """{"id":"$ACTOR","type":"Person","preferredUsername":"alice","name":"アリス（改名）"}""")
 

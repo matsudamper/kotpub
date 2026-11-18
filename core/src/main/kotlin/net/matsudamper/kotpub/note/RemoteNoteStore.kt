@@ -54,7 +54,7 @@ data class ReceivedNote(
      */
     val linkHref: String?,
     /**
-     * 投稿本体・添付・タグのうち、このライブラリが読み方を知らない `type` の名前。重複は除く
+     * 添付・タグのうち、このライブラリが読み方を知らない `type` の名前。重複は除く
      */
     val unknownTypes: List<String>,
 )

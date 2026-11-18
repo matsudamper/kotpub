@@ -19,7 +19,7 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        val type = note["type"].string()?.takeIf { it !in ACTOR_TYPES } ?: return null
+        val type = note["type"].string()?.takeIf { it in KNOWN_OBJECT_TYPES } ?: return null
         val linkHref = if (type == LINK_TYPE) note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null else null
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
@@ -45,7 +45,7 @@ internal object ReceivedNoteJson {
             mentions = note["tag"].mentions(),
             poll = note.poll(),
             linkHref = linkHref,
-            unknownTypes = note.unknownTypes(type),
+            unknownTypes = note.unknownAttachmentAndTagTypes(),
         )
     }
 
@@ -65,7 +65,17 @@ internal object ReceivedNoteJson {
     }
 
     /**
-     * `Link` や知らない型は投稿者や宛先を持たないことがあるので、無いものは包んでいるアクティビティから補う。
+     * 投稿として読まない、知らない型の object。知っている型か、出どころの URL が無ければ null
+     */
+    fun readUnknownObject(obj: JsonObject, activity: JsonObject): UnknownObject? {
+        val types = obj["type"].strings().filterNot { it in KNOWN_OBJECT_TYPES }.distinct()
+        if (types.isEmpty()) return null
+        val sourceUrl = obj["id"].string() ?: activity["id"].string() ?: return null
+        return UnknownObject(types = types, sourceUrl = sourceUrl)
+    }
+
+    /**
+     * `Link` は投稿者や宛先を持たない型なので、無いものは包んでいるアクティビティから補う。
      * `Note` と `Question` はアクティビティを見ずに [read] と同じに読む。
      *
      * id は `Create` のときだけ補う。`Update` の id は作ったときの `Create` の id と違い、保存した投稿を指せない
@@ -152,10 +162,9 @@ internal object ReceivedNoteJson {
 
     private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
 
-    private fun JsonObject.unknownTypes(type: String): List<String> = buildList {
-        if (type !in KNOWN_OBJECT_TYPES) add(type)
-        addAll(this@unknownTypes["attachment"].types().filterNot { it in KNOWN_ATTACHMENT_TYPES })
-        addAll(this@unknownTypes["tag"].types().filterNot { it in KNOWN_TAG_TYPES })
+    private fun JsonObject.unknownAttachmentAndTagTypes(): List<String> = buildList {
+        addAll(this@unknownAttachmentAndTagTypes["attachment"].types().filterNot { it in KNOWN_ATTACHMENT_TYPES })
+        addAll(this@unknownAttachmentAndTagTypes["tag"].types().filterNot { it in KNOWN_TAG_TYPES })
     }.distinct()
 
     private fun JsonElement?.types(): List<String> {
@@ -226,11 +235,6 @@ internal object ReceivedNoteJson {
 
     private const val CREATE_TYPE = "Create"
 
-    /**
-     * 投稿として受け取らない型。知らない型は投稿として受け取るが、アクターは投稿ではない
-     */
-    val ACTOR_TYPES = setOf("Person", "Service", "Application", "Group", "Organization")
-
     private val KNOWN_OBJECT_TYPES = NOTE_TYPES + LINK_TYPE
 
     private val KNOWN_ATTACHMENT_TYPES = setOf("Document", "Image", "Video", "Audio")
@@ -247,3 +251,12 @@ internal object ReceivedNoteJson {
 
     private const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 }
+
+/**
+ * @param types 読み方を知らない `type` の名前。重複は除いてある
+ * @param sourceUrl object の id。無ければ包んでいるアクティビティの id
+ */
+internal class UnknownObject(
+    val types: List<String>,
+    val sourceUrl: String,
+)
