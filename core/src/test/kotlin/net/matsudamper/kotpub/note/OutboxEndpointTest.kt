@@ -119,6 +119,7 @@ class OutboxEndpointTest {
         quote = null,
         mentions = listOf(),
         emojis = listOf(),
+        sensitive = false,
     )
 
     private fun boost(key: String, boostedAt: String, audience: BoostAudience) = StoredBoost(
