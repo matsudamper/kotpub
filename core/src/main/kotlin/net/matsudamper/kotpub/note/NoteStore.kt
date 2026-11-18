@@ -88,6 +88,7 @@ data class NotePosition(
  * @param publicId URL のパスに入る識別子
  * @param username 投稿したこちらのアカウントの名前
  * @param contentHtml 配信した本文の HTML
+ * @param summary 閲覧注意の注意書き。プレーンテキスト。閲覧注意でなければ null
  * @param publishedAt 相手に見せる公開日時
  * @param updatedAt 最後に書き換えた日時。書き換えていなければ null
  * @param attachments 付けた画像。付けた順
@@ -100,6 +101,7 @@ data class StoredNote(
     val publicId: PublicNoteId,
     val username: String,
     val contentHtml: String,
+    val summary: String?,
     val publishedAt: Instant,
     val updatedAt: Instant?,
     val attachments: List<NoteAttachment>,

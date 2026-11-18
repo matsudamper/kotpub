@@ -28,6 +28,7 @@ class NotePublisher(
      * 投稿の id と時刻を決めて、フォロワーに送る `Create{Note}` の JSON を組み立てる。
      *
      * @param contentHtml 本文。サニタイズ済みの HTML を渡すこと。ここでは中身を検査しない
+     * @param summary 閲覧注意の注意書き。プレーンテキスト。閲覧注意でなければ null
      * @param attachments 付ける画像。付けた順に並ぶ
      * @param inReplyTo 返信先の投稿の id。返信でなければ null
      * @param quote 引用する投稿の id。引用でなければ null
@@ -37,6 +38,7 @@ class NotePublisher(
     fun prepare(
         sender: ActorUrls,
         contentHtml: String,
+        summary: String?,
         attachments: List<NoteAttachment>,
         inReplyTo: String?,
         quote: String?,
@@ -48,6 +50,7 @@ class NotePublisher(
             publicId = PublicNoteId(UuidV7.generate(publishedAt.toEpochMilli())),
             username = sender.username,
             contentHtml = contentHtml,
+            summary = summary,
             publishedAt = publishedAt,
             updatedAt = null,
             attachments = attachments,
