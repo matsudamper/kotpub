@@ -21,6 +21,37 @@ class RemoteActorDocumentTest {
     }
 
     @Test
+    fun `補足情報を attachment の PropertyValue から読む`() {
+        val profile = profile(
+            """
+            {"attachment":[
+              {"type":"PropertyValue","name":"Web","value":"<a href=\"https://example.com\">example.com</a>"},
+              {"type":"Image","url":"https://files.remote.example/a.png"},
+              {"type":"PropertyValue","name":"場所"},
+              {"type":"PropertyValue","name":"場所","value":"東京"}
+            ]}
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(
+                RemoteActorProfileField(name = "Web", htmlValue = "<a href=\"https://example.com\">example.com</a>"),
+                RemoteActorProfileField(name = "場所", htmlValue = "東京"),
+            ),
+            profile.fields,
+        )
+    }
+
+    @Test
+    fun `補足情報が 1 つだけオブジェクトで置かれていても読む`() {
+        assertEquals(
+            listOf(RemoteActorProfileField(name = "場所", htmlValue = "東京")),
+            profile("""{"attachment":{"type":"PropertyValue","name":"場所","value":"東京"}}""").fields,
+        )
+        assertEquals(listOf(), profile("""{"preferredUsername":"alice"}""").fields)
+    }
+
+    @Test
     fun `文字列で書かれた名前とアイコンを読む`() {
         val profile = profile(
             """
