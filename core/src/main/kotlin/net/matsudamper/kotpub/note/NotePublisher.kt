@@ -35,6 +35,7 @@ class NotePublisher(
      * @param mentions 宛てるアカウント。宛てた相手の inbox へ積むのは呼び出し側
      * @param emojis 本文に `:name:` の形で入れた、こちらのサーバーのカスタム絵文字。相手は画像に置き換えて出す
      * @param sensitive 閲覧注意の投稿か。相手は付けた画像をぼかして出す
+     * @param poll 付ける投票。票数は 0 で渡す。投票でなければ null
      */
     fun prepare(
         sender: ActorUrls,
@@ -46,6 +47,7 @@ class NotePublisher(
         mentions: List<NoteMention>,
         emojis: List<EmojiObject>,
         sensitive: Boolean,
+        poll: NotePoll?,
     ): PreparedNote {
         val publishedAt = Instant.now()
         val note = StoredNote(
@@ -61,6 +63,7 @@ class NotePublisher(
             mentions = mentions,
             emojis = emojis,
             sensitive = sensitive,
+            poll = poll,
         )
 
         return note.toPrepared(sender)

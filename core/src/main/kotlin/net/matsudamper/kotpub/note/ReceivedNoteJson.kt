@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import net.matsudamper.kotpub.emoji.CustomEmojiTags
 import net.matsudamper.kotpub.http.HttpUrl
 
@@ -18,7 +19,7 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        if (note["type"].string() != "Note") return null
+        if (note["type"].string() !in NOTE_TYPES) return null
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
         val to = note["to"].strings()
@@ -41,6 +42,21 @@ internal object ReceivedNoteJson {
             attachments = note["attachment"].attachments(),
             emojis = CustomEmojiTags.read(note["tag"]),
             mentions = note["tag"].mentions(),
+            poll = note.poll(),
+        )
+    }
+
+    /**
+     * 本文が無く `name` と `inReplyTo` を持つ `Note` を、投票への票として読む。投稿として読めるものは票にしない
+     */
+    fun readVote(note: JsonObject): ReceivedPollVote? {
+        if (note["type"].string() != Note.NOTE_TYPE) return null
+        if (note["content"].string() != null) return null
+        return ReceivedPollVote(
+            id = note["id"].string() ?: return null,
+            voterActorId = note["attributedTo"].string() ?: return null,
+            questionId = note["inReplyTo"].idOrString() ?: return null,
+            choice = note["name"].string() ?: return null,
         )
     }
 
@@ -76,6 +92,35 @@ internal object ReceivedNoteJson {
         is JsonArray -> firstNotNullOfOrNull { it.idOrString() }
         else -> string()
     }
+
+    /**
+     * 選択肢が無ければ投票として扱わない。`oneOf` と `anyOf` の両方があれば、Mastodon と同じく `anyOf` を使う
+     */
+    private fun JsonObject.poll(): ReceivedPoll? {
+        val anyOf = this["anyOf"].pollOptions()
+        val oneOf = this["oneOf"].pollOptions()
+        val multipleChoice = anyOf.isNotEmpty()
+        val options = if (multipleChoice) anyOf else oneOf
+        if (options.isEmpty()) return null
+        return ReceivedPoll(
+            options = options,
+            multipleChoice = multipleChoice,
+            endsAt = this["endTime"].instant() ?: this["closed"].instant(),
+            votersCount = this["votersCount"].int(),
+        )
+    }
+
+    private fun JsonElement?.pollOptions(): List<ReceivedPollOption> {
+        val options = this as? JsonArray ?: return listOf()
+        return options.filterIsInstance<JsonObject>().mapNotNull { option ->
+            ReceivedPollOption(
+                name = option["name"].string() ?: return@mapNotNull null,
+                votesCount = (option["replies"] as? JsonObject)?.get("totalItems").int(),
+            )
+        }
+    }
+
+    private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
 
     private fun JsonElement?.mentions(): List<String> {
         val tags = when (this) {
@@ -130,6 +175,8 @@ internal object ReceivedNoteJson {
     private val QUOTE_KEYS = listOf("quote", "quoteUrl", "quoteUri", "_misskey_quote")
 
     private const val MENTION_TYPE = "Mention"
+
+    private val NOTE_TYPES = setOf(Note.NOTE_TYPE, Note.QUESTION_TYPE)
 
     private const val UNDETERMINED_LANGUAGE = "und"
 

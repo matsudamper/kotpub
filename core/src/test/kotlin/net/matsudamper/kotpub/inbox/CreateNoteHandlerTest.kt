@@ -1,5 +1,6 @@
 package net.matsudamper.kotpub.inbox
 
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -9,15 +10,19 @@ import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.emoji.CustomEmoji
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteVisibility
+import net.matsudamper.kotpub.note.PollVoteStore
 import net.matsudamper.kotpub.note.ReceivedNote
 import net.matsudamper.kotpub.note.ReceivedNoteAttachment
+import net.matsudamper.kotpub.note.ReceivedPoll
+import net.matsudamper.kotpub.note.ReceivedPollOption
+import net.matsudamper.kotpub.note.ReceivedPollVote
 import net.matsudamper.kotpub.note.RemoteNoteStore
 
 class CreateNoteHandlerTest {
     @Test
     fun embeddedNotesRequireMatchingAuthorAndHost() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         receive(handler, """"https://remote.example/notes/1"""")
         receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1", to = PUBLIC, cc = ""))
         receive(handler, note(author = ACTOR, id = "https://other.example/notes/1", to = PUBLIC, cc = ""))
@@ -30,7 +35,7 @@ class CreateNoteHandlerTest {
     @Test
     fun visibilityUsesToBeforeCcAndKeepsPrivateRecipients() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         listOf(PUBLIC to "", "local" to PUBLIC, "$ACTOR/followers" to "", "local" to "").forEach { (to, cc) ->
             receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = to, cc = cc))
         }
@@ -41,7 +46,7 @@ class CreateNoteHandlerTest {
     @Test
     fun attachmentsAcceptStringOrLinkUrlsAndSkipNonHttp() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         val attachments = """[
             {"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png","name":"説明"},
             {"type":"Image","url":{"type":"Link","href":"https://remote.example/b.jpg","mediaType":"image/jpeg"}},
@@ -63,7 +68,7 @@ class CreateNoteHandlerTest {
     @Test
     fun singleAttachmentObjectIsAccepted() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         val attachment = """{"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"}"""
         receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "", attachment = attachment))
         assertEquals(listOf("https://remote.example/a.png"), store.saved.single().attachments.map { it.url })
@@ -72,7 +77,7 @@ class CreateNoteHandlerTest {
     @Test
     fun customEmojisAreReadFromTagAndSkipNonHttpIcons() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         val tag = """[
             {"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://remote.example/blob.png"}},
             {"type":"Hashtag","name":"#kotlin"},
@@ -90,7 +95,7 @@ class CreateNoteHandlerTest {
     @Test
     fun mentionsAreReadFromTag() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         val tag = """[
             {"type":"Mention","href":"https://local.example/users/alice","name":"@alice@local.example"},
             {"type":"Hashtag","name":"#kotlin"},
@@ -105,7 +110,7 @@ class CreateNoteHandlerTest {
     @Test
     fun singleMentionTagObjectIsRead() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         val tag = """{"type":"Mention","href":"https://local.example/users/alice"}"""
         val target =
             """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>@alice</p>","to":["$PUBLIC"],"tag":$tag}"""
@@ -116,7 +121,7 @@ class CreateNoteHandlerTest {
     @Test
     fun quoteIsReadFromEachImplementationsKey() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         listOf(
             """"quote":"https://other.example/notes/fep"""",
             """"quoteUrl":"https://other.example/notes/url"""",
@@ -148,7 +153,7 @@ class CreateNoteHandlerTest {
     @Test
     fun languageIsReadFromFirstContentMapKey() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         listOf(
             """"content":"<p>q</p>","contentMap":{"ja":"<p>q</p>"}""",
             """"content":"<p>q</p>","contentMap":{"zh-tw":"<p>q</p>","en":"<p>q</p>"}""",
@@ -169,7 +174,7 @@ class CreateNoteHandlerTest {
     @Test
     fun contentPrefersContentOverContentMap() = runBlocking {
         val store = RecordingNotes()
-        val handler = CreateNoteHandler(store)
+        val handler = CreateNoteHandler(store, RecordingVotes())
         listOf(
             """"content":"<p>content</p>","contentMap":{"ja":"<p>map</p>"}""",
             """"contentMap":{"ja":"<p>first</p>","en":"<p>second</p>"}""",
@@ -181,6 +186,69 @@ class CreateNoteHandlerTest {
         }
         assertEquals(listOf("<p>content</p>", "<p>first</p>"), store.saved.map { it.content })
     }
+
+    @Test
+    fun questionIsSavedWithPoll() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        val options = """[
+            {"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":3}},
+            {"type":"Note","name":"猫"},
+            {"type":"Note"}
+        ]"""
+        receive(
+            handler,
+            """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>どっち</p>","to":["$PUBLIC"],"oneOf":$options,"endTime":"2026-01-02T00:00:00Z","votersCount":3}""",
+        )
+        receive(
+            handler,
+            """{"type":"Question","id":"https://remote.example/notes/2","attributedTo":"$ACTOR","content":"<p>どれも</p>","to":["$PUBLIC"],"anyOf":$options}""",
+        )
+        receive(handler, note(author = ACTOR, id = "https://remote.example/notes/3", to = PUBLIC, cc = ""))
+        assertEquals(
+            listOf(
+                ReceivedPoll(
+                    options = listOf(ReceivedPollOption(name = "犬", votesCount = 3), ReceivedPollOption(name = "猫", votesCount = null)),
+                    multipleChoice = false,
+                    endsAt = Instant.parse("2026-01-02T00:00:00Z"),
+                    votersCount = 3,
+                ),
+                ReceivedPoll(
+                    options = listOf(ReceivedPollOption(name = "犬", votesCount = 3), ReceivedPollOption(name = "猫", votesCount = null)),
+                    multipleChoice = true,
+                    endsAt = null,
+                    votersCount = null,
+                ),
+                null,
+            ),
+            store.saved.map { it.poll },
+        )
+    }
+
+    @Test
+    fun noteWithoutContentAndWithNameIsVote() = runBlocking {
+        val store = RecordingNotes()
+        val votes = RecordingVotes()
+        val handler = CreateNoteHandler(store, votes)
+        receive(handler, vote(author = ACTOR, id = "https://remote.example/votes/1"))
+        receive(handler, vote(author = "https://other.example/actor", id = "https://remote.example/votes/2"))
+        receive(handler, vote(author = ACTOR, id = "https://other.example/votes/3"))
+        assertTrue(store.saved.isEmpty())
+        assertEquals(
+            listOf(
+                ReceivedPollVote(
+                    id = "https://remote.example/votes/1",
+                    voterActorId = ACTOR,
+                    questionId = "https://local.example/notes/1",
+                    choice = "犬",
+                ),
+            ),
+            votes.received,
+        )
+    }
+
+    private fun vote(author: String, id: String): String =
+        """{"type":"Note","id":"$id","attributedTo":"$author","name":"犬","inReplyTo":"https://local.example/notes/1","to":["https://local.example/users/alice"]}"""
 
     private suspend fun receive(handler: CreateNoteHandler, target: String) {
         val raw = AppJson.parseToJsonElement("""{"type":"Create","actor":"$ACTOR","object":$target}""").jsonObject
@@ -202,6 +270,14 @@ class CreateNoteHandlerTest {
         override suspend fun update(note: ReceivedNote) = Unit
 
         override suspend fun delete(actorId: String, objectId: String) = Unit
+    }
+
+    private class RecordingVotes : PollVoteStore {
+        val received = mutableListOf<ReceivedPollVote>()
+
+        override suspend fun vote(vote: ReceivedPollVote) {
+            received.add(vote)
+        }
     }
 
     private companion object {

@@ -45,6 +45,10 @@ data class ReceivedNote(
      * `tag` の `Mention` が指すアクターの id。宛先に入っていても `Mention` が無いアカウントは含めない
      */
     val mentions: List<String>,
+    /**
+     * `Question` で届いた投稿の投票。投票でなければ null
+     */
+    val poll: ReceivedPoll?,
 )
 
 /**

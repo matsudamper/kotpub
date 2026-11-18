@@ -49,6 +49,7 @@ class QuoteRequestHandlerTest {
                 mentions = listOf(),
                 emojis = listOf(),
                 sensitive = false,
+                poll = null,
             ),
         )
     }
@@ -86,6 +87,7 @@ class QuoteRequestHandlerTest {
                     attachments = listOf(),
                     emojis = listOf(),
                     mentions = listOf(),
+                    poll = null,
                 ),
             )
         }
