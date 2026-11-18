@@ -231,6 +231,8 @@ private fun noteDocument(
         id = noteUrls.noteId,
         attributedTo = urls.actorId,
         content = note.contentHtml,
+        summary = note.summary,
+        sensitive = note.summary != null,
         published = note.publishedAt.toActivityPubPublished(),
         to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
         cc = note.ccWith(urls.followers),

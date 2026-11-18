@@ -24,6 +24,7 @@ class FeaturedEndpointTest {
         publicId = PublicNoteId("pinned"),
         username = TestLocalActor.USERNAME,
         contentHtml = "<p>固定した投稿</p>",
+        summary = null,
         publishedAt = Instant.parse("2026-08-10T00:00:00Z"),
         attachments = listOf(),
         inReplyTo = null,

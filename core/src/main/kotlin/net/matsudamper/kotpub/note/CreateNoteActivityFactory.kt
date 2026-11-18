@@ -32,6 +32,8 @@ internal object CreateNoteActivityFactory {
                 id = urls.noteId,
                 attributedTo = sender.actorId,
                 content = note.contentHtml,
+                summary = note.summary,
+                sensitive = note.summary != null,
                 published = published,
                 to = listOf(ActivityStreamsIri.PUBLIC_AUDIENCE),
                 cc = cc,

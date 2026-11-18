@@ -60,6 +60,14 @@ data class Note(
      */
     @SerialName("atomUri")
     val atomUri: String? = null,
+    /**
+     * 閲覧注意の注意書き。Mastodon は本文を畳んでこれだけを見せる。閲覧注意でなければ null
+     */
+    @SerialName("summary")
+    val summary: String? = null,
+    /**
+     * Mastodon は [summary] があっても、これが false だと画像をぼかさない
+     */
     @SerialName("sensitive")
     val sensitive: Boolean = false,
     /**

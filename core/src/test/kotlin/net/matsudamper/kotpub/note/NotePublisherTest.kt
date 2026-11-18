@@ -27,7 +27,7 @@ class NotePublisherTest {
 
     @Test
     fun `Create に包んだ Note を組み立てる`() {
-        val prepared = publisher().prepare(sender, "<p>こんにちは</p>", listOf(), null, null, listOf(), listOf())
+        val prepared = publisher().prepare(sender, "<p>こんにちは</p>", null, listOf(), null, null, listOf(), listOf())
 
         val activity = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson)
         assertEquals("Create", activity.type)
@@ -47,7 +47,7 @@ class NotePublisherTest {
 
     @Test
     fun `id は UUID v7 で時刻と揃う`() {
-        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(), null, null, listOf(), listOf())
+        val prepared = publisher().prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf())
 
         assertEquals(7, UUID.fromString(prepared.publicId.value).version())
         assertEquals("<p>本文</p>", prepared.contentHtml)
@@ -60,7 +60,7 @@ class NotePublisherTest {
         val delivery = TestDelivery()
         val publisher = NotePublisher(notes, TestWebPageUrls)
 
-        publisher.prepare(sender, "<p>本文</p>", listOf(), null, null, listOf(), listOf())
+        publisher.prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf())
 
         assertTrue(notes.added.isEmpty())
         assertTrue(delivery.delivered.isEmpty())
@@ -70,8 +70,8 @@ class NotePublisherTest {
     fun `呼ぶたびに別の id になる`() {
         val publisher = publisher()
 
-        val first = publisher.prepare(sender, "<p>1</p>", listOf(), null, null, listOf(), listOf())
-        val second = publisher.prepare(sender, "<p>2</p>", listOf(), null, null, listOf(), listOf())
+        val first = publisher.prepare(sender, "<p>1</p>", null, listOf(), null, null, listOf(), listOf())
+        val second = publisher.prepare(sender, "<p>2</p>", null, listOf(), null, null, listOf(), listOf())
 
         assertTrue(first.publicId != second.publicId)
     }
@@ -81,6 +81,7 @@ class NotePublisherTest {
         val prepared = publisher().prepare(
             sender,
             "<p>画像</p>",
+            null,
             listOf(
                 NoteAttachment(url = "https://example.com/media/1.png", mediaType = "image/png", description = "猫"),
                 NoteAttachment(url = "https://example.com/media/2.jpg", mediaType = "image/jpeg", description = null),
@@ -103,6 +104,7 @@ class NotePublisherTest {
         val prepared = publisher().prepare(
             sender,
             "<p>@alice こんにちは</p>",
+            null,
             listOf(),
             "https://remote.example/notes/1",
             null,
@@ -126,6 +128,7 @@ class NotePublisherTest {
         val prepared = publisher().prepare(
             sender,
             "<p>:blobcat:</p>",
+            null,
             listOf(),
             null,
             null,
@@ -140,7 +143,7 @@ class NotePublisherTest {
 
     @Test
     fun `引用した投稿を各実装が読む名前で載せる`() {
-        val prepared = publisher().prepare(sender, "<p>引用</p>", listOf(), null, "https://remote.example/notes/2", listOf(), listOf())
+        val prepared = publisher().prepare(sender, "<p>引用</p>", null, listOf(), null, "https://remote.example/notes/2", listOf(), listOf())
 
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
         assertEquals(
@@ -151,7 +154,7 @@ class NotePublisherTest {
 
     @Test
     fun `引用でなければ引用のキーを出さない`() {
-        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(), null, null, listOf(), listOf())
+        val prepared = publisher().prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf())
 
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
         assertEquals(listOf(), listOf("quote", "quoteUrl", "_misskey_quote").filter { it in note })
@@ -159,7 +162,7 @@ class NotePublisherTest {
 
     @Test
     fun `誰でも引用できることを interactionPolicy で示す`() {
-        val prepared = publisher().prepare(sender, "<p>本文</p>", listOf(), null, null, listOf(), listOf())
+        val prepared = publisher().prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf())
 
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
         val automaticApproval = note.getValue("interactionPolicy").jsonObject
@@ -167,5 +170,23 @@ class NotePublisherTest {
             .getValue("automaticApproval").jsonArray
             .map { it.jsonPrimitive.content }
         assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE), automaticApproval)
+    }
+
+    @Test
+    fun `閲覧注意の注意書きを summary に載せ、sensitive にする`() {
+        val prepared = publisher().prepare(sender, "<p>本文</p>", "ネタバレ", listOf(), null, null, listOf(), listOf())
+
+        val note = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson).target
+        assertEquals("ネタバレ", note.summary)
+        assertTrue(note.sensitive)
+    }
+
+    @Test
+    fun `閲覧注意でなければ sensitive にしない`() {
+        val prepared = publisher().prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf())
+
+        val note = AppJson.decodeFromString(CreateNoteActivity.serializer(), prepared.activityJson).target
+        assertNull(note.summary)
+        assertEquals(false, note.sensitive)
     }
 }
