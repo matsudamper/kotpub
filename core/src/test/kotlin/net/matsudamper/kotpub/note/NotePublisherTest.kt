@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -153,7 +154,7 @@ class NotePublisherTest {
         val prepared = publisher().prepare(sender, "<p>本文</p>", null, listOf(), null, null, listOf(), listOf(), true)
 
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
-        assertEquals(true, note.getValue("sensitive").jsonPrimitive.content.toBooleanStrict())
+        assertEquals(JsonPrimitive(true), note.getValue("sensitive"))
     }
 
     @Test
@@ -243,7 +244,7 @@ class NotePublisherTest {
 
         assertNotNull(prepared)
         val note = AppJson.parseToJsonElement(prepared.activityJson).jsonObject.getValue("object").jsonObject
-        assertEquals(true, note.getValue("sensitive").jsonPrimitive.content.toBooleanStrict())
+        assertEquals(JsonPrimitive(true), note.getValue("sensitive"))
     }
 
     @Test
