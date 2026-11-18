@@ -225,6 +225,18 @@ class NotePublisherTest {
     }
 
     @Test
+    fun `書き換えても閲覧注意の注意書きを残す`() {
+        val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = null).copy(summary = "ネタバレ")) }
+
+        val prepared = NotePublisher(notes, TestWebPageUrls).prepareUpdate(sender, PublicNoteId("note-1"), "<p>書き換えた</p>", listOf())
+
+        assertNotNull(prepared)
+        val note = AppJson.decodeFromString(UpdateNoteActivity.serializer(), prepared.activityJson).target
+        assertEquals("ネタバレ", note.summary)
+        assertTrue(note.sensitive)
+    }
+
+    @Test
     fun `別のアカウントの投稿は書き換えられない`() {
         val notes = FakeNoteStore().apply { add(recordedNote(publishedAt = Instant.parse("2026-01-01T00:00:00Z"), updatedAt = null).copy(username = "other")) }
 
