@@ -84,7 +84,7 @@ class HttpRemoteNotesTest {
     }
 
     @Test
-    fun findByUrlRejectsNoteWhoseIdDoesNotServeTheSameNote() = runBlocking {
+    fun findByUrlRejectsNoteWhoseIdDoesNotServeTheSameNote(): Unit = runBlocking {
         val pageUrl = "https://remote.example/@alice/1"
         val claimedId = "https://other.example/notes/1"
         documents[pageUrl] = note(claimedId, "https://other.example/users/bob")
