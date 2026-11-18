@@ -73,4 +73,30 @@ class HttpRemoteNotesTest {
         documents["http://remote.example/notes/3"] = note("http://remote.example/notes/3", "http://remote.example/users/alice")
         assertIs<RemoteFetchFailure.NotHttps>(assertIs<RemoteNoteLookup.NotFound>(notes.find("http://remote.example/notes/3")).failure)
     }
+
+    @Test
+    fun findByUrlRefetchesNoteFromItsIdWhenPageUrlDiffers() = runBlocking {
+        val pageUrl = "https://remote.example/@alice/1"
+        documents[pageUrl] = note(noteId, "https://remote.example/users/alice")
+        documents[noteId] = note(noteId, "https://remote.example/users/alice")
+
+        assertEquals(noteId, (notes.findByUrl(pageUrl) as? RemoteNoteLookup.Found)?.note?.id)
+    }
+
+    @Test
+    fun findByUrlRejectsNoteWhoseIdDoesNotServeTheSameNote() = runBlocking {
+        val pageUrl = "https://remote.example/@alice/1"
+        val claimedId = "https://other.example/notes/1"
+        documents[pageUrl] = note(claimedId, "https://other.example/users/bob")
+        documents[claimedId] = note("https://other.example/notes/2", "https://other.example/users/bob")
+
+        assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteNoteLookup.NotFound>(notes.findByUrl(pageUrl)).failure)
+    }
+
+    @Test
+    fun findByUrlReadsNoteWhoseIdIsTheUrl() = runBlocking {
+        documents[noteId] = note(noteId, "https://remote.example/users/alice")
+
+        assertEquals(noteId, (notes.findByUrl(noteId) as? RemoteNoteLookup.Found)?.note?.id)
+    }
 }

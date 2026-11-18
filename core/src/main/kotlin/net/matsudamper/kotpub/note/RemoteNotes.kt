@@ -19,6 +19,15 @@ import net.matsudamper.kotpub.json.AppJson
  */
 fun interface RemoteNotes {
     suspend fun find(noteId: String): RemoteNoteLookup
+
+    /**
+     * 人が入力した URL から、それが指す投稿を [find] と同じ形で取得する。
+     *
+     * Mastodon は画面の投稿の URL（`/@user/1`）へのアクティビティ文書の要求にも投稿を返すが、その `id` は別の URL（`/users/user/statuses/1`）になる。
+     * [find] は `id` が取得先と違う文書を捨てるので、`id` の指す先から [find] で取得し直す。
+     * 取得し直した文書は `id` の指す先を基準に確かめるので、入力された URL のサーバーが他所の投稿を名乗ることはできない
+     */
+    suspend fun findByUrl(url: String): RemoteNoteLookup = find(url)
 }
 
 /**
@@ -53,6 +62,28 @@ class HttpRemoteNotes(
         is RemoteNoteDocumentLookup.Unavailable -> RemoteNoteLookup.Unavailable(lookup.failure)
     }
 
+    override suspend fun findByUrl(url: String): RemoteNoteLookup {
+        val requestUrl = HttpUrl.parseHttps(url)
+        if (requestUrl == null) {
+            return RemoteNoteLookup.NotFound(RemoteFetchFailure.NotHttps(url))
+        }
+        val json = when (val fetched = fetchSameHost(url, requestUrl)) {
+            is RemoteDocumentFetch.Found -> fetched.document
+            is RemoteDocumentFetch.NotFound -> return RemoteNoteLookup.NotFound(fetched.failure)
+            is RemoteDocumentFetch.Unavailable -> return RemoteNoteLookup.Unavailable(fetched.failure)
+        }
+        val noteId = ReceivedNoteJson.read(json)?.id
+        if (noteId == null) {
+            return RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(url, "投稿として読めない"))
+        }
+        if (noteId != url) return find(noteId)
+        return when (val verified = verifiedDocument(noteId = url, noteUrl = requestUrl, json = json)) {
+            is RemoteNoteDocumentLookup.Found -> RemoteNoteLookup.Found(verified.note)
+            is RemoteNoteDocumentLookup.NotFound -> RemoteNoteLookup.NotFound(verified.failure)
+            is RemoteNoteDocumentLookup.Unavailable -> RemoteNoteLookup.Unavailable(verified.failure)
+        }
+    }
+
     /**
      * [find] と同じ確かめ方で取得し、読んだ投稿と一緒に取得した文書そのものも返す。
      * 投稿に付いたコレクション（`replies` など）は [ReceivedNote] に載らないので、文書から読む
@@ -67,18 +98,7 @@ class HttpRemoteNotes(
             is RemoteDocumentFetch.NotFound -> return RemoteNoteDocumentLookup.NotFound(fetched.failure)
             is RemoteDocumentFetch.Unavailable -> return RemoteNoteDocumentLookup.Unavailable(fetched.failure)
         }
-        val note = ReceivedNoteJson.read(json)
-        if (note == null) {
-            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿として読めない"))
-        }
-        if (note.id != noteId) {
-            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "id が取得先と違う: ${note.id}"))
-        }
-        val authorUrl = HttpUrl.parseHttps(note.attributedTo)
-        if (authorUrl == null || !authorUrl.isSameHost(noteUrl)) {
-            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿者が投稿と別のホスト: ${note.attributedTo}"))
-        }
-        return RemoteNoteDocumentLookup.Found(note, json)
+        return verifiedDocument(noteId = noteId, noteUrl = noteUrl, json = json)
     }
 
     /**
@@ -93,6 +113,21 @@ class HttpRemoteNotes(
             return RemoteDocumentFetch.NotFound(RemoteFetchFailure.DisallowedHost(url))
         }
         return fetch(url, originUrl)
+    }
+
+    private fun verifiedDocument(noteId: String, noteUrl: HttpUrl, json: JsonObject): RemoteNoteDocumentLookup {
+        val note = ReceivedNoteJson.read(json)
+        if (note == null) {
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿として読めない"))
+        }
+        if (note.id != noteId) {
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "id が取得先と違う: ${note.id}"))
+        }
+        val authorUrl = HttpUrl.parseHttps(note.attributedTo)
+        if (authorUrl == null || !authorUrl.isSameHost(noteUrl)) {
+            return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿者が投稿と別のホスト: ${note.attributedTo}"))
+        }
+        return RemoteNoteDocumentLookup.Found(note, json)
     }
 
     private suspend fun fetch(url: String, noteUrl: HttpUrl): RemoteDocumentFetch {
