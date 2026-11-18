@@ -20,7 +20,7 @@ class UpdateHandlerTest {
         receive(handler, """"https://remote.example/notes/1"""")
         receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
         receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
-        receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
+        receive(handler, """{"id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>no type</p>"}""")
         assertTrue(notes.updated.isEmpty())
 
         receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
@@ -28,6 +28,16 @@ class UpdateHandlerTest {
         val updated = notes.updated.single()
         assertEquals("<p>edited</p>", updated.content)
         assertEquals(Instant.parse("2026-08-10T01:00:00Z"), updated.updated)
+    }
+
+    @Test
+    fun `知らない型の Update も型の名前を付けて投稿の編集として渡す`() = runBlocking {
+        val notes = RecordingNotes()
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes)
+
+        receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
+
+        assertEquals(listOf("Article"), notes.updated.single().unknownTypes)
     }
 
     @Test

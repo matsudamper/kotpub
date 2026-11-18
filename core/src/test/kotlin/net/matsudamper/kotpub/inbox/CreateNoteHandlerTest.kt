@@ -225,6 +225,34 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun unknownObjectTypeIsSavedWithItsTypeName() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        val raw = AppJson.parseToJsonElement(
+            """{"id":"https://remote.example/activities/1","type":"Create","actor":"$ACTOR","to":["$PUBLIC"],
+                "object":{"type":"Article","name":"題名","content":"<p>本文</p>"}}""",
+        ).jsonObject
+        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+        val saved = store.saved.single()
+        assertEquals(listOf("Article"), saved.unknownTypes)
+        assertEquals("<p>本文</p>", saved.content)
+        assertEquals(ACTOR, saved.attributedTo)
+    }
+
+    @Test
+    fun unknownAttachmentAndTagTypesAreRecorded() = runBlocking {
+        val store = RecordingNotes()
+        val handler = CreateNoteHandler(store, RecordingVotes())
+        val attachments = """[
+            {"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"},
+            {"type":"PropertyValue","name":"a","value":"b"},
+            {"type":"PropertyValue","name":"c","value":"d"}
+        ]"""
+        receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "", attachment = attachments))
+        assertEquals(listOf("PropertyValue"), store.saved.single().unknownTypes)
+    }
+
+    @Test
     fun questionIsSavedWithPoll() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store, RecordingVotes())

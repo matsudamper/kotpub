@@ -47,6 +47,7 @@ class AnnounceHandlerTest {
             mentions = listOf(),
             poll = null,
             linkHref = null,
+            unknownTypes = listOf(),
         )
 
     private suspend fun handle(

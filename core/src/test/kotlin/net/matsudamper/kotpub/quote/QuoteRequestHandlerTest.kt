@@ -89,6 +89,7 @@ class QuoteRequestHandlerTest {
                     mentions = listOf(),
                     poll = null,
                     linkHref = null,
+                    unknownTypes = listOf(),
                 ),
             )
         }
