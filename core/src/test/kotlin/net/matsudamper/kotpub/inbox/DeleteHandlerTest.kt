@@ -2,7 +2,6 @@ package net.matsudamper.kotpub.inbox
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -12,8 +11,12 @@ import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.FakeStampStore
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.note.ReceivedNote
+import net.matsudamper.kotpub.note.ReceivedNoteJson
+import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.RemoteNotes
 
 class DeleteHandlerTest {
     @Test
@@ -27,7 +30,7 @@ class DeleteHandlerTest {
                 deleted.add(objectId)
             }
         }
-        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes)
+        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes, NOT_FOUND_ORIGIN)
         listOf(ACTOR, "https://other.example/note", "https://remote.example/notes/1").forEach { id ->
             handler.handle(InboxRecipient.Shared, ACTOR, InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(id)), JsonObject(mapOf()))
         }
@@ -48,30 +51,43 @@ class DeleteHandlerTest {
     }
 
     @Test
-    fun `同じホストの別のアクターの投稿を消す Delete は渡さない`() = runBlocking {
-        val deleted = mutableListOf<String>()
-        val notes = object : RemoteNoteStore {
-            override suspend fun findAttributedTo(noteId: String): String? = "https://remote.example/other"
-            override suspend fun save(note: ReceivedNote) = Unit
-            override suspend fun update(note: ReceivedNote) = Unit
-            override suspend fun delete(actorId: String, objectId: String) {
-                deleted.add(objectId)
+    fun `保存済みの投稿者と違う Delete は投稿のあるサーバーが投稿者を示すか投稿を返さないときだけ渡す`() = runBlocking {
+        val noteId = "https://remote.example/notes/1"
+        val otherAuthor = "https://remote.example/other"
+        val authoredByOther = RemoteNotes { RemoteNoteLookup.Found(receivedNote(id = it, author = otherAuthor)) }
+        val authoredBySigner = RemoteNotes { RemoteNoteLookup.Found(receivedNote(id = it, author = ACTOR)) }
+        val unavailable = RemoteNotes { RemoteNoteLookup.Unavailable(RemoteFetchFailure.Throttled(it)) }
+
+        val deletedByOrigin = listOf(authoredByOther, unavailable, authoredBySigner, NOT_FOUND_ORIGIN).map { origin ->
+            val deleted = mutableListOf<String>()
+            val notes = object : RemoteNoteStore {
+                override suspend fun findAttributedTo(noteId: String): String? = otherAuthor
+                override suspend fun save(note: ReceivedNote) = Unit
+                override suspend fun update(note: ReceivedNote) = Unit
+                override suspend fun delete(actorId: String, objectId: String) {
+                    deleted.add(objectId)
+                }
             }
+            val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes, origin)
+            handler.handle(
+                InboxRecipient.Shared,
+                ACTOR,
+                InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(noteId)),
+                JsonObject(mapOf()),
+            )
+            deleted.toList()
         }
-        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes)
 
-        val handling = handler.handle(
-            InboxRecipient.Shared,
-            ACTOR,
-            InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link("https://remote.example/notes/1")),
-            JsonObject(mapOf()),
-        )
-
-        assertTrue(handling is InboxHandling.Ignored)
-        assertTrue(deleted.isEmpty())
+        assertEquals(listOf(listOf(), listOf(), listOf(noteId), listOf(noteId)), deletedByOrigin)
     }
+
+    private fun receivedNote(id: String, author: String): ReceivedNote =
+        ReceivedNoteJson.read(
+            JsonObject(mapOf("type" to JsonPrimitive("Note"), "id" to JsonPrimitive(id), "attributedTo" to JsonPrimitive(author), "content" to JsonPrimitive("<p>note</p>"))),
+        ) ?: error("テストの投稿を読めない")
 
     private companion object {
         const val ACTOR = "https://remote.example/actor"
+        val NOT_FOUND_ORIGIN = RemoteNotes { noteId -> RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿のあるサーバーに無い")) }
     }
 }

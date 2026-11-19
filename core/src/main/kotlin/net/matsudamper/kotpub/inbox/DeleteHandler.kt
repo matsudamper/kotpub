@@ -7,11 +7,15 @@ import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.RemoteNotes
 
 class DeleteHandler(
     private val actors: DeleteActorHandler,
     private val notes: RemoteNoteStore,
+    remoteNotes: RemoteNotes,
 ) : InboxActivityHandler {
+    private val authorship = NoteAuthorship(notes = notes, remoteNotes = remoteNotes)
+
     override val type: String = "Delete"
 
     override suspend fun handle(
@@ -34,8 +38,7 @@ class DeleteHandler(
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Delete の actor を URL として読めない: $actor")
         val objectUrl = HttpUrl.parse(objectId) ?: return InboxHandling.Ignored("Delete の object を URL として読めない: $objectId")
         if (!actorUrl.isSameHost(objectUrl)) return InboxHandling.Ignored("Delete の対象が actor と別のホスト: $objectId actor=$actor")
-        val savedAuthor = notes.findAttributedTo(objectId)
-        if (savedAuthor != null && savedAuthor != actor) return InboxHandling.Ignored("保存済みの投稿の投稿者が署名者と違う: $objectId 投稿者=$savedAuthor 署名者=$actor")
+        if (!authorship.canDelete(noteId = objectId, actorId = actor)) return InboxHandling.Ignored("署名者の投稿だと確かめられない: $objectId 署名者=$actor")
         notes.delete(actor, objectId)
         return InboxHandling.Handled
     }

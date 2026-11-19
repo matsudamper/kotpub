@@ -8,16 +8,20 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.activity.InboxActivity
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.ReceivedNote
+import net.matsudamper.kotpub.note.ReceivedNoteJson
+import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.RemoteNotes
 import net.matsudamper.kotpub.note.UnknownTypeStore
 
 class UpdateHandlerTest {
     @Test
     fun `編集された投稿は署名者と同じホストの署名者の投稿だけを渡す`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
         receive(handler, """"https://remote.example/notes/1"""")
         receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
         receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
@@ -32,21 +36,22 @@ class UpdateHandlerTest {
     }
 
     @Test
-    fun `同じホストの別のアクターの投稿を書き換える Update は渡さない`() = runBlocking {
+    fun `保存済みの投稿者と違う Update は投稿のあるサーバーの投稿者で判断する`() = runBlocking {
         val notes = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+        val edited = note(author = ACTOR, id = "https://remote.example/notes/1")
 
-        val handling = receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
-
-        assertTrue(handling is InboxHandling.Ignored)
+        receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy("https://remote.example/other")), edited)
         assertTrue(notes.updated.isEmpty())
+
+        receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy(ACTOR)), edited)
+        assertEquals(ACTOR, notes.updated.single().attributedTo)
     }
 
     @Test
     fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() = runBlocking {
         val notes = RecordingNotes()
         val recorded = mutableListOf<Pair<List<String>, String>>()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { types, sourceUrl -> recorded.add(types to sourceUrl) })
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { types, sourceUrl -> recorded.add(types to sourceUrl) }, NOT_FOUND_ORIGIN)
 
         receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
 
@@ -57,7 +62,7 @@ class UpdateHandlerTest {
     @Test
     fun `id の無い Link の Update は Update の id を投稿の id にしない`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
         val raw = AppJson.parseToJsonElement(
             """{"id":"https://remote.example/activities/2","type":"Update","actor":"$ACTOR","object":{"type":"Link","href":"https://example.com/"}}""",
         ).jsonObject
@@ -70,7 +75,7 @@ class UpdateHandlerTest {
     @Test
     fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
         val options = """[{"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":2}}]"""
 
         receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>","oneOf":$options}""")
@@ -81,7 +86,7 @@ class UpdateHandlerTest {
     @Test
     fun `送り主自身の Update はプロフィールの編集として扱う`() = runBlocking {
         val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
 
         val handling = receive(handler, """{"id":"$ACTOR","type":"Person","preferredUsername":"alice","name":"アリス（改名）"}""")
 
@@ -96,6 +101,10 @@ class UpdateHandlerTest {
 
     private fun note(author: String, id: String): String =
         """{"type":"Note","id":"$id","attributedTo":"$author","content":"<p>edited</p>","to":["$PUBLIC"],"updated":"2026-08-10T01:00:00Z"}"""
+
+    private fun originAuthoredBy(author: String): RemoteNotes = RemoteNotes { noteId ->
+        RemoteNoteLookup.Found(ReceivedNoteJson.read(AppJson.parseToJsonElement(note(author = author, id = noteId)).jsonObject) ?: error("テストの投稿を読めない"))
+    }
 
     private class RecordingNotes(
         private val savedAuthors: Map<String, String> = mapOf(),
@@ -116,5 +125,6 @@ class UpdateHandlerTest {
     private companion object {
         const val ACTOR = "https://remote.example/actor"
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
+        val NOT_FOUND_ORIGIN = RemoteNotes { noteId -> RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿のあるサーバーに無い")) }
     }
 }
