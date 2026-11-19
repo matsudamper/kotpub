@@ -13,12 +13,17 @@ import net.matsudamper.kotpub.follower.FollowerStore
  *
  * @param failOnRecord 記録に失敗する状況を作る
  * @param deletedUsernames 消えたアカウント。宛先がもう無い状況を作る
+ * @param refusedFollowers 受け付けないフォロー元のアクター URL。ブロックした状況を作る
  */
 class FakeFollowerStore(
     private val failOnRecord: Boolean = false,
     private val deletedUsernames: Set<String> = emptySet(),
+    private val refusedFollowers: Set<String> = emptySet(),
 ) : FollowerStore {
     val rows: MutableList<Row> = mutableListOf()
+
+    /** 配信キューに登録した `Reject`。登録した順 */
+    val rejects: MutableList<Reject> = mutableListOf()
 
     override fun record(
         username: String,
@@ -58,6 +63,25 @@ class FakeFollowerStore(
             accepted = false,
         )
 
+        return true
+    }
+
+    override fun refuses(
+        username: String,
+        followerActorUri: String,
+    ): Boolean = followerActorUri in refusedFollowers
+
+    override fun reject(
+        username: String,
+        follower: RemoteActor,
+        followActivityUri: String,
+        receivedAt: Instant,
+        rejectBody: String,
+    ): Boolean {
+        if (username in deletedUsernames) return false
+
+        rows.removeAll { it.username == username && it.followerActorUri == follower.actorId }
+        rejects += Reject(username = username, inbox = follower.inbox, body = rejectBody)
         return true
     }
 
@@ -139,6 +163,12 @@ class FakeFollowerStore(
         .filter { it.username == username && it.accepted }
         .map { it.sharedInbox ?: it.inbox }
         .distinct()
+
+    data class Reject(
+        val username: String,
+        val inbox: String,
+        val body: String,
+    )
 
     data class Row(
         val username: String,
