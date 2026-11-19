@@ -17,10 +17,13 @@ import net.matsudamper.kotpub.crypto.RsaSignature
  * 鍵の取得（ここだけ外に HTTP を投げる）→ 署名の検証、とすることで、
  * 明らかにおかしいリクエストで相手のサーバーから取得せずに済む。
  *
+ * @param domain 自サーバーのドメイン。署名された Host がこれと違えば、
+ *   他のサーバー宛てに署名されたリクエストを投げ直されたものとして落とす
  * @param clock テストから時刻を固定するために持つ
  */
 class HttpSignatureVerifier(
     private val publicKeys: PublicKeys,
+    private val domain: String,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     /**
@@ -58,6 +61,12 @@ class HttpSignatureVerifier(
         val missing = required.filterNot { it in signature.headers }
         if (missing.isNotEmpty()) {
             return HttpSignatureResult.Rejected("署名対象に入っていない: ${missing.joinToString(" ")}")
+        }
+
+        // 署名は宛先のサーバーに縛られていないと、他のサーバー宛てのものを Date の窓の間こちらへ投げ直せる
+        val host = request.headers[HOST_HEADER]
+        if (host == null || !host.equals(domain, ignoreCase = true)) {
+            return HttpSignatureResult.Rejected("Host が自サーバーのドメインではない: $host")
         }
 
         val date =
@@ -128,6 +137,7 @@ class HttpSignatureVerifier(
         const val SIGNATURE_HEADER = "Signature"
         const val DIGEST_HEADER = "Digest"
         const val DATE_HEADER = "Date"
+        const val HOST_HEADER = "Host"
 
         /**
          * `hs2019` は新しい draft での呼び名で、RSA 鍵に対しては中身が rsa-sha256 になる。

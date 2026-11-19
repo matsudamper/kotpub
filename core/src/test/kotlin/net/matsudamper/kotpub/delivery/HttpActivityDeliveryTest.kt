@@ -56,7 +56,7 @@ class HttpActivityDeliveryTest {
         val sent = URI(client.url)
         val verification =
             runBlocking {
-                HttpSignatureVerifier(remoteActors).verify(
+                HttpSignatureVerifier(remoteActors, "remote.example").verify(
                     SignedRequest(
                         method = "POST",
                         requestTarget = "${sent.rawPath}?${sent.rawQuery}",
@@ -97,7 +97,7 @@ class HttpActivityDeliveryTest {
 
         val verification =
             runBlocking {
-                HttpSignatureVerifier(remoteActors).verify(
+                HttpSignatureVerifier(remoteActors, "remote.example").verify(
                     SignedRequest(
                         method = "POST",
                         requestTarget = "/users/%E3%81%82/inbox",
