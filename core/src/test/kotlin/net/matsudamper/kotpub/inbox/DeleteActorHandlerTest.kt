@@ -85,43 +85,47 @@ class DeleteActorHandlerTest {
     }
 
     @Test
-    fun `自分自身の Delete でフォロワーから外す`() = runBlocking {
-        val store = followers()
-        val favourites = favourites()
-        val stamps = stamps()
+    fun `自分自身の Delete でフォロワーから外す`() {
+        runBlocking {
+            val store = followers()
+            val favourites = favourites()
+            val stamps = stamps()
 
-        handle(
-            store,
-            """
+            handle(
+                store,
+                """
             {"id":"https://remote.example/activities/9","type":"Delete",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"${TestRemoteActor.ACTOR_ID}"}
-            """.trimIndent(),
-            favourites = favourites,
-            stamps = stamps,
-        )
+                """.trimIndent(),
+                favourites = favourites,
+                stamps = stamps,
+            )
 
-        assertTrue(favourites.rows.isEmpty())
-        assertTrue(stamps.rows.isEmpty())
+            assertTrue(favourites.rows.isEmpty())
+            assertTrue(stamps.rows.isEmpty())
 
-        // 宛先のアカウントだけでなく、この相手のフォローが全部消える。
-        // 残すと消えた相手に送り続けることになる
-        assertEquals(0, store.count(TestLocalActor.USERNAME))
-        assertEquals(0, store.count(TestLocalActor.STORED_USERNAME))
+            // 宛先のアカウントだけでなく、この相手のフォローが全部消える。
+            // 残すと消えた相手に送り続けることになる
+            assertEquals(0, store.count(TestLocalActor.USERNAME))
+            assertEquals(0, store.count(TestLocalActor.STORED_USERNAME))
+        }
     }
 
     @Test
-    fun `投稿の Delete では何もしない`() = runBlocking {
-        val store = followers()
+    fun `投稿の Delete では何もしない`() {
+        runBlocking {
+            val store = followers()
 
-        handle(
-            store,
-            """
+            handle(
+                store,
+                """
             {"id":"https://remote.example/activities/9","type":"Delete",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"https://remote.example/notes/1"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertEquals(1, store.count(TestLocalActor.USERNAME))
-        assertEquals(1, store.count(TestLocalActor.STORED_USERNAME))
+            assertEquals(1, store.count(TestLocalActor.USERNAME))
+            assertEquals(1, store.count(TestLocalActor.STORED_USERNAME))
+        }
     }
 }

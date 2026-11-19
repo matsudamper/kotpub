@@ -63,219 +63,247 @@ class ReactionHandlerTest {
         handleLike(json = json, remoteActors = knownActor, earlyUndoneLikes = FakeEarlyUndoneLikes())
 
     @Test
-    fun `content の無い Like をお気に入りとして記録する`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `content の無い Like をお気に入りとして記録する`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        val favourite = recorded.favourites.rows.single()
-        assertEquals(notePublicId, favourite.notePublicId)
-        assertEquals(TestRemoteActor.ACTOR_ID, favourite.actor.actorId)
-        assertTrue(recorded.stamps.rows.isEmpty())
+            val favourite = recorded.favourites.rows.single()
+            assertEquals(notePublicId, favourite.notePublicId)
+            assertEquals(TestRemoteActor.ACTOR_ID, favourite.actor.actorId)
+            assertTrue(recorded.stamps.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `絵文字付きの Like はお気に入りではなくスタンプとして記録する`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `絵文字付きの Like はお気に入りではなくスタンプとして記録する`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":"👍"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        val stamp = recorded.stamps.rows.single()
-        assertEquals(notePublicId, stamp.notePublicId)
-        assertEquals("👍", stamp.emoji)
-        assertNull(stamp.emojiImageUrl)
-        assertTrue(recorded.favourites.rows.isEmpty())
+            val stamp = recorded.stamps.rows.single()
+            assertEquals(notePublicId, stamp.notePublicId)
+            assertEquals("👍", stamp.emoji)
+            assertNull(stamp.emojiImageUrl)
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `カスタム絵文字の画像を tag から探す`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `カスタム絵文字の画像を tag から探す`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":":kawaii:",
              "tag":[{"type":"Emoji","name":":kawaii:","icon":{"type":"Image","url":"https://remote.example/kawaii.png"}}]}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        val stamp = recorded.stamps.rows.single()
-        assertEquals(":kawaii:", stamp.emoji)
-        assertEquals("https://remote.example/kawaii.png", stamp.emojiImageUrl)
+            val stamp = recorded.stamps.rows.single()
+            assertEquals(":kawaii:", stamp.emoji)
+            assertEquals("https://remote.example/kawaii.png", stamp.emojiImageUrl)
+        }
     }
 
     @Test
-    fun `http と https 以外の画像 URL は記録しない`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `http と https 以外の画像 URL は記録しない`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":":kawaii:",
              "tag":{"type":"Emoji","name":":kawaii:","icon":{"type":"Image","url":"javascript:alert(1)"}}}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertNull(recorded.stamps.rows.single().emojiImageUrl)
+            assertNull(recorded.stamps.rows.single().emojiImageUrl)
+        }
     }
 
     @Test
-    fun `EmojiReact をスタンプとして記録する`() = runBlocking {
-        val recorded = handle(
-            type = ReactionHandler.EMOJI_REACT_TYPE,
-            json = """
+    fun `EmojiReact をスタンプとして記録する`() {
+        runBlocking {
+            val recorded = handle(
+                type = ReactionHandler.EMOJI_REACT_TYPE,
+                json = """
             {"id":"https://remote.example/reacts/1","type":"EmojiReact",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":"🎉"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = FakeEarlyUndoneLikes(),
-        )
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = FakeEarlyUndoneLikes(),
+            )
 
-        assertEquals("🎉", recorded.stamps.rows.single().emoji)
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertEquals("🎉", recorded.stamps.rows.single().emoji)
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `絵文字の無い EmojiReact は何も記録しない`() = runBlocking {
-        val recorded = handle(
-            type = ReactionHandler.EMOJI_REACT_TYPE,
-            json = """
+    fun `絵文字の無い EmojiReact は何も記録しない`() {
+        runBlocking {
+            val recorded = handle(
+                type = ReactionHandler.EMOJI_REACT_TYPE,
+                json = """
             {"id":"https://remote.example/reacts/1","type":"EmojiReact",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = FakeEarlyUndoneLikes(),
-        )
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = FakeEarlyUndoneLikes(),
+            )
 
-        assertTrue(recorded.stamps.rows.isEmpty())
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertTrue(recorded.stamps.rows.isEmpty())
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `絵文字 1 つとして扱えない長さの content は記録しない`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `絵文字 1 つとして扱えない長さの content は記録しない`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":"${"あ".repeat(101)}"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertTrue(recorded.stamps.rows.isEmpty())
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertTrue(recorded.stamps.rows.isEmpty())
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `id の無い Like も記録する`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `id の無い Like も記録する`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"type":"Like","actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertEquals(1, recorded.favourites.rows.size)
+            assertEquals(1, recorded.favourites.rows.size)
+        }
     }
 
     @Test
-    fun `よそのサーバーの投稿へのお気に入りは記録しない`() = runBlocking {
-        val recorded = handleLike(
-            """
+    fun `よそのサーバーの投稿へのお気に入りは記録しない`() {
+        runBlocking {
+            val recorded = handleLike(
+                """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"https://other.example/notes/1"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `押した相手のアクター文書を取得できなければ記録しない`() = runBlocking {
-        val recorded = handleLike(
-            json = """
+    fun `押した相手のアクター文書を取得できなければ記録しない`() {
+        runBlocking {
+            val recorded = handleLike(
+                json = """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-            remoteActors = TestRemoteActors(),
-            earlyUndoneLikes = FakeEarlyUndoneLikes(),
-        )
+                """.trimIndent(),
+                remoteActors = TestRemoteActors(),
+                earlyUndoneLikes = FakeEarlyUndoneLikes(),
+            )
 
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `先に取り消しが届いた Like は記録しない`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
-            remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
-        }
+    fun `先に取り消しが届いた Like は記録しない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
+                remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
+            }
 
-        val recorded = handleLike(
-            json = """
+            val recorded = handleLike(
+                json = """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        assertTrue(recorded.favourites.rows.isEmpty())
+            assertTrue(recorded.favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `先に取り消しが届いた絵文字付きの Like はスタンプとしても記録しない`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
-            remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
-        }
+    fun `先に取り消しが届いた絵文字付きの Like はスタンプとしても記録しない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
+                remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
+            }
 
-        val recorded = handleLike(
-            json = """
+            val recorded = handleLike(
+                json = """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":"👍"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
-
-        assertTrue(recorded.stamps.rows.isEmpty())
-    }
-
-    @Test
-    fun `期限を過ぎた取り消しでは Like を止めない`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
-            remember(
-                actorUri = TestRemoteActor.ACTOR_ID,
-                activityUri = "https://remote.example/likes/1",
-                expiresAt = Instant.now().minusSeconds(1),
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = earlyUndoneLikes,
             )
+
+            assertTrue(recorded.stamps.rows.isEmpty())
         }
-
-        val recorded = handleLike(
-            json = """
-            {"id":"https://remote.example/likes/1","type":"Like",
-             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
-
-        assertEquals(1, recorded.favourites.rows.size)
     }
 
     @Test
-    fun `別の相手が先に取り消しを送っていても記録する`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
-            remember(actorUri = "https://remote.example/users/bob", activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
-        }
+    fun `期限を過ぎた取り消しでは Like を止めない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
+                remember(
+                    actorUri = TestRemoteActor.ACTOR_ID,
+                    activityUri = "https://remote.example/likes/1",
+                    expiresAt = Instant.now().minusSeconds(1),
+                )
+            }
 
-        val recorded = handleLike(
-            json = """
+            val recorded = handleLike(
+                json = """
             {"id":"https://remote.example/likes/1","type":"Like",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
-            """.trimIndent(),
-            remoteActors = knownActor,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        assertEquals(1, recorded.favourites.rows.size)
+            assertEquals(1, recorded.favourites.rows.size)
+        }
+    }
+
+    @Test
+    fun `別の相手が先に取り消しを送っていても記録する`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes().apply {
+                remember(actorUri = "https://remote.example/users/bob", activityUri = "https://remote.example/likes/1", expiresAt = Instant.MAX)
+            }
+
+            val recorded = handleLike(
+                json = """
+            {"id":"https://remote.example/likes/1","type":"Like",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}
+                """.trimIndent(),
+                remoteActors = knownActor,
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
+
+            assertEquals(1, recorded.favourites.rows.size)
+        }
     }
 }

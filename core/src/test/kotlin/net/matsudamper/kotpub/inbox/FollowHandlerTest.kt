@@ -7,12 +7,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import net.matsudamper.kotpub.FakeFollowerStore
 import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activity.OutgoingActivity
+import net.matsudamper.kotpub.activitypub.LinkOrObject
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.json.AppJson
 
@@ -56,121 +58,179 @@ class FollowHandlerTest {
         AppJson.decodeFromString(OutgoingActivity.serializer(), followers.rows.single().acceptBody)
 
     @Test
-    fun `記録と一緒に Accept を配信キューに登録する`() = runBlocking {
-        val followers = FakeFollowerStore()
+    fun `記録と一緒に Accept を配信キューに登録する`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(followHandler(followers), followJson())
+
+            val row = followers.rows.single()
+            assertEquals(TestLocalActor.USERNAME, row.username)
+            assertEquals(TestRemoteActor.ACTOR_ID, row.followerActorUri)
+            // 記録する inbox と鍵は、Accept を送るのに取得したアクター文書から読む
+            assertEquals(TestRemoteActor.INBOX, row.inbox)
+            assertTrue(row.publicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----"))
+            assertEquals("https://remote.example/activities/1", row.followActivityUri)
+
+            val accept = acceptOf(followers)
+            assertEquals(OutgoingActivity.TYPE_ACCEPT, accept.type)
+            assertEquals(recipient.actorId, accept.actor)
+        }
+    }
+
+    @Test
+    fun `配信キューに登録しただけではフォロワーに数えない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(followHandler(followers), followJson())
+
+            // 数え始めるのは Accept が届いてから。届く前に配ると、相手からは
+            // フォローしていないアカウントの投稿が流れてくることになる
+            assertFalse(followers.rows.single().accepted)
+            assertEquals(0, followers.count(TestLocalActor.USERNAME))
+        }
+    }
+
+    @Test
+    fun `送り直された Follow への Accept は毎回違う id になる`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+            val handler = followHandler(followers)
+
+            handle(handler, followJson())
+            val first = acceptOf(followers).id
+            handle(handler, followJson())
+
+            // 相手は id で重複を判断する。同じ id だと送り直した Accept が落ちる
+            assertEquals(1, followers.rows.size)
+            assertTrue(first != acceptOf(followers).id)
+        }
+    }
+
+    @Test
+    fun `記録できなければ Accept も配信キューに登録せず、送り直してもらうために投げる`() {
+        runBlocking {
+            val followers = FakeFollowerStore(failOnRecord = true)
+
+            assertFailsWith<IllegalStateException> { handle(followHandler(followers), followJson()) }
+
+            // 送り先が残らないのに相手だけがフォローできたつもりになる状態を作らない
+            assertEquals(emptyList(), followers.rows)
+        }
+    }
+
+    @Test
+    fun `id の無い Follow は受け付けない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(followHandler(followers), followJson(id = null))
+
+            // 送り直しと新しい Follow を区別できないので記録も Accept もしない
+            assertEquals(emptyList(), followers.rows)
+        }
+    }
+
+    @Test
+    fun `宛先が違う Follow は記録しない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(followHandler(followers), followJson(target = "https://example.com/users/someone-else"))
+
+            assertEquals(emptyList(), followers.rows)
+        }
+    }
+
+    @Test
+    fun `相手のアクターを取得できなければ記録しない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(followHandler(followers = followers, remoteActors = TestRemoteActors()), followJson())
+
+            // inbox も鍵も取得できていないので、記録する中身が揃っていない
+            assertEquals(emptyList(), followers.rows)
+        }
+    }
+
+    @Test
+    fun `同じ Follow を二重に受けても行が増えない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+            val handler = followHandler(followers)
+
+            handle(handler, followJson())
+            handle(handler, followJson())
+
+            assertEquals(1, followers.rows.size)
+        }
+    }
+
+    @Test
+    fun `共有 inbox では object のアクターを宛先として記録する`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+            val followee = TestLocalActor.directory.resolve(TestLocalActor.STORED_USERNAME) ?: error("テスト用のアカウントが無い")
+
+            handle(followHandler(followers), followJson(target = followee.actorId), inbox = InboxRecipient.Shared)
+
+            assertEquals(TestLocalActor.STORED_USERNAME, followers.rows.single().username)
+            assertEquals(followee.actorId, acceptOf(followers).actor)
+        }
+    }
+
+    @Test
+    fun `共有 inbox でも object がこちらのアカウントでなければ記録しない`() {
+        runBlocking {
+            val followers = FakeFollowerStore()
+
+            handle(
+                followHandler(followers),
+                followJson(target = "https://${TestLocalActor.DOMAIN}/users/nobody"),
+                inbox = InboxRecipient.Shared,
+            )
+
+            assertTrue(followers.rows.isEmpty())
+        }
+    }
+
+    @Test
+    fun `受け付けない相手の Follow は記録せず Reject を配信キューに登録する`() = runBlocking {
+        val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
 
         handle(followHandler(followers), followJson())
-
-        val row = followers.rows.single()
-        assertEquals(TestLocalActor.USERNAME, row.username)
-        assertEquals(TestRemoteActor.ACTOR_ID, row.followerActorUri)
-        // 記録する inbox と鍵は、Accept を送るのに取得したアクター文書から読む
-        assertEquals(TestRemoteActor.INBOX, row.inbox)
-        assertTrue(row.publicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----"))
-        assertEquals("https://remote.example/activities/1", row.followActivityUri)
-
-        val accept = acceptOf(followers)
-        assertEquals(OutgoingActivity.TYPE_ACCEPT, accept.type)
-        assertEquals(recipient.actorId, accept.actor)
-    }
-
-    @Test
-    fun `配信キューに登録しただけではフォロワーに数えない`() = runBlocking {
-        val followers = FakeFollowerStore()
-
-        handle(followHandler(followers), followJson())
-
-        // 数え始めるのは Accept が届いてから。届く前に配ると、相手からは
-        // フォローしていないアカウントの投稿が流れてくることになる
-        assertFalse(followers.rows.single().accepted)
-        assertEquals(0, followers.count(TestLocalActor.USERNAME))
-    }
-
-    @Test
-    fun `送り直された Follow への Accept は毎回違う id になる`() = runBlocking {
-        val followers = FakeFollowerStore()
-        val handler = followHandler(followers)
-
-        handle(handler, followJson())
-        val first = acceptOf(followers).id
-        handle(handler, followJson())
-
-        // 相手は id で重複を判断する。同じ id だと送り直した Accept が落ちる
-        assertEquals(1, followers.rows.size)
-        assertTrue(first != acceptOf(followers).id)
-    }
-
-    @Test
-    fun `記録できなければ Accept も配信キューに登録せず、送り直してもらうために投げる`() = runBlocking {
-        val followers = FakeFollowerStore(failOnRecord = true)
-
-        assertFailsWith<IllegalStateException> { handle(followHandler(followers), followJson()) }
-
-        // 送り先が残らないのに相手だけがフォローできたつもりになる状態を作らない
-        assertEquals(emptyList(), followers.rows)
-    }
-
-    @Test
-    fun `id の無い Follow は受け付けない`() = runBlocking {
-        val followers = FakeFollowerStore()
-
-        handle(followHandler(followers), followJson(id = null))
-
-        // 送り直しと新しい Follow を区別できないので記録も Accept もしない
-        assertEquals(emptyList(), followers.rows)
-    }
-
-    @Test
-    fun `宛先が違う Follow は記録しない`() = runBlocking {
-        val followers = FakeFollowerStore()
-
-        handle(followHandler(followers), followJson(target = "https://example.com/users/someone-else"))
-
-        assertEquals(emptyList(), followers.rows)
-    }
-
-    @Test
-    fun `相手のアクターを取得できなければ記録しない`() = runBlocking {
-        val followers = FakeFollowerStore()
-
-        handle(followHandler(followers = followers, remoteActors = TestRemoteActors()), followJson())
-
-        // inbox も鍵も取得できていないので、記録する中身が揃っていない
-        assertEquals(emptyList(), followers.rows)
-    }
-
-    @Test
-    fun `同じ Follow を二重に受けても行が増えない`() = runBlocking {
-        val followers = FakeFollowerStore()
-        val handler = followHandler(followers)
-
-        handle(handler, followJson())
-        handle(handler, followJson())
-
-        assertEquals(1, followers.rows.size)
-    }
-
-    @Test
-    fun `共有 inbox では object のアクターを宛先として記録する`() = runBlocking {
-        val followers = FakeFollowerStore()
-        val followee = TestLocalActor.directory.resolve(TestLocalActor.STORED_USERNAME) ?: error("テスト用のアカウントが無い")
-
-        handle(followHandler(followers), followJson(target = followee.actorId), inbox = InboxRecipient.Shared)
-
-        assertEquals(TestLocalActor.STORED_USERNAME, followers.rows.single().username)
-        assertEquals(followee.actorId, acceptOf(followers).actor)
-    }
-
-    @Test
-    fun `共有 inbox でも object がこちらのアカウントでなければ記録しない`() = runBlocking {
-        val followers = FakeFollowerStore()
-
-        handle(
-            followHandler(followers),
-            followJson(target = "https://${TestLocalActor.DOMAIN}/users/nobody"),
-            inbox = InboxRecipient.Shared,
-        )
 
         assertTrue(followers.rows.isEmpty())
+        val reject = followers.rejects.single()
+        assertEquals(TestLocalActor.USERNAME, reject.username)
+        assertEquals(TestRemoteActor.INBOX, reject.inbox)
+        val body = AppJson.decodeFromString(OutgoingActivity.serializer(), reject.body)
+        assertEquals(OutgoingActivity.TYPE_REJECT, body.type)
+        assertEquals(recipient.actorId, body.actor)
+        val embedded = (body.target as LinkOrObject.Embedded).json
+        assertEquals("https://remote.example/activities/1", embedded.getValue("id").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `受け付けない相手からのフォローの記録が残っていれば消す`() = runBlocking {
+        val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
+        followers.rows += FakeFollowerStore.Row(
+            username = TestLocalActor.USERNAME,
+            followerActorUri = TestRemoteActor.ACTOR_ID,
+            inbox = TestRemoteActor.INBOX,
+            sharedInbox = null,
+            publicKeyPem = "",
+            profile = TestRemoteActor.noProfile,
+            followActivityUri = "https://remote.example/activities/0",
+            acceptBody = "",
+            accepted = true,
+        )
+
+        handle(followHandler(followers), followJson())
+
+        assertTrue(followers.rows.isEmpty())
+        assertEquals(1, followers.rejects.size)
     }
 }

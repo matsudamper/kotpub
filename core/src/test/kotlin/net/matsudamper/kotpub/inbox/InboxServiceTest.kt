@@ -151,7 +151,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `type が一致するハンドラに渡す`() =
+    fun `type が一致するハンドラに渡す`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -167,9 +167,10 @@ class InboxServiceTest {
             // Accept に丸ごと入れるので、元の JSON も渡っている必要がある
             assertEquals("https://remote.example/activities/1", call.rawActivityJson["id"]?.jsonPrimitive?.content)
         }
+    }
 
     @Test
-    fun `受信を止めているドメインからは鍵を取得せずに受け取って捨てる`() =
+    fun `受信を止めているドメインからは鍵を取得せずに受け取って捨てる`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
             val domainBlocks = FakeInboxDomainBlocks(blockedUrls = setOf(TestRemoteActor.KEY_ID))
@@ -191,9 +192,10 @@ class InboxServiceTest {
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
             assertTrue(domainBlocks.signedRequestSigners.isEmpty())
         }
+    }
 
     @Test
-    fun `受信を止めているかを判定できなければハンドラに渡さずに送り直してもらう`() =
+    fun `受信を止めているかを判定できなければハンドラに渡さずに送り直してもらう`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
             val domainBlocks = object : InboxDomainBlocks {
@@ -211,9 +213,10 @@ class InboxServiceTest {
             assertIs<InboxResult.TemporarilyUnavailable>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `ハンドラが投げたら送り直してもらう`() =
+    fun `ハンドラが投げたら送り直してもらう`() {
         runBlocking {
             val handler = object : InboxActivityHandler {
                 override val type: String = "Follow"
@@ -230,9 +233,10 @@ class InboxServiceTest {
 
             assertIs<InboxResult.TemporarilyUnavailable>(result)
         }
+    }
 
     @Test
-    fun `署名を検証できたら届いたことを記録する`() =
+    fun `署名を検証できたら届いたことを記録する`() {
         runBlocking {
             val domainBlocks = FakeInboxDomainBlocks(blockedUrls = setOf())
 
@@ -241,9 +245,10 @@ class InboxServiceTest {
 
             assertEquals(listOf(TestRemoteActor.ACTOR_ID), domainBlocks.signedRequestSigners)
         }
+    }
 
     @Test
-    fun `対応するハンドラが無い type は何もせずに受け取る`() =
+    fun `対応するハンドラが無い type は何もせずに受け取る`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -253,9 +258,10 @@ class InboxServiceTest {
             assertIs<InboxHandling.Ignored>(assertIs<InboxResult.Accepted>(result).handling)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `公開鍵を取得できなければ拒否してハンドラを呼ばない`() =
+    fun `公開鍵を取得できなければ拒否してハンドラを呼ばない`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -266,9 +272,10 @@ class InboxServiceTest {
             assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `ボディを差し替えたら拒否する`() =
+    fun `ボディを差し替えたら拒否する`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -279,9 +286,10 @@ class InboxServiceTest {
             assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `JSON として読めないボディは弾く`() =
+    fun `JSON として読めないボディは弾く`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -290,9 +298,10 @@ class InboxServiceTest {
             assertIs<InboxResult.BadRequest>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `actor が署名者と違えば拒否する`() =
+    fun `actor が署名者と違えば拒否する`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
 
@@ -303,9 +312,10 @@ class InboxServiceTest {
             assertIs<InboxResult.Unauthorized>(result)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `actor が無いアクティビティも受け取る`() =
+    fun `actor が無いアクティビティも受け取る`() {
         runBlocking {
             val handler = RecordingHandler("Follow")
             val body =
@@ -321,9 +331,10 @@ class InboxServiceTest {
             assertNull(call.activity.actorId)
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
         }
+    }
 
     @Test
-    fun `鍵を取得できない自分自身の Delete は受け流す`() =
+    fun `鍵を取得できない自分自身の Delete は受け流す`() {
         runBlocking {
             val handler = RecordingHandler("Delete")
 
@@ -335,9 +346,10 @@ class InboxServiceTest {
             assertIs<InboxHandling.Ignored>(assertIs<InboxResult.Accepted>(result).handling)
             assertTrue(handler.calls.isEmpty(), "${handler.calls.size}")
         }
+    }
 
     @Test
-    fun `消えたアクターでもフォローの記録があれば Delete を検証できる`() =
+    fun `消えたアクターでもフォローの記録があれば Delete を検証できる`() {
         runBlocking {
             val handler = RecordingHandler("Delete")
             val publicKeys =
@@ -358,6 +370,7 @@ class InboxServiceTest {
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
         }
+    }
 
     private fun recordedFavourite(): FakeFavouriteStore =
         FakeFavouriteStore().apply {
@@ -371,7 +384,7 @@ class InboxServiceTest {
         }
 
     @Test
-    fun `フォロワーでなくてもお気に入りの記録があれば消えたアクターの Delete を検証できる`() =
+    fun `フォロワーでなくてもお気に入りの記録があれば消えたアクターの Delete を検証できる`() {
         runBlocking {
             val handler = RecordingHandler("Delete")
             val publicKeys =
@@ -391,6 +404,7 @@ class InboxServiceTest {
             val call = handler.calls.singleOrNull() ?: fail("ハンドラが呼ばれていない")
             assertEquals(TestRemoteActor.ACTOR_ID, call.verifiedSignerActorId)
         }
+    }
 
     @Test
     fun `同じ type のハンドラが複数あれば作れない`() {

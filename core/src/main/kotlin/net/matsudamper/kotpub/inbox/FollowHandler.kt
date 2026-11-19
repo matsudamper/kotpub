@@ -21,6 +21,8 @@ import net.matsudamper.kotpub.json.AppJson
  * こちらが `Accept` を相手の inbox に返して初めて確定する。返さないと
  * Mastodon の画面ではフォローボタンが保留のまま戻らない。
  *
+ * 受け付けない相手（[FollowerStore.refuses]）には記録せず `Reject` を返す。
+ *
  * ここでは送らない。記録と一緒に `Accept` を [FollowerStore] 経由で配信キューに登録して、
  * inbox の応答を返す。相手のサーバーが応答しないときに inbox が待たされることも、
  * 1 回送れなかっただけで保留が残ることも無くなる。
@@ -71,6 +73,27 @@ class FollowHandler(
             }
         }
 
+        if (followers.refuses(followee.username, follower.actorId)) {
+            val reject =
+                OutgoingActivity(
+                    id = rejectId(followee),
+                    type = OutgoingActivity.TYPE_REJECT,
+                    actor = followee.actorId,
+                    target = LinkOrObject.Embedded(rawActivityJson),
+                )
+            val rejected = followers.reject(
+                username = followee.username,
+                follower = follower,
+                followActivityUri = followActivityUri,
+                receivedAt = Instant.now(),
+                rejectBody = AppJson.encodeToString(OutgoingActivity.serializer(), reject),
+            )
+            if (!rejected) {
+                return InboxHandling.Ignored("消えたアカウント宛の Follow なので受け付けない: ${followee.acct} ← $verifiedSignerActorId")
+            }
+            return InboxHandling.Handled
+        }
+
         val accept =
             OutgoingActivity(
                 id = acceptId(followee),
@@ -105,5 +128,10 @@ class FollowHandler(
          * 実際には返せないものを配ることになる。Mastodon も同じ作りで送ってくる。
          */
         fun acceptId(followee: ActorUrls): String = "${followee.actorId}#accepts/follows/${UUID.randomUUID()}"
+
+        /**
+         * `Reject` 自身の id。[acceptId] と同じ理由でフラグメントにする
+         */
+        fun rejectId(followee: ActorUrls): String = "${followee.actorId}#rejects/follows/${UUID.randomUUID()}"
     }
 }

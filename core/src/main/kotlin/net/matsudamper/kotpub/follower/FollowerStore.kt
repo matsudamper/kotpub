@@ -46,6 +46,34 @@ interface FollowerStore {
     ): Boolean
 
     /**
+     * [username] へのフォローを [followerActorUri] から受け付けないなら true。
+     *
+     * true なら `Follow` を記録せず、[reject] で `Reject` を返す。
+     * 何も返さないと、相手の画面ではフォローが保留のまま残る
+     */
+    fun refuses(
+        username: String,
+        followerActorUri: String,
+    ): Boolean
+
+    /**
+     * 受けた `Follow` を断る。`Reject` を配信キューに登録する。
+     *
+     * 同じ相手からのフォローの記録が残っていれば消し、まだ送れていない `Accept` も取り下げる。
+     * 残すと、断ったのに `Accept` が後から届いてフォローが成立する
+     *
+     * @param rejectBody 相手に返す `Reject` の JSON
+     * @return 登録したら true。宛先のアカウントが消えていれば false
+     */
+    fun reject(
+        username: String,
+        follower: RemoteActor,
+        followActivityUri: String,
+        receivedAt: Instant,
+        rejectBody: String,
+    ): Boolean
+
+    /**
      * フォローを消す。
      *
      * @param followActivityUri 消す対象を元の `Follow` の id で絞る。null なら id を問わない

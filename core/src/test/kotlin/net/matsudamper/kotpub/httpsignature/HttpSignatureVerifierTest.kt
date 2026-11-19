@@ -55,7 +55,7 @@ class HttpSignatureVerifierTest {
     )
 
     @Test
-    fun `正しく署名されていれば通る`() =
+    fun `正しく署名されていれば通る`() {
         runBlocking {
             val result = verifier().verify(request(signedHeaders()))
 
@@ -63,9 +63,10 @@ class HttpSignatureVerifierTest {
             assertEquals(TestRemoteActor.KEY_ID, verified.keyId)
             assertEquals(TestRemoteActor.ACTOR_ID, verified.owner)
         }
+    }
 
     @Test
-    fun `Signature ヘッダが無ければ通らない`() =
+    fun `Signature ヘッダが無ければ通らない`() {
         runBlocking {
             val headers = signedHeaders().filterKeys { it != "Signature" }
 
@@ -73,9 +74,10 @@ class HttpSignatureVerifierTest {
 
             assertIs<HttpSignatureResult.Rejected>(result)
         }
+    }
 
     @Test
-    fun `ボディを差し替えたら通らない`() =
+    fun `ボディを差し替えたら通らない`() {
         runBlocking {
             // 署名はヘッダにしか掛かっていない。Digest を見ないとここが素通りする
             val result = verifier().verify(request(signedHeaders(), body = """{"type":"Undo"}""".toByteArray()))
@@ -83,17 +85,19 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("Digest"))
         }
+    }
 
     @Test
-    fun `パスを差し替えたら通らない`() =
+    fun `パスを差し替えたら通らない`() {
         runBlocking {
             val result = verifier().verify(request(signedHeaders(), requestTarget = "/users/other/inbox"))
 
             assertIs<HttpSignatureResult.Rejected>(result)
         }
+    }
 
     @Test
-    fun `Date が離れすぎていたら通らない`() =
+    fun `Date が離れすぎていたら通らない`() {
         runBlocking {
             // 署名ごと記録して後から投げ直されるのを防ぐ
             val old = now.minus(Duration.ofHours(1))
@@ -103,18 +107,20 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("Date"))
         }
+    }
 
     @Test
-    fun `相手の時計が少し進んでいても通る`() =
+    fun `相手の時計が少し進んでいても通る`() {
         runBlocking {
             // 数分のずれで弾くと、NTP のずれだけでフォローが成立しなくなる
             val result = verifier().verify(request(signedHeaders(date = now.plus(Duration.ofMinutes(1)))))
 
             assertIs<HttpSignatureResult.Verified>(result)
         }
+    }
 
     @Test
-    fun `Digest が署名対象に入っていなければ通らない`() =
+    fun `Digest が署名対象に入っていなければ通らない`() {
         runBlocking {
             // Digest が署名されていなければ、ヘッダごと差し替えてボディを入れ替えられる
             val headerNames = listOf(SigningString.REQUEST_TARGET, "host", "date")
@@ -124,9 +130,10 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("digest"))
         }
+    }
 
     @Test
-    fun `request-target が署名対象に入っていなければ通らない`() =
+    fun `request-target が署名対象に入っていなければ通らない`() {
         runBlocking {
             val headerNames = listOf("host", "date", "digest")
 
@@ -134,18 +141,20 @@ class HttpSignatureVerifierTest {
 
             assertIs<HttpSignatureResult.Rejected>(result)
         }
+    }
 
     @Test
-    fun `知らない keyId なら通らない`() =
+    fun `知らない keyId なら通らない`() {
         runBlocking {
             val result = verifier(TestRemoteActors()).verify(request(signedHeaders()))
 
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("公開鍵"))
         }
+    }
 
     @Test
-    fun `別の鍵で署名されていたら通らない`() =
+    fun `別の鍵で署名されていたら通らない`() {
         runBlocking {
             // keyId は本人のものを指定しつつ、署名だけ手元の鍵で作った場合
             val headers =
@@ -162,9 +171,10 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("署名が一致しない"))
         }
+    }
 
     @Test
-    fun `対応していない algorithm なら通らない`() =
+    fun `対応していない algorithm なら通らない`() {
         runBlocking {
             val headers =
                 signedHeaders().mapValues { (name, value) ->
@@ -176,9 +186,10 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("algorithm"))
         }
+    }
 
     @Test
-    fun `覚えている鍵が古ければ取得し直して通す`() =
+    fun `覚えている鍵が古ければ取得し直して通す`() {
         runBlocking {
             // 相手が鍵を替えると、替わったことは通らない署名が届いて初めて分かる
             val publicKeys = RotatingPublicKeys(before = RsaKeys.generateKeyPair().public, after = TestRemoteActor.keyPair.public)
@@ -188,9 +199,10 @@ class HttpSignatureVerifierTest {
             assertIs<HttpSignatureResult.Verified>(result)
             assertEquals(1, publicKeys.refreshCallCount)
         }
+    }
 
     @Test
-    fun `取得し直しても合わなければ通らない`() =
+    fun `取得し直しても合わなければ通らない`() {
         runBlocking {
             val publicKeys = RotatingPublicKeys(before = RsaKeys.generateKeyPair().public, after = RsaKeys.generateKeyPair().public)
 
@@ -199,9 +211,10 @@ class HttpSignatureVerifierTest {
             val rejected = assertIs<HttpSignatureResult.Rejected>(result)
             assertTrue(rejected.reason.contains("取得し直した鍵でも署名が一致しない"))
         }
+    }
 
     @Test
-    fun `署名が通れば取得し直さない`() =
+    fun `署名が通れば取得し直さない`() {
         runBlocking {
             val publicKeys = TestRemoteActor.remoteActors()
 
@@ -209,9 +222,10 @@ class HttpSignatureVerifierTest {
 
             assertEquals(0, publicKeys.refreshCallCount)
         }
+    }
 
     @Test
-    fun `鍵を取得する前に明らかな不備で落とす`() =
+    fun `鍵を取得する前に明らかな不備で落とす`() {
         runBlocking {
             // 形が壊れたリクエストのたびに相手のサーバーから取得しない
             val publicKeys = TestRemoteActor.remoteActors()
@@ -221,6 +235,7 @@ class HttpSignatureVerifierTest {
 
             assertEquals(0, publicKeys.findCallCount)
         }
+    }
 
     /**
      * 鍵を替えた相手。[find] は替える前の鍵を、[refresh] は替えた後の鍵を返す
