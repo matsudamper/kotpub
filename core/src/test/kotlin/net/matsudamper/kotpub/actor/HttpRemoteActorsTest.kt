@@ -72,6 +72,16 @@ class HttpRemoteActorsTest {
     }
 
     @Test
+    fun findActorByUrlReusesProfileUrlDocumentWithinRefreshInterval() {
+        runBlocking {
+            HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use {
+                assertEquals(VICTIM_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(VICTIM_PROFILE_URL)).actor.actorId)
+                assertEquals(VICTIM_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(VICTIM_PROFILE_URL)).actor.actorId)
+            }
+        }
+    }
+
+    @Test
     fun rejectsKeyDocumentClaimingOwnerThatDoesNotListKeyId() {
         runBlocking {
             val lookup = HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = "$VICTIM_ID#main-key"), null).use { it.find(UPLOADED_KEY_ID) }
@@ -96,7 +106,7 @@ class HttpRemoteActorsTest {
     }
 
     /**
-     * [UPLOADED_KEY_ID] には持ち主を [VICTIM_ID] と名乗る鍵の文書を、[VICTIM_ID] には [ownerListedKeyId] を載せたアクター文書を返す
+     * [UPLOADED_KEY_ID] には持ち主を [VICTIM_ID] と名乗る鍵の文書を、[VICTIM_ID] と [VICTIM_PROFILE_URL] には [ownerListedKeyId] を載せたアクター文書を返す
      */
     private class KeyDocumentClient(
         private val ownerListedKeyId: String,
@@ -105,7 +115,7 @@ class HttpRemoteActorsTest {
 
         override suspend fun get(url: String, headers: Map<String, String>, maxBodyBytes: Int, readsBody: (Int, String) -> Boolean): ActivityPubClientResponse {
             val document =
-                if (url == VICTIM_ID) {
+                if (url == VICTIM_ID || url == VICTIM_PROFILE_URL) {
                     buildJsonObject {
                         put("id", VICTIM_ID)
                         put("inbox", "https://remote.example/inbox")
@@ -193,6 +203,7 @@ class HttpRemoteActorsTest {
 
     private companion object {
         const val VICTIM_ID = "https://remote.example/users/victim"
+        const val VICTIM_PROFILE_URL = "https://remote.example/@victim"
         const val UPLOADED_KEY_ID = "https://remote.example/media/key.json"
     }
 }

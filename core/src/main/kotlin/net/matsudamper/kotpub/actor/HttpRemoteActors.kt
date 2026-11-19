@@ -409,7 +409,7 @@ class HttpRemoteActors(
         // 使えると分かった文書だけを覚える。中身を見ずに入れ替えると、相手が 200 で
         // 空の JSON や他所のアクターの鍵を返した瞬間に、それまでの正しい文書を失う。
         // 再取得は通らない署名を投げ込むだけで起こせるので、外から狙える
-        if (!document.hasUsableKey(documentUrl = cacheKey, requestUrl = requestUrl)) {
+        if (!document.hasUsableKey(requestUrl)) {
             RemoteActorSpan.outcome("no_usable_key")
             return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Found(document)
         }
@@ -420,7 +420,10 @@ class HttpRemoteActors(
     }
 
     /**
-     * 覚える値打ちがあるか。文書の id が取得先と一致し、検証に使える鍵が、取得先と同じホストの持ち主で入っていること。
+     * 覚える値打ちがあるか。検証に使える鍵が、取得先と同じホストの持ち主で入っていること。
+     *
+     * 文書の id が keyId と一致するかは見ない。プロフィール URL から取得した文書は id が取得先と違うが、
+     * 覚えておかないと再取得の間隔の中の次の呼び出しで使えない。id の一致は [publicKeyOf] が使うたびに確かめる。
      *
      * [publicKeyOf] のうち、他の文書を取得せずに見られる条件で見る。読めない鍵の文書を覚えると、そこから先の
      * 検証は鍵が無いものとして落ち、[refresh] にも進まないまま期限まで拒み続ける。
@@ -428,14 +431,10 @@ class HttpRemoteActors(
      * ここを通らない文書でも、呼び出し側は結果として受け取る。そこで落ちるのは
      * 同じ判断で、覚えるかどうかだけをここで決める
      */
-    private fun RemoteActorDocument.hasUsableKey(
-        documentUrl: String,
-        requestUrl: HttpUrl,
-    ): Boolean {
+    private fun RemoteActorDocument.hasUsableKey(requestUrl: HttpUrl): Boolean {
         val publicKey = publicKey ?: return false
-        if (id != documentUrl) return false
 
-        val keyOwnerActorId = publicKey.owner ?: id
+        val keyOwnerActorId = publicKey.owner ?: id ?: return false
         if (!isSameHost(keyOwnerActorId, requestUrl)) return false
 
         return runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }.isSuccess
