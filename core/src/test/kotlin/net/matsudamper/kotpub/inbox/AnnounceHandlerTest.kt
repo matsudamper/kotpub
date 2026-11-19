@@ -91,96 +91,110 @@ class AnnounceHandlerTest {
         """.trimIndent()
 
     @Test
-    fun `こちらの投稿のブーストは押した相手と Announce の id を記録する`() = runBlocking {
-        val boosts = FakeBoostStore()
+    fun `こちらの投稿のブーストは押した相手と Announce の id を記録する`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
 
-        handle(announce(activityUri, localNoteUrl, PUBLIC, "${TestRemoteActor.ACTOR_ID}/followers"), boosts)
+            handle(announce(activityUri, localNoteUrl, PUBLIC, "${TestRemoteActor.ACTOR_ID}/followers"), boosts)
 
-        val boost = boosts.rows.single()
-        assertEquals(PublicNoteId("note1"), boost.notePublicId)
-        assertEquals(TestRemoteActor.ACTOR_ID, boost.actor.actorId)
-        assertEquals(activityUri, boost.activityUri)
-        assertTrue(boosts.remoteRows.isEmpty())
-    }
-
-    @Test
-    fun `他のサーバーの投稿のブーストは取得した投稿と一緒に渡す`() = runBlocking {
-        val boosts = FakeBoostStore()
-
-        handle(
-            announce(activityUri, remoteNoteId, PUBLIC, "${TestRemoteActor.ACTOR_ID}/followers"),
-            boosts,
-            notes = mapOf(remoteNoteId to remoteNote(NoteVisibility.Public)),
-        )
-
-        val boost = boosts.remoteRows.single()
-        assertEquals(activityUri, boost.activityUri)
-        assertEquals(TestRemoteActor.ACTOR_ID, boost.actorUri)
-        assertEquals(NoteVisibility.Public, boost.visibility)
-        assertEquals(remoteNoteId, boost.note.id)
-        assertEquals("2026-11-01T00:00:00Z", boost.published.toString())
-        assertTrue(boosts.rows.isEmpty())
-    }
-
-    @Test
-    fun `取得できない投稿や公開されていない投稿のブーストは渡さない`() = runBlocking {
-        val boosts = FakeBoostStore()
-
-        handle(announce(activityUri, remoteNoteId, PUBLIC, ""), boosts)
-        handle(
-            announce(activityUri, remoteNoteId, PUBLIC, ""),
-            boosts,
-            notes = mapOf(remoteNoteId to remoteNote(NoteVisibility.Followers)),
-        )
-
-        assertTrue(boosts.remoteRows.isEmpty())
-    }
-
-    @Test
-    fun `投稿を今は取得できなければ送り直してもらうために投げる`() = runBlocking {
-        val boosts = FakeBoostStore()
-
-        assertFailsWith<IllegalStateException> {
-            handle(announce(activityUri, remoteNoteId, PUBLIC, ""), boosts, unavailableNoteIds = setOf(remoteNoteId))
+            val boost = boosts.rows.single()
+            assertEquals(PublicNoteId("note1"), boost.notePublicId)
+            assertEquals(TestRemoteActor.ACTOR_ID, boost.actor.actorId)
+            assertEquals(activityUri, boost.activityUri)
+            assertTrue(boosts.remoteRows.isEmpty())
         }
-
-        assertTrue(boosts.remoteRows.isEmpty())
     }
 
     @Test
-    fun `ブーストした相手と別のホストの id を名乗る Announce は受け付けない`() = runBlocking {
-        val boosts = FakeBoostStore()
+    fun `他のサーバーの投稿のブーストは取得した投稿と一緒に渡す`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
 
-        handle(announce("https://other.example/activities/1", localNoteUrl, PUBLIC, ""), boosts)
+            handle(
+                announce(activityUri, remoteNoteId, PUBLIC, "${TestRemoteActor.ACTOR_ID}/followers"),
+                boosts,
+                notes = mapOf(remoteNoteId to remoteNote(NoteVisibility.Public)),
+            )
 
-        assertTrue(boosts.rows.isEmpty())
+            val boost = boosts.remoteRows.single()
+            assertEquals(activityUri, boost.activityUri)
+            assertEquals(TestRemoteActor.ACTOR_ID, boost.actorUri)
+            assertEquals(NoteVisibility.Public, boost.visibility)
+            assertEquals(remoteNoteId, boost.note.id)
+            assertEquals("2026-11-01T00:00:00Z", boost.published.toString())
+            assertTrue(boosts.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `actor が署名者と違う Announce は受け付けない`() = runBlocking {
-        val boosts = FakeBoostStore()
+    fun `取得できない投稿や公開されていない投稿のブーストは渡さない`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
 
-        handle(
-            """
+            handle(announce(activityUri, remoteNoteId, PUBLIC, ""), boosts)
+            handle(
+                announce(activityUri, remoteNoteId, PUBLIC, ""),
+                boosts,
+                notes = mapOf(remoteNoteId to remoteNote(NoteVisibility.Followers)),
+            )
+
+            assertTrue(boosts.remoteRows.isEmpty())
+        }
+    }
+
+    @Test
+    fun `投稿を今は取得できなければ送り直してもらうために投げる`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
+
+            assertFailsWith<IllegalStateException> {
+                handle(announce(activityUri, remoteNoteId, PUBLIC, ""), boosts, unavailableNoteIds = setOf(remoteNoteId))
+            }
+
+            assertTrue(boosts.remoteRows.isEmpty())
+        }
+    }
+
+    @Test
+    fun `ブーストした相手と別のホストの id を名乗る Announce は受け付けない`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
+
+            handle(announce("https://other.example/activities/1", localNoteUrl, PUBLIC, ""), boosts)
+
+            assertTrue(boosts.rows.isEmpty())
+        }
+    }
+
+    @Test
+    fun `actor が署名者と違う Announce は受け付けない`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
+
+            handle(
+                """
             {"id":"$activityUri","type":"Announce","actor":"https://remote.example/users/mallory",
              "to":["$PUBLIC"],"object":"$localNoteUrl"}
-            """.trimIndent(),
-            boosts,
-        )
+                """.trimIndent(),
+                boosts,
+            )
 
-        assertTrue(boosts.rows.isEmpty())
+            assertTrue(boosts.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `先に取り消しが届いた Announce は記録しない`() = runBlocking {
-        val boosts = FakeBoostStore()
-        val earlyUndone = FakeEarlyUndoneLikes().apply {
-            remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = activityUri, expiresAt = Instant.now().plusSeconds(60))
+    fun `先に取り消しが届いた Announce は記録しない`() {
+        runBlocking {
+            val boosts = FakeBoostStore()
+            val earlyUndone = FakeEarlyUndoneLikes().apply {
+                remember(actorUri = TestRemoteActor.ACTOR_ID, activityUri = activityUri, expiresAt = Instant.now().plusSeconds(60))
+            }
+
+            handle(announce(activityUri, localNoteUrl, PUBLIC, ""), boosts, earlyUndone = earlyUndone)
+
+            assertTrue(boosts.rows.isEmpty())
         }
-
-        handle(announce(activityUri, localNoteUrl, PUBLIC, ""), boosts, earlyUndone = earlyUndone)
-
-        assertTrue(boosts.rows.isEmpty())
     }
 
     private companion object {

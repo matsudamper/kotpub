@@ -70,86 +70,63 @@ class FollowBackfillPublisherTest {
     )
 
     @Test
-    fun `フォローより前の投稿を古い順に配る`() = runBlocking {
-        val delivery = TestDelivery()
+    fun `フォローより前の投稿を古い順に配る`() {
+        runBlocking {
+            val delivery = TestDelivery()
 
-        val result = deliver(notes = notesOf(3), delivery = delivery)
+            val result = deliver(notes = notesOf(3), delivery = delivery)
 
-        assertEquals(3, assertIs<BackfillResult.Attempted>(result).delivered.size)
-        assertEquals(listOf(TestRemoteActor.INBOX), delivery.delivered.map { it.inbox }.distinct())
-        assertEquals(listOf("<p>0</p>", "<p>1</p>", "<p>2</p>"), deliveredCreates(delivery).map { it.target.content })
-    }
-
-    @Test
-    fun `配り直した Create は元の投稿と同じ id と日時になる`() = runBlocking {
-        val delivery = TestDelivery()
-        val notes = notesOf(1)
-
-        deliver(notes = notes, delivery = delivery)
-
-        // 相手はこの id で重複を判断する。作り直すとタイムラインに 2 度並ぶ
-        val note = notes.added.single()
-        val create = deliveredCreates(delivery).single()
-        assertEquals("https://${TestLocalActor.DOMAIN}/notes/${note.publicId.value}#create", create.id.value)
-        assertEquals("https://${TestLocalActor.DOMAIN}/notes/${note.publicId.value}", create.target.id.value)
-        assertEquals(create.published, create.target.published)
-        assertEquals("2026-08-10T00:00:00Z", create.published)
-    }
-
-    @Test
-    fun `配る件数には上限がある`() = runBlocking {
-        val delivery = TestDelivery()
-
-        deliver(notes = notesOf(25), delivery = delivery)
-
-        val creates = deliveredCreates(delivery)
-        assertEquals(5, creates.size)
-        // 上限を超えるときは新しい方を残す
-        assertEquals("<p>24</p>", creates.last().target.content)
-        assertEquals("<p>20</p>", creates.first().target.content)
-    }
-
-    @Test
-    fun `フォローが成立した後に作られた投稿は配らない`() = runBlocking {
-        val delivery = TestDelivery()
-        val notes = notesOf(1).apply {
-            add(
-                StoredNote(
-                    publicId = PublicNoteId("note-after"),
-                    username = TestLocalActor.USERNAME,
-                    contentHtml = "<p>フォローの後</p>",
-                    summary = null,
-                    publishedAt = followAcceptedAt.plusSeconds(60),
-                    updatedAt = null,
-                    attachments = listOf(),
-                    inReplyTo = null,
-                    quote = null,
-                    mentions = listOf(),
-                    emojis = listOf(),
-                    sensitive = false,
-                    poll = null,
-                ),
-            )
+            assertEquals(3, assertIs<BackfillResult.Attempted>(result).delivered.size)
+            assertEquals(listOf(TestRemoteActor.INBOX), delivery.delivered.map { it.inbox }.distinct())
+            assertEquals(listOf("<p>0</p>", "<p>1</p>", "<p>2</p>"), deliveredCreates(delivery).map { it.target.content })
         }
-
-        deliver(notes = notes, delivery = delivery)
-
-        // 成立後の投稿は通常の配信で届く。混ぜるとフォロー前の投稿が上限から押し出される
-        assertEquals(listOf("<p>0</p>"), deliveredCreates(delivery).map { it.target.content })
     }
 
     @Test
-    fun `成立後の投稿があっても上限まで過去の投稿を配る`() = runBlocking {
-        val delivery = TestDelivery()
-        val notes = notesOf(20).apply {
-            repeat(5) { index ->
+    fun `配り直した Create は元の投稿と同じ id と日時になる`() {
+        runBlocking {
+            val delivery = TestDelivery()
+            val notes = notesOf(1)
+
+            deliver(notes = notes, delivery = delivery)
+
+            // 相手はこの id で重複を判断する。作り直すとタイムラインに 2 度並ぶ
+            val note = notes.added.single()
+            val create = deliveredCreates(delivery).single()
+            assertEquals("https://${TestLocalActor.DOMAIN}/notes/${note.publicId.value}#create", create.id.value)
+            assertEquals("https://${TestLocalActor.DOMAIN}/notes/${note.publicId.value}", create.target.id.value)
+            assertEquals(create.published, create.target.published)
+            assertEquals("2026-08-10T00:00:00Z", create.published)
+        }
+    }
+
+    @Test
+    fun `配る件数には上限がある`() {
+        runBlocking {
+            val delivery = TestDelivery()
+
+            deliver(notes = notesOf(25), delivery = delivery)
+
+            val creates = deliveredCreates(delivery)
+            assertEquals(5, creates.size)
+            // 上限を超えるときは新しい方を残す
+            assertEquals("<p>24</p>", creates.last().target.content)
+            assertEquals("<p>20</p>", creates.first().target.content)
+        }
+    }
+
+    @Test
+    fun `フォローが成立した後に作られた投稿は配らない`() {
+        runBlocking {
+            val delivery = TestDelivery()
+            val notes = notesOf(1).apply {
                 add(
                     StoredNote(
-                        publicId = PublicNoteId("note-after-$index"),
+                        publicId = PublicNoteId("note-after"),
                         username = TestLocalActor.USERNAME,
-                        contentHtml = "<p>フォローの後 $index</p>",
+                        contentHtml = "<p>フォローの後</p>",
                         summary = null,
-                        publishedAt = followAcceptedAt.plusSeconds(index + 1L),
+                        publishedAt = followAcceptedAt.plusSeconds(60),
                         updatedAt = null,
                         attachments = listOf(),
                         inReplyTo = null,
@@ -161,11 +138,44 @@ class FollowBackfillPublisherTest {
                     ),
                 )
             }
+
+            deliver(notes = notes, delivery = delivery)
+
+            // 成立後の投稿は通常の配信で届く。混ぜるとフォロー前の投稿が上限から押し出される
+            assertEquals(listOf("<p>0</p>"), deliveredCreates(delivery).map { it.target.content })
         }
+    }
 
-        deliver(notes = notes, delivery = delivery)
+    @Test
+    fun `成立後の投稿があっても上限まで過去の投稿を配る`() {
+        runBlocking {
+            val delivery = TestDelivery()
+            val notes = notesOf(20).apply {
+                repeat(5) { index ->
+                    add(
+                        StoredNote(
+                            publicId = PublicNoteId("note-after-$index"),
+                            username = TestLocalActor.USERNAME,
+                            contentHtml = "<p>フォローの後 $index</p>",
+                            summary = null,
+                            publishedAt = followAcceptedAt.plusSeconds(index + 1L),
+                            updatedAt = null,
+                            attachments = listOf(),
+                            inReplyTo = null,
+                            quote = null,
+                            mentions = listOf(),
+                            emojis = listOf(),
+                            sensitive = false,
+                            poll = null,
+                        ),
+                    )
+                }
+            }
 
-        // 成立後の投稿を数に含めて切ると、その分だけ過去の投稿が減る
-        assertEquals(5, deliveredCreates(delivery).size)
+            deliver(notes = notes, delivery = delivery)
+
+            // 成立後の投稿を数に含めて切ると、その分だけ過去の投稿が減る
+            assertEquals(5, deliveredCreates(delivery).size)
+        }
     }
 }

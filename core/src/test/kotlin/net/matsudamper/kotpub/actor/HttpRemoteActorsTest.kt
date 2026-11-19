@@ -16,46 +16,58 @@ import net.matsudamper.kotpub.http.ResponseBody
 
 class HttpRemoteActorsTest {
     @Test
-    fun profileUrlReturnsDocumentActorId() = runBlocking {
-        assertEquals("https://remote.example/users/alice", assertIs<RemoteActorLookup.Found>(findActor("\"https://remote.example/users/alice\"")).actor.actorId)
-    }
-
-    @Test
-    fun rejectsDocumentIdOnAnotherHost() = runBlocking {
-        assertInvalidDocument(findActor("\"https://other.example/users/alice\""))
-    }
-
-    @Test
-    fun rejectsMissingOrNonHttpsDocumentId() = runBlocking {
-        assertInvalidDocument(findActor("null"))
-        assertInvalidDocument(findActor("\"http://remote.example/users/alice\""))
-        assertInvalidDocument(findActor("\"invalid\""))
-    }
-
-    @Test
-    fun findActorByUrlRefetchesFromOtherHostRedirectTarget() = runBlocking {
-        val client = RedirectingClient()
-
-        val actor = HttpRemoteActors(client, null).use { it.findActorByUrl(RedirectingClient.PROFILE_URL) }
-
-        assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(actor).actor.actorId)
-        assertEquals(listOf(RedirectingClient.PROFILE_URL, RedirectingClient.ACTOR_ID), client.requestedUrls)
-    }
-
-    @Test
-    fun findActorByUrlReturnsRedirectTargetAgainWithinRefreshInterval() = runBlocking {
-        val actors = HttpRemoteActors(RedirectingClient(), null)
-
-        actors.use {
-            assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
-            assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
+    fun profileUrlReturnsDocumentActorId() {
+        runBlocking {
+            assertEquals("https://remote.example/users/alice", assertIs<RemoteActorLookup.Found>(findActor("\"https://remote.example/users/alice\"")).actor.actorId)
         }
     }
 
     @Test
-    fun findActorDoesNotFollowOtherHostRedirect() = runBlocking<Unit> {
-        val lookup = HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) }
-        assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
+    fun rejectsDocumentIdOnAnotherHost() {
+        runBlocking {
+            assertInvalidDocument(findActor("\"https://other.example/users/alice\""))
+        }
+    }
+
+    @Test
+    fun rejectsMissingOrNonHttpsDocumentId() {
+        runBlocking {
+            assertInvalidDocument(findActor("null"))
+            assertInvalidDocument(findActor("\"http://remote.example/users/alice\""))
+            assertInvalidDocument(findActor("\"invalid\""))
+        }
+    }
+
+    @Test
+    fun findActorByUrlRefetchesFromOtherHostRedirectTarget() {
+        runBlocking {
+            val client = RedirectingClient()
+
+            val actor = HttpRemoteActors(client, null).use { it.findActorByUrl(RedirectingClient.PROFILE_URL) }
+
+            assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(actor).actor.actorId)
+            assertEquals(listOf(RedirectingClient.PROFILE_URL, RedirectingClient.ACTOR_ID), client.requestedUrls)
+        }
+    }
+
+    @Test
+    fun findActorByUrlReturnsRedirectTargetAgainWithinRefreshInterval() {
+        runBlocking {
+            val actors = HttpRemoteActors(RedirectingClient(), null)
+
+            actors.use {
+                assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
+                assertEquals(RedirectingClient.ACTOR_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(RedirectingClient.PROFILE_URL)).actor.actorId)
+            }
+        }
+    }
+
+    @Test
+    fun findActorDoesNotFollowOtherHostRedirect() {
+        runBlocking {
+            val lookup = HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) }
+            assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
+        }
     }
 
     private class RedirectingClient : ActivityPubHttpClient {

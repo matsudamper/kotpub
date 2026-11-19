@@ -28,27 +28,29 @@ class FollowResponseHandlerTest {
     }
 
     @Test
-    fun responsesPassOriginalIdAndRejectMismatchedActorsOrObjects() = runBlocking {
-        val received = mutableListOf<String>()
-        val responses = object : FollowingResponses {
-            override fun accept(actorId: String, followActivityId: String) {
-                received.add("accept:$followActivityId")
+    fun responsesPassOriginalIdAndRejectMismatchedActorsOrObjects() {
+        runBlocking {
+            val received = mutableListOf<String>()
+            val responses = object : FollowingResponses {
+                override fun accept(actorId: String, followActivityId: String) {
+                    received.add("accept:$followActivityId")
+                }
+                override fun reject(actorId: String, followActivityId: String) {
+                    received.add("reject:$followActivityId")
+                }
             }
-            override fun reject(actorId: String, followActivityId: String) {
-                received.add("reject:$followActivityId")
+            val follow = FollowActivities.follow("follow-1", LOCAL, REMOTE)
+            val embedded = FollowActivities.undo("unused", follow).target
+            listOf("Accept", "Reject").forEach { type ->
+                val handler = FollowResponseHandler(type, responses)
+                val activity = InboxActivity(type = type, actor = LinkOrObject.Link(REMOTE), target = embedded)
+                handler.handle(InboxRecipient.Shared, REMOTE, activity, JsonObject(mapOf()))
+                handler.handle(InboxRecipient.Shared, LOCAL, activity, JsonObject(mapOf()))
+                val wrong = OutgoingActivity(id = "wrong", type = "Like", actor = LOCAL, target = LinkOrObject.Link(REMOTE))
+                handler.handle(InboxRecipient.Shared, REMOTE, activity.copy(target = LinkOrObject.Embedded(AppJson.encodeToJsonElement(wrong).jsonObject)), JsonObject(mapOf()))
             }
+            assertEquals(listOf("accept:follow-1", "reject:follow-1"), received)
         }
-        val follow = FollowActivities.follow("follow-1", LOCAL, REMOTE)
-        val embedded = FollowActivities.undo("unused", follow).target
-        listOf("Accept", "Reject").forEach { type ->
-            val handler = FollowResponseHandler(type, responses)
-            val activity = InboxActivity(type = type, actor = LinkOrObject.Link(REMOTE), target = embedded)
-            handler.handle(InboxRecipient.Shared, REMOTE, activity, JsonObject(mapOf()))
-            handler.handle(InboxRecipient.Shared, LOCAL, activity, JsonObject(mapOf()))
-            val wrong = OutgoingActivity(id = "wrong", type = "Like", actor = LOCAL, target = LinkOrObject.Link(REMOTE))
-            handler.handle(InboxRecipient.Shared, REMOTE, activity.copy(target = LinkOrObject.Embedded(AppJson.encodeToJsonElement(wrong).jsonObject)), JsonObject(mapOf()))
-        }
-        assertEquals(listOf("accept:follow-1", "reject:follow-1"), received)
     }
 
     private companion object {

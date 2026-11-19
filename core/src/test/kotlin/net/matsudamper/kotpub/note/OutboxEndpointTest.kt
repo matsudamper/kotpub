@@ -26,80 +26,88 @@ class OutboxEndpointTest {
     )
 
     @Test
-    fun `投稿とブーストを新しい順に混ぜて並べる`() = runBlocking {
-        val endpoint = OutboxEndpoint(
-            directory = directory,
-            notes = ListNoteStore(listOf(note("new", "2026-11-03T00:00:00Z"), note("old", "2026-11-01T00:00:00Z"))),
-            boosts = ListBoostStore(listOf(boost("boost", "2026-11-02T00:00:00Z", BoostAudience.UNLISTED))),
-            webPages = null,
-        )
+    fun `投稿とブーストを新しい順に混ぜて並べる`() {
+        runBlocking {
+            val endpoint = OutboxEndpoint(
+                directory = directory,
+                notes = ListNoteStore(listOf(note("new", "2026-11-03T00:00:00Z"), note("old", "2026-11-01T00:00:00Z"))),
+                boosts = ListBoostStore(listOf(boost("boost", "2026-11-02T00:00:00Z", BoostAudience.UNLISTED))),
+                webPages = null,
+            )
 
-        val page = page(endpoint, cursor = "")
+            val page = page(endpoint, cursor = "")
 
-        assertEquals(3L, page.totalItems)
-        assertEquals(listOf("Create", "Announce", "Create"), page.orderedItems.map { it.jsonObject.getValue("type").jsonPrimitive.content })
-        val announce = page.orderedItems[1].jsonObject
-        assertEquals("$ACTOR/announces/boost", announce.getValue("id").jsonPrimitive.content)
-        assertEquals(TestLocalActor.urls.actorId, announce.getValue("actor").jsonPrimitive.content)
-        assertEquals(REMOTE_NOTE, announce.getValue("object").jsonPrimitive.content)
-        assertEquals(listOf(TestLocalActor.urls.followers), announce.getValue("to").jsonArray.map { it.jsonPrimitive.content })
-        assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE, REMOTE_AUTHOR), announce.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
-        assertEquals(null, page.next)
+            assertEquals(3L, page.totalItems)
+            assertEquals(listOf("Create", "Announce", "Create"), page.orderedItems.map { it.jsonObject.getValue("type").jsonPrimitive.content })
+            val announce = page.orderedItems[1].jsonObject
+            assertEquals("$ACTOR/announces/boost", announce.getValue("id").jsonPrimitive.content)
+            assertEquals(TestLocalActor.urls.actorId, announce.getValue("actor").jsonPrimitive.content)
+            assertEquals(REMOTE_NOTE, announce.getValue("object").jsonPrimitive.content)
+            assertEquals(listOf(TestLocalActor.urls.followers), announce.getValue("to").jsonArray.map { it.jsonPrimitive.content })
+            assertEquals(listOf(ActivityStreamsIri.PUBLIC_AUDIENCE, REMOTE_AUTHOR), announce.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+            assertEquals(null, page.next)
+        }
     }
 
     @Test
-    fun `ページの境目で投稿もブーストも抜けず重ならない`() = runBlocking {
-        val notes = (1..COLLECTION_PAGE_SIZE).map { note("note$it", "2026-11-01T00:00:${it.toString().padStart(2, '0')}Z") }
-        val boosts = (1..COLLECTION_PAGE_SIZE).map { boost("boost$it", "2026-11-01T00:01:${it.toString().padStart(2, '0')}Z", BoostAudience.PUBLIC) }
-        val endpoint = OutboxEndpoint(directory = directory, notes = ListNoteStore(notes), boosts = ListBoostStore(boosts), webPages = null)
+    fun `ページの境目で投稿もブーストも抜けず重ならない`() {
+        runBlocking {
+            val notes = (1..COLLECTION_PAGE_SIZE).map { note("note$it", "2026-11-01T00:00:${it.toString().padStart(2, '0')}Z") }
+            val boosts = (1..COLLECTION_PAGE_SIZE).map { boost("boost$it", "2026-11-01T00:01:${it.toString().padStart(2, '0')}Z", BoostAudience.PUBLIC) }
+            val endpoint = OutboxEndpoint(directory = directory, notes = ListNoteStore(notes), boosts = ListBoostStore(boosts), webPages = null)
 
-        val first = page(endpoint, cursor = "")
-        val nextCursor = checkNotNull(first.next).substringAfter("cursor=")
-        val second = page(endpoint, cursor = java.net.URLDecoder.decode(nextCursor, Charsets.UTF_8))
+            val first = page(endpoint, cursor = "")
+            val nextCursor = checkNotNull(first.next).substringAfter("cursor=")
+            val second = page(endpoint, cursor = java.net.URLDecoder.decode(nextCursor, Charsets.UTF_8))
 
-        val ids = (first.orderedItems + second.orderedItems).map { it.jsonObject.getValue("id").jsonPrimitive.content }
-        assertEquals(COLLECTION_PAGE_SIZE * 2, ids.toSet().size)
-        assertEquals(COLLECTION_PAGE_SIZE.toLong() * 2, first.totalItems)
+            val ids = (first.orderedItems + second.orderedItems).map { it.jsonObject.getValue("id").jsonPrimitive.content }
+            assertEquals(COLLECTION_PAGE_SIZE * 2, ids.toSet().size)
+            assertEquals(COLLECTION_PAGE_SIZE.toLong() * 2, first.totalItems)
+        }
     }
 
     @Test
-    fun `cursor が無ければ件数に投稿とブーストの両方を数える`() = runBlocking {
-        val endpoint = OutboxEndpoint(
-            directory = directory,
-            notes = ListNoteStore(listOf(note("note", "2026-11-03T00:00:00Z"))),
-            boosts = ListBoostStore(listOf(boost("boost", "2026-11-02T00:00:00Z", BoostAudience.PUBLIC))),
-            webPages = null,
-        )
+    fun `cursor が無ければ件数に投稿とブーストの両方を数える`() {
+        runBlocking {
+            val endpoint = OutboxEndpoint(
+                directory = directory,
+                notes = ListNoteStore(listOf(note("note", "2026-11-03T00:00:00Z"))),
+                boosts = ListBoostStore(listOf(boost("boost", "2026-11-02T00:00:00Z", BoostAudience.PUBLIC))),
+                webPages = null,
+            )
 
-        val collection = AppJson.decodeFromString(
-            OrderedCollection.serializer(),
-            endpoint.get(username = TestLocalActor.USERNAME, accept = null, cursor = null).body.decodeToString(),
-        )
+            val collection = AppJson.decodeFromString(
+                OrderedCollection.serializer(),
+                endpoint.get(username = TestLocalActor.USERNAME, accept = null, cursor = null).body.decodeToString(),
+            )
 
-        assertEquals(2L, collection.totalItems)
+            assertEquals(2L, collection.totalItems)
+        }
     }
 
     @Test
-    fun `宛てたアクターは Create と Note の両方の cc に入る`() = runBlocking {
-        val mentioned = "https://remote.example/users/alice"
-        val endpoint = OutboxEndpoint(
-            directory = directory,
-            notes = ListNoteStore(
-                listOf(
-                    note("reply", "2026-11-01T00:00:00Z").copy(
-                        inReplyTo = "https://remote.example/notes/1",
-                        mentions = listOf(NoteMention(actorId = mentioned, acct = "alice@remote.example")),
+    fun `宛てたアクターは Create と Note の両方の cc に入る`() {
+        runBlocking {
+            val mentioned = "https://remote.example/users/alice"
+            val endpoint = OutboxEndpoint(
+                directory = directory,
+                notes = ListNoteStore(
+                    listOf(
+                        note("reply", "2026-11-01T00:00:00Z").copy(
+                            inReplyTo = "https://remote.example/notes/1",
+                            mentions = listOf(NoteMention(actorId = mentioned, acct = "alice@remote.example")),
+                        ),
                     ),
                 ),
-            ),
-            boosts = ListBoostStore(listOf()),
-            webPages = null,
-        )
+                boosts = ListBoostStore(listOf()),
+                webPages = null,
+            )
 
-        val create = page(endpoint, cursor = "").orderedItems.single().jsonObject
-        val expectedCc = listOf(directory.resolve(TestLocalActor.USERNAME)?.followers, mentioned)
-        assertEquals(expectedCc, create.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
-        assertEquals(expectedCc, create.getValue("object").jsonObject.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+            val create = page(endpoint, cursor = "").orderedItems.single().jsonObject
+            val expectedCc = listOf(directory.resolve(TestLocalActor.USERNAME)?.followers, mentioned)
+            assertEquals(expectedCc, create.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+            assertEquals(expectedCc, create.getValue("object").jsonObject.getValue("cc").jsonArray.map { it.jsonPrimitive.content })
+        }
     }
 
     private suspend fun page(endpoint: OutboxEndpoint, cursor: String): OrderedCollectionPage<JsonElement> = AppJson.decodeFromString(

@@ -46,7 +46,7 @@ class RecordedFallbackPublicKeysTest {
     private fun gone(): TestRemoteActors = TestRemoteActors(missing = PublicKeyLookup.Gone)
 
     @Test
-    fun `相手のサーバーから取得できたらそちらを使う`() =
+    fun `相手のサーバーから取得できたらそちらを使う`() {
         runBlocking {
             val remote = TestRemoteActor.remoteActors()
 
@@ -58,9 +58,10 @@ class RecordedFallbackPublicKeysTest {
             assertEquals(TestRemoteActor.keyPair.public, (lookup as PublicKeyLookup.Found).key.publicKey)
             assertEquals(TestRemoteActor.ACTOR_ID, lookup.key.owner)
         }
+    }
 
     @Test
-    fun `取得できたら記録の鍵を読み直したものにする`() =
+    fun `取得できたら記録の鍵を読み直したものにする`() {
         runBlocking {
             // 相手が鍵を替えてから消えると、Follow のときの鍵では Delete を検証できない
             val followers = followers(publicKeyPem = "替える前の鍵")
@@ -73,9 +74,10 @@ class RecordedFallbackPublicKeysTest {
                 followers.findPublicKeyPem(TestRemoteActor.ACTOR_ID),
             )
         }
+    }
 
     @Test
-    fun `取得し直したときも記録の鍵を新しくする`() =
+    fun `取得し直したときも記録の鍵を新しくする`() {
         runBlocking {
             // 取得し直しは相手が鍵を替えたときに通る経路。記録も一緒に新しくしないと、
             // その相手が消えた後の Delete を検証できない
@@ -89,9 +91,10 @@ class RecordedFallbackPublicKeysTest {
                 followers.findPublicKeyPem(TestRemoteActor.ACTOR_ID),
             )
         }
+    }
 
     @Test
-    fun `消えた相手はフォローの記録から探す`() =
+    fun `消えた相手はフォローの記録から探す`() {
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(remote = gone(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
@@ -104,10 +107,11 @@ class RecordedFallbackPublicKeysTest {
             assertEquals(TestRemoteActor.ACTOR_ID, found.key.owner)
             assertEquals(TestRemoteActor.KEY_ID, found.key.keyId)
         }
+    }
 
     @Test
-    fun `一時的に取得できなかっただけなら記録の鍵は使わない`() =
-        runBlocking<Unit> {
+    fun `一時的に取得できなかっただけなら記録の鍵は使わない`() {
+        runBlocking {
             // 相手が鍵を替えた後にこの経路を通すと、失効した鍵で署名が通ってしまう
             val lookup =
                 RecordedFallbackPublicKeys(remote = TestRemoteActors(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
@@ -115,6 +119,7 @@ class RecordedFallbackPublicKeysTest {
 
             assertIs<PublicKeyLookup.Unavailable>(lookup)
         }
+    }
 
     private fun favourites(): FakeFavouriteStore = FakeFavouriteStore().apply {
         add(
@@ -127,7 +132,7 @@ class RecordedFallbackPublicKeysTest {
     }
 
     @Test
-    fun `消えた相手はフォローしていなくてもお気に入りの記録から探す`() =
+    fun `消えた相手はフォローしていなくてもお気に入りの記録から探す`() {
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(
@@ -142,9 +147,10 @@ class RecordedFallbackPublicKeysTest {
             assertEquals(TestRemoteActor.keyPair.public, found.key.publicKey)
             assertEquals(TestRemoteActor.ACTOR_ID, found.key.owner)
         }
+    }
 
     @Test
-    fun `消えた相手はスタンプしか押していなくてもスタンプの記録から探す`() =
+    fun `消えた相手はスタンプしか押していなくてもスタンプの記録から探す`() {
         runBlocking {
             val stamps = FakeStampStore().apply {
                 put(
@@ -171,9 +177,10 @@ class RecordedFallbackPublicKeysTest {
             assertEquals(TestRemoteActor.keyPair.public, found.key.publicKey)
             assertEquals(TestRemoteActor.ACTOR_ID, found.key.owner)
         }
+    }
 
     @Test
-    fun `フォローもお気に入りもスタンプも記録が無ければ見つからない`() =
+    fun `フォローもお気に入りもスタンプも記録が無ければ見つからない`() {
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(remote = gone(), followers = FakeFollowerStore(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())
@@ -181,9 +188,10 @@ class RecordedFallbackPublicKeysTest {
 
             assertEquals(PublicKeyLookup.Gone, lookup)
         }
+    }
 
     @Test
-    fun `記録した PEM を読めなければ見つからない`() =
+    fun `記録した PEM を読めなければ見つからない`() {
         runBlocking {
             val lookup =
                 RecordedFallbackPublicKeys(
@@ -196,4 +204,5 @@ class RecordedFallbackPublicKeysTest {
 
             assertEquals(PublicKeyLookup.Gone, lookup)
         }
+    }
 }

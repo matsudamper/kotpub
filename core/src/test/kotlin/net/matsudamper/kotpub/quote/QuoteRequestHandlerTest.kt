@@ -121,162 +121,190 @@ class QuoteRequestHandlerTest {
         """{"id":"$QUOTING_NOTE#quote_request","type":"QuoteRequest","actor":"${TestRemoteActor.ACTOR_ID}","object":"$target","instrument":$instrument}"""
 
     @Test
-    fun `こちらの投稿への引用は承認して、承認の id を result に入れた Accept を登録する`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
+    fun `こちらの投稿への引用は承認して、承認の id を result に入れた Accept を登録する`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        assertEquals(InboxHandling.Handled, handle(approvals, quoteRequestJson()))
+            assertEquals(InboxHandling.Handled, handle(approvals, quoteRequestJson()))
 
-        val enqueued = approvals.enqueued.single()
-        assertEquals(TestLocalActor.USERNAME, enqueued.username)
-        assertEquals(TestRemoteActor.INBOX, enqueued.inbox)
-        val accept = AppJson.decodeFromString(OutgoingActivity.serializer(), enqueued.acceptBody)
-        assertEquals(OutgoingActivity.TYPE_ACCEPT, accept.type)
-        assertEquals(TestLocalActor.urls.actorId, accept.actor)
-        assertTrue(accept.result.orEmpty().startsWith("${noteUrls.noteUrl}/quote_authorizations/"))
+            val enqueued = approvals.enqueued.single()
+            assertEquals(TestLocalActor.USERNAME, enqueued.username)
+            assertEquals(TestRemoteActor.INBOX, enqueued.inbox)
+            val accept = AppJson.decodeFromString(OutgoingActivity.serializer(), enqueued.acceptBody)
+            assertEquals(OutgoingActivity.TYPE_ACCEPT, accept.type)
+            assertEquals(TestLocalActor.urls.actorId, accept.actor)
+            assertTrue(accept.result.orEmpty().startsWith("${noteUrls.noteUrl}/quote_authorizations/"))
+        }
     }
 
     @Test
-    fun `引用した投稿の id だけが入っていても承認する`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
+    fun `引用した投稿の id だけが入っていても承認する`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        assertEquals(InboxHandling.Handled, handle(approvals, quoteRequestJson(instrument = "\"$QUOTING_NOTE\"")))
+            assertEquals(InboxHandling.Handled, handle(approvals, quoteRequestJson(instrument = "\"$QUOTING_NOTE\"")))
+        }
     }
 
     @Test
-    fun `取得した引用元の投稿者が署名した相手と違えば、埋め込みで名乗っていても承認しない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
+    fun `取得した引用元の投稿者が署名した相手と違えば、埋め込みで名乗っていても承認しない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        val handling = handle(
-            approvals,
-            quoteRequestJson(),
-            remoteNotes = remoteNotesPostedBy("https://remote.example/users/bob"),
-        )
-
-        assertIs<InboxHandling.Ignored>(handling)
-        assertTrue(approvals.enqueued.isEmpty())
-    }
-
-    @Test
-    fun `引用元の投稿を取得できなければ承認しない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-
-        val handling = handle(
-            approvals,
-            quoteRequestJson(),
-            remoteNotes = { RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(QUOTING_NOTE, HttpStatusCodes.NOT_FOUND)) },
-        )
-
-        assertIs<InboxHandling.Ignored>(handling)
-        assertTrue(approvals.enqueued.isEmpty())
-    }
-
-    @Test
-    fun `引用元の投稿を一時的に取得できなければ送り直してもらう`() = runBlocking<Unit> {
-        assertFailsWith<IllegalStateException> {
-            handle(
-                FakeQuoteApprovals(),
+            val handling = handle(
+                approvals,
                 quoteRequestJson(),
-                remoteNotes = { RemoteNoteLookup.Unavailable(RemoteFetchFailure.Throttled(QUOTING_NOTE)) },
+                remoteNotes = remoteNotesPostedBy("https://remote.example/users/bob"),
             )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertTrue(approvals.enqueued.isEmpty())
         }
     }
 
     @Test
-    fun `引用した相手のアクター文書を一時的に取得できなければ送り直してもらう`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
+    fun `引用元の投稿を取得できなければ承認しない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        assertFailsWith<IllegalStateException> {
-            handle(approvals, quoteRequestJson(), remoteActorsFailingWith(RemoteFetchFailure.Throttled(TestRemoteActor.ACTOR_ID)))
+            val handling = handle(
+                approvals,
+                quoteRequestJson(),
+                remoteNotes = { RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(QUOTING_NOTE, HttpStatusCodes.NOT_FOUND)) },
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertTrue(approvals.enqueued.isEmpty())
         }
-        assertTrue(approvals.enqueued.isEmpty())
     }
 
     @Test
-    fun `引用した相手のサーバーが 429 や 5xx を返したら送り直してもらう`() = runBlocking {
-        listOf(HttpStatusCodes.TOO_MANY_REQUESTS, HttpStatusCodes.SERVICE_UNAVAILABLE).forEach { status ->
+    fun `引用元の投稿を一時的に取得できなければ送り直してもらう`() {
+        runBlocking {
             assertFailsWith<IllegalStateException> {
                 handle(
                     FakeQuoteApprovals(),
                     quoteRequestJson(),
-                    remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, status)),
+                    remoteNotes = { RemoteNoteLookup.Unavailable(RemoteFetchFailure.Throttled(QUOTING_NOTE)) },
                 )
             }
         }
     }
 
     @Test
-    fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() = runBlocking<Unit> {
-        val approvals = FakeQuoteApprovals()
+    fun `引用した相手のアクター文書を一時的に取得できなければ送り直してもらう`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        val handling = handle(
-            approvals,
-            quoteRequestJson(),
-            remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, HttpStatusCodes.NOT_FOUND)),
-        )
-
-        assertIs<InboxHandling.Ignored>(handling)
+            assertFailsWith<IllegalStateException> {
+                handle(approvals, quoteRequestJson(), remoteActorsFailingWith(RemoteFetchFailure.Throttled(TestRemoteActor.ACTOR_ID)))
+            }
+            assertTrue(approvals.enqueued.isEmpty())
+        }
     }
 
     @Test
-    fun `無い投稿への引用は承認しない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-
-        val handling = handle(approvals, quoteRequestJson(target = "https://${TestLocalActor.DOMAIN}/notes/missing"))
-
-        assertIs<InboxHandling.Ignored>(handling)
-        assertTrue(approvals.enqueued.isEmpty())
+    fun `引用した相手のサーバーが 429 や 5xx を返したら送り直してもらう`() {
+        runBlocking {
+            listOf(HttpStatusCodes.TOO_MANY_REQUESTS, HttpStatusCodes.SERVICE_UNAVAILABLE).forEach { status ->
+                assertFailsWith<IllegalStateException> {
+                    handle(
+                        FakeQuoteApprovals(),
+                        quoteRequestJson(),
+                        remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, status)),
+                    )
+                }
+            }
+        }
     }
 
     @Test
-    fun `受け付けない相手には承認を返さない`() = runBlocking<Unit> {
-        val approvals = FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID))
+    fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        assertIs<InboxHandling.Ignored>(handle(approvals, quoteRequestJson()))
+            val handling = handle(
+                approvals,
+                quoteRequestJson(),
+                remoteActorsFailingWith(RemoteFetchFailure.UnsuccessfulStatus(TestRemoteActor.ACTOR_ID, HttpStatusCodes.NOT_FOUND)),
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+        }
     }
 
     @Test
-    fun `Accept の result の URL から、引用の組を示す QuoteAuthorization を返す`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-        val authorizationUrl = acceptedAuthorizationUrl(approvals)
+    fun `無い投稿への引用は承認しない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
 
-        val response = getAuthorization(approvals, authorizationUrl.substringAfterLast('/'))
+            val handling = handle(approvals, quoteRequestJson(target = "https://${TestLocalActor.DOMAIN}/notes/missing"))
 
-        assertEquals(HttpStatusCodes.OK, response.status)
-        val json = AppJson.parseToJsonElement(response.body.decodeToString()).jsonObject
-        assertEquals(QuoteAuthorization.TYPE, json.getValue("type").jsonPrimitive.content)
-        assertEquals(authorizationUrl, json.getValue("id").jsonPrimitive.content)
-        assertEquals(TestLocalActor.urls.actorId, json.getValue("attributedTo").jsonPrimitive.content)
-        assertEquals(QUOTING_NOTE, json.getValue("interactingObject").jsonPrimitive.content)
-        assertEquals(noteUrls.noteUrl, json.getValue("interactionTarget").jsonPrimitive.content)
+            assertIs<InboxHandling.Ignored>(handling)
+            assertTrue(approvals.enqueued.isEmpty())
+        }
     }
 
     @Test
-    fun `書き換えた URL には承認を返さない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-        val (quoter, _, signature) = acceptedAuthorizationUrl(approvals).substringAfterLast('/').split('.')
-        val otherNote = Base64.getUrlEncoder().withoutPadding().encodeToString("https://remote.example/notes/other".toByteArray())
+    fun `受け付けない相手には承認を返さない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID))
 
-        val response = getAuthorization(approvals, "$quoter.$otherNote.$signature")
-
-        assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
+            assertIs<InboxHandling.Ignored>(handle(approvals, quoteRequestJson()))
+        }
     }
 
     @Test
-    fun `承認した後にブロックした相手には承認を返さない`() = runBlocking {
-        val token = acceptedAuthorizationUrl(FakeQuoteApprovals()).substringAfterLast('/')
+    fun `Accept の result の URL から、引用の組を示す QuoteAuthorization を返す`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
+            val authorizationUrl = acceptedAuthorizationUrl(approvals)
 
-        val response = getAuthorization(FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID)), token)
+            val response = getAuthorization(approvals, authorizationUrl.substringAfterLast('/'))
 
-        assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
+            assertEquals(HttpStatusCodes.OK, response.status)
+            val json = AppJson.parseToJsonElement(response.body.decodeToString()).jsonObject
+            assertEquals(QuoteAuthorization.TYPE, json.getValue("type").jsonPrimitive.content)
+            assertEquals(authorizationUrl, json.getValue("id").jsonPrimitive.content)
+            assertEquals(TestLocalActor.urls.actorId, json.getValue("attributedTo").jsonPrimitive.content)
+            assertEquals(QUOTING_NOTE, json.getValue("interactingObject").jsonPrimitive.content)
+            assertEquals(noteUrls.noteUrl, json.getValue("interactionTarget").jsonPrimitive.content)
+        }
     }
 
     @Test
-    fun `投稿が消えたら承認も返さない`() = runBlocking {
-        val approvals = FakeQuoteApprovals()
-        val token = acceptedAuthorizationUrl(approvals).substringAfterLast('/')
-        notes.delete(PublicNoteId(PUBLIC_ID))
+    fun `書き換えた URL には承認を返さない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
+            val (quoter, _, signature) = acceptedAuthorizationUrl(approvals).substringAfterLast('/').split('.')
+            val otherNote = Base64.getUrlEncoder().withoutPadding().encodeToString("https://remote.example/notes/other".toByteArray())
 
-        assertEquals(HttpStatusCodes.NOT_FOUND, getAuthorization(approvals, token).status)
+            val response = getAuthorization(approvals, "$quoter.$otherNote.$signature")
+
+            assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
+        }
+    }
+
+    @Test
+    fun `承認した後にブロックした相手には承認を返さない`() {
+        runBlocking {
+            val token = acceptedAuthorizationUrl(FakeQuoteApprovals()).substringAfterLast('/')
+
+            val response = getAuthorization(FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID)), token)
+
+            assertEquals(HttpStatusCodes.NOT_FOUND, response.status)
+        }
+    }
+
+    @Test
+    fun `投稿が消えたら承認も返さない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
+            val token = acceptedAuthorizationUrl(approvals).substringAfterLast('/')
+            notes.delete(PublicNoteId(PUBLIC_ID))
+
+            assertEquals(HttpStatusCodes.NOT_FOUND, getAuthorization(approvals, token).status)
+        }
     }
 
     private suspend fun acceptedAuthorizationUrl(approvals: FakeQuoteApprovals): String {

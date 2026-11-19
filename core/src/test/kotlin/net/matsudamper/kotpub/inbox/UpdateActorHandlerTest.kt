@@ -59,54 +59,60 @@ class UpdateActorHandlerTest {
         rows.single { it.followerActorUri == TestRemoteActor.ACTOR_ID }.profile
 
     @Test
-    fun `自分自身の Update で表示名とアイコンが入れ替わる`() = runBlocking {
-        val store = followers()
+    fun `自分自身の Update で表示名とアイコンが入れ替わる`() {
+        runBlocking {
+            val store = followers()
 
-        handle(
-            store,
-            """
+            handle(
+                store,
+                """
             {"id":"https://remote.example/activities/9","type":"Update",
              "actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"${TestRemoteActor.ACTOR_ID}","type":"Person",
                        "preferredUsername":"alice","name":"アリス（改名）",
                        "url":"https://remote.example/@alice",
                        "icon":{"type":"Image","url":"https://files.remote.example/new.png"}}}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertEquals("アリス（改名）", store.profile().displayName)
-        assertEquals("https://files.remote.example/new.png", store.profile().iconUrl)
+            assertEquals("アリス（改名）", store.profile().displayName)
+            assertEquals("https://files.remote.example/new.png", store.profile().iconUrl)
+        }
     }
 
     @Test
-    fun `投稿の Update では何もしない`() = runBlocking {
-        val store = followers()
+    fun `投稿の Update では何もしない`() {
+        runBlocking {
+            val store = followers()
 
-        handle(
-            store,
-            """
+            handle(
+                store,
+                """
             {"id":"https://remote.example/activities/9","type":"Update",
              "actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"https://remote.example/notes/1","type":"Note","name":"投稿の名前"}}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertEquals("アリス", store.profile().displayName)
+            assertEquals("アリス", store.profile().displayName)
+        }
     }
 
     @Test
-    fun `中身が埋め込まれていない Update では何もしない`() = runBlocking {
-        val store = followers()
+    fun `中身が埋め込まれていない Update では何もしない`() {
+        runBlocking {
+            val store = followers()
 
-        handle(
-            store,
-            """
+            handle(
+                store,
+                """
             {"id":"https://remote.example/activities/9","type":"Update",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"${TestRemoteActor.ACTOR_ID}"}
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
 
-        assertEquals("アリス", store.profile().displayName)
-        assertEquals("https://files.remote.example/old.png", store.profile().iconUrl)
+            assertEquals("アリス", store.profile().displayName)
+            assertEquals("https://files.remote.example/old.png", store.profile().iconUrl)
+        }
     }
 }
