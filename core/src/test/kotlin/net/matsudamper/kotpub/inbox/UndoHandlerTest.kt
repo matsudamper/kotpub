@@ -112,277 +112,305 @@ class UndoHandlerTest {
     }
 
     @Test
-    fun `object に Like が埋まっていればお気に入りを取り消す`() = runBlocking {
-        val followers = followers()
-        val favourites = favourites()
+    fun `object に Like が埋まっていればお気に入りを取り消す`() {
+        runBlocking {
+            val followers = followers()
+            val favourites = favourites()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$likeUri","type":"Like","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"$noteUrl"}}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites,
-        )
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites,
+            )
 
-        assertTrue(favourites.rows.isEmpty())
-        // フォローは巻き込まれない
-        assertEquals(1, followers.rows.size)
+            assertTrue(favourites.rows.isEmpty())
+            // フォローは巻き込まれない
+            assertEquals(1, followers.rows.size)
+        }
     }
 
     @Test
-    fun `object に絵文字付きの Like が埋まっていればスタンプを取り消す`() = runBlocking {
-        val favourites = favourites()
-        val stamps = stamps(emoji = "👍")
+    fun `object に絵文字付きの Like が埋まっていればスタンプを取り消す`() {
+        runBlocking {
+            val favourites = favourites()
+            val stamps = stamps(emoji = "👍")
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$likeUri","type":"Like","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"$noteUrl","content":"👍"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = favourites,
-            stamps = stamps,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites,
+                stamps = stamps,
+            )
 
-        assertTrue(stamps.rows.isEmpty())
-        assertEquals(1, favourites.rows.size)
+            assertTrue(stamps.rows.isEmpty())
+            assertEquals(1, favourites.rows.size)
+        }
     }
 
     @Test
-    fun `object に EmojiReact が埋まっていればスタンプを取り消す`() = runBlocking {
-        val stamps = stamps(emoji = "🎉")
+    fun `object に EmojiReact が埋まっていればスタンプを取り消す`() {
+        runBlocking {
+            val stamps = stamps(emoji = "🎉")
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"https://remote.example/reacts/1","type":"EmojiReact",
                        "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":"🎉"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = FakeFavouriteStore(),
-            stamps = stamps,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = FakeFavouriteStore(),
+                stamps = stamps,
+            )
 
-        assertTrue(stamps.rows.isEmpty())
+            assertTrue(stamps.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `押し替えた後に古いスタンプの取り消しが届いても今のスタンプは残す`() = runBlocking {
-        val stamps = stamps(emoji = "🎉")
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+    fun `押し替えた後に古いスタンプの取り消しが届いても今のスタンプは残す`() {
+        runBlocking {
+            val stamps = stamps(emoji = "🎉")
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$likeUri","type":"Like","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"$noteUrl","content":"👍"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = FakeFavouriteStore(),
-            stamps = stamps,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = FakeFavouriteStore(),
+                stamps = stamps,
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        assertEquals("🎉", stamps.rows.single().emoji)
-        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+            assertEquals("🎉", stamps.rows.single().emoji)
+            assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+        }
     }
 
     @Test
-    fun `元のアクティビティの id が無ければ投稿で取り消す`() = runBlocking {
-        val favourites = favourites()
+    fun `元のアクティビティの id が無ければ投稿で取り消す`() {
+        runBlocking {
+            val favourites = favourites()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"type":"Like","actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = favourites,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites,
+            )
 
-        assertTrue(favourites.rows.isEmpty())
+            assertTrue(favourites.rows.isEmpty())
+        }
     }
 
     @Test
-    fun `id だけの Undo ではお気に入りを取り消さず、後から届く同じ id の Like に備える`() = runBlocking {
-        val followers = followers()
-        val favourites = favourites()
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+    fun `id だけの Undo ではお気に入りを取り消さず、後から届く同じ id の Like に備える`() {
+        runBlocking {
+            val followers = followers()
+            val favourites = favourites()
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$likeUri"}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites,
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites,
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        // Mastodon と同じく、Like の id は記録していないので突き合わせられない
-        assertEquals(1, favourites.rows.size)
-        assertEquals(1, followers.rows.size)
-        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+            // Mastodon と同じく、Like の id は記録していないので突き合わせられない
+            assertEquals(1, favourites.rows.size)
+            assertEquals(1, followers.rows.size)
+            assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+        }
     }
 
     @Test
-    fun `記録に無い Like の取り消しは、後から届く同じ id の Like に備える`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+    fun `記録に無い Like の取り消しは、後から届く同じ id の Like に備える`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$likeUri","type":"Like","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"$noteUrl"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = FakeFavouriteStore(),
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = FakeFavouriteStore(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+            assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = likeUri, now = Instant.now()))
+        }
     }
 
     @Test
-    fun `フォローを解除した id だけの Undo は Like の取り消しとして覚えない`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+    fun `フォローを解除した id だけの Undo は Like の取り消しとして覚えない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$followUri"}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = favourites(),
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
 
-        assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = followUri, now = Instant.now()))
+            assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = followUri, now = Instant.now()))
+        }
     }
 
     @Test
-    fun `id だけの Undo はフォローの解除として扱う`() = runBlocking {
-        val followers = followers()
-        val favourites = favourites()
+    fun `id だけの Undo はフォローの解除として扱う`() {
+        runBlocking {
+            val followers = followers()
+            val favourites = favourites()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo",
              "actor":"${TestRemoteActor.ACTOR_ID}","object":"$followUri"}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites,
-        )
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites,
+            )
 
-        assertTrue(followers.rows.isEmpty())
-        assertEquals(1, favourites.rows.size)
+            assertTrue(followers.rows.isEmpty())
+            assertEquals(1, favourites.rows.size)
+        }
     }
 
     @Test
-    fun `object に Follow が埋まっていればフォローを解除する`() = runBlocking {
-        val followers = followers()
-        val favourites = favourites()
+    fun `object に Follow が埋まっていればフォローを解除する`() {
+        runBlocking {
+            val followers = followers()
+            val favourites = favourites()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$followUri","type":"Follow","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"${TestLocalActor.urls.actorId}"}}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites,
-        )
-
-        assertTrue(followers.rows.isEmpty())
-        assertEquals(1, favourites.rows.size)
-    }
-
-    @Test
-    fun `object に Announce が埋まっていればブーストを取り消す`() = runBlocking {
-        val followers = followers()
-        val boosts = boosts()
-
-        handle(
-            """
-            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
-             "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
-                       "object":"$noteUrl"}}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites(),
-            boosts = boosts,
-        )
-
-        assertTrue(boosts.rows.isEmpty())
-        assertEquals(1, followers.rows.size)
-    }
-
-    @Test
-    fun `id だけの Undo でも Announce の id ならブーストを取り消す`() = runBlocking {
-        val followers = followers()
-        val boosts = boosts()
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
-
-        handle(
-            """
-            {"id":"https://remote.example/undo/1","type":"Undo",
-             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
-            """.trimIndent(),
-            followers = followers,
-            favourites = favourites(),
-            earlyUndoneLikes = earlyUndoneLikes,
-            boosts = boosts,
-        )
-
-        assertTrue(boosts.rows.isEmpty())
-        assertEquals(1, followers.rows.size)
-        assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
-    }
-
-    @Test
-    fun `他人のブーストは取り消さない`() = runBlocking {
-        val boosts = FakeBoostStore().apply {
-            add(
-                ReceivedBoost(
-                    notePublicId = notePublicId,
-                    actor = TestRemoteActor.actor.copy(actorId = "https://remote.example/users/mallory"),
-                    activityUri = announceUri,
-                    receivedAt = now,
-                ),
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites,
             )
+
+            assertTrue(followers.rows.isEmpty())
+            assertEquals(1, favourites.rows.size)
         }
-
-        handle(
-            """
-            {"id":"https://remote.example/undo/1","type":"Undo",
-             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = favourites(),
-            boosts = boosts,
-        )
-
-        assertEquals(1, boosts.rows.size)
     }
 
     @Test
-    fun `記録に無い Announce の取り消しは、後から届く同じ id の Announce に備える`() = runBlocking {
-        val earlyUndoneLikes = FakeEarlyUndoneLikes()
+    fun `object に Announce が埋まっていればブーストを取り消す`() {
+        runBlocking {
+            val followers = followers()
+            val boosts = boosts()
 
-        handle(
-            """
+            handle(
+                """
             {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
              "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
                        "object":"$noteUrl"}}
-            """.trimIndent(),
-            followers = followers(),
-            favourites = favourites(),
-            earlyUndoneLikes = earlyUndoneLikes,
-        )
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites(),
+                boosts = boosts,
+            )
 
-        assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
+            assertTrue(boosts.rows.isEmpty())
+            assertEquals(1, followers.rows.size)
+        }
+    }
+
+    @Test
+    fun `id だけの Undo でも Announce の id ならブーストを取り消す`() {
+        runBlocking {
+            val followers = followers()
+            val boosts = boosts()
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
+                """.trimIndent(),
+                followers = followers,
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+                boosts = boosts,
+            )
+
+            assertTrue(boosts.rows.isEmpty())
+            assertEquals(1, followers.rows.size)
+            assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
+        }
+    }
+
+    @Test
+    fun `他人のブーストは取り消さない`() {
+        runBlocking {
+            val boosts = FakeBoostStore().apply {
+                add(
+                    ReceivedBoost(
+                        notePublicId = notePublicId,
+                        actor = TestRemoteActor.actor.copy(actorId = "https://remote.example/users/mallory"),
+                        activityUri = announceUri,
+                        receivedAt = now,
+                    ),
+                )
+            }
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$announceUri"}
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                boosts = boosts,
+            )
+
+            assertEquals(1, boosts.rows.size)
+        }
+    }
+
+    @Test
+    fun `記録に無い Announce の取り消しは、後から届く同じ id の Announce に備える`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
+             "object":{"id":"$announceUri","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
+                       "object":"$noteUrl"}}
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
+
+            assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
+        }
     }
 }
