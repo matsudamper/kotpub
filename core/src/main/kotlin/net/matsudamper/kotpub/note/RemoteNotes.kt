@@ -143,12 +143,13 @@ class HttpRemoteNotes(
         } catch (exception: Exception) {
             return RemoteDocumentFetch.Unavailable(RemoteFetchFailure.RequestFailed(url, exception))
         }
+        // status より先に見る。別のホストが返した 404 や 410 を、投稿が無いことの根拠にしない
+        if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) {
+            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.RedirectedToDisallowedUrl(url, response.finalUrl))
+        }
         if (response.status != 200) {
             val failure = RemoteFetchFailure.UnsuccessfulStatus(url, response.status)
             return if (isTemporaryFailure(response.status)) RemoteDocumentFetch.Unavailable(failure) else RemoteDocumentFetch.NotFound(failure)
-        }
-        if (HttpUrl.parseHttps(response.finalUrl)?.isSameHost(noteUrl) != true) {
-            return RemoteDocumentFetch.NotFound(RemoteFetchFailure.RedirectedToDisallowedUrl(url, response.finalUrl))
         }
         val body = when (val responseBody = response.body) {
             is ResponseBody.Read -> responseBody.bytes

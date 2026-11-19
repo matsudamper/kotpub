@@ -75,6 +75,13 @@ class HttpRemoteNotesTest {
     }
 
     @Test
+    fun `別のホストへ移った先の 404 は投稿の不存在として返さない`() = runBlocking<Unit> {
+        redirects[noteId] = "https://other.example/notes/1"
+
+        assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
+    }
+
+    @Test
     fun findByUrlRefetchesNoteFromItsIdWhenPageUrlDiffers() = runBlocking {
         val pageUrl = "https://remote.example/@alice/1"
         documents[pageUrl] = note(noteId, "https://remote.example/users/alice")
