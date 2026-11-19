@@ -13,6 +13,7 @@ import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.ActivityPubPostResponse
 import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.http.ResponseBody
+import net.matsudamper.kotpub.httpsignature.PublicKeyLookup
 
 class HttpRemoteActorsTest {
     @Test
@@ -68,6 +69,78 @@ class HttpRemoteActorsTest {
             val lookup = HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) }
             assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
         }
+    }
+
+    @Test
+    fun findActorByUrlReusesProfileUrlDocumentWithinRefreshInterval() {
+        runBlocking {
+            HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use {
+                assertEquals(VICTIM_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(VICTIM_PROFILE_URL)).actor.actorId)
+                assertEquals(VICTIM_ID, assertIs<RemoteActorLookup.Found>(it.findActorByUrl(VICTIM_PROFILE_URL)).actor.actorId)
+            }
+        }
+    }
+
+    @Test
+    fun rejectsKeyDocumentClaimingOwnerThatDoesNotListKeyId() {
+        runBlocking {
+            val lookup = HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = "$VICTIM_ID#main-key"), null).use { it.find(UPLOADED_KEY_ID) }
+            assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<PublicKeyLookup.Unavailable>(lookup).failure)
+        }
+    }
+
+    @Test
+    fun acceptsKeyDocumentWhoseOwnerListsKeyId() {
+        runBlocking {
+            val lookup = HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use { it.find(UPLOADED_KEY_ID) }
+            assertEquals(VICTIM_ID, assertIs<PublicKeyLookup.Found>(lookup).key.owner)
+        }
+    }
+
+    @Test
+    fun rejectsKeyDocumentWhoseIdDiffersFromKeyId() {
+        runBlocking {
+            val lookup = HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use { it.find("https://remote.example/media/other.json") }
+            assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<PublicKeyLookup.Unavailable>(lookup).failure)
+        }
+    }
+
+    /**
+     * [UPLOADED_KEY_ID] には持ち主を [VICTIM_ID] と名乗る鍵の文書を、[VICTIM_ID] と [VICTIM_PROFILE_URL] には [ownerListedKeyId] を載せたアクター文書を返す
+     */
+    private class KeyDocumentClient(
+        private val ownerListedKeyId: String,
+    ) : ActivityPubHttpClient {
+        private val publicKeyPem = RsaKeys.encodeToPem(RsaKeys.generateKeyPair().public)
+
+        override suspend fun get(url: String, headers: Map<String, String>, maxBodyBytes: Int, readsBody: (Int, String) -> Boolean): ActivityPubClientResponse {
+            val document =
+                if (url == VICTIM_ID || url == VICTIM_PROFILE_URL) {
+                    buildJsonObject {
+                        put("id", VICTIM_ID)
+                        put("inbox", "https://remote.example/inbox")
+                        putJsonObject("publicKey") {
+                            put("id", ownerListedKeyId)
+                            put("owner", VICTIM_ID)
+                            put("publicKeyPem", publicKeyPem)
+                        }
+                    }
+                } else {
+                    buildJsonObject {
+                        put("id", UPLOADED_KEY_ID)
+                        putJsonObject("publicKey") {
+                            put("id", UPLOADED_KEY_ID)
+                            put("owner", VICTIM_ID)
+                            put("publicKeyPem", publicKeyPem)
+                        }
+                    }
+                }
+            return ActivityPubClientResponse(200, url, ResponseBody.Read(document.toString().encodeToByteArray()))
+        }
+
+        override suspend fun post(url: String, headers: Map<String, String>, body: ByteArray): ActivityPubPostResponse = error("POST は不要")
+
+        override fun close() = Unit
     }
 
     private class RedirectingClient : ActivityPubHttpClient {
@@ -126,5 +199,11 @@ class HttpRemoteActorsTest {
             override fun close() = Unit
         }
         return HttpRemoteActors(client, null).use { it.findActor("https://remote.example/@alice") }
+    }
+
+    private companion object {
+        const val VICTIM_ID = "https://remote.example/users/victim"
+        const val VICTIM_PROFILE_URL = "https://remote.example/@victim"
+        const val UPLOADED_KEY_ID = "https://remote.example/media/key.json"
     }
 }
