@@ -32,6 +32,10 @@ import net.matsudamper.kotpub.json.AppJson
  *   他人のアクターの鍵だと偽れてしまう。[findActorByUrl] だけは、移った先から取得し直す
  * - 文書に書かれた `owner` と `inbox` は、取得先と同じホストであること。
  *   他所のホストのものだと言い張るものを信じない
+ * - 鍵の文書の `id` は取得先と一致すること。`owner` が文書自身でなければ、
+ *   `owner` のアクター文書の `publicKey.id` に `keyId` が載っていること。
+ *   同じホストでも任意の JSON を置ける場所（メディアの置き場など）はあり、
+ *   ホストだけでは他人の鍵だと偽る文書を区別できない
  * - 大きすぎる応答は読まない
  *
  * 取得結果は [ExpiringCache] を通してキャッシュし、TTL の間は GET しない。
@@ -73,7 +77,7 @@ class HttpRemoteActors(
     override suspend fun find(keyId: String): PublicKeyLookup {
         val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
-        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = true))
+        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = true), useCache = true)
     }
 
     /**
@@ -87,18 +91,20 @@ class HttpRemoteActors(
     override suspend fun refresh(keyId: String): PublicKeyLookup {
         val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
-        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = false))
+        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = false), useCache = false)
     }
 
     /**
      * 取得できた文書から検証に使う鍵を読む。
      *
      * @param requestUrl 取得先。文書に書かれた鍵の持ち主が、取得先と同じホストか確かめる
+     * @param useCache 持ち主のアクター文書を取得し直すときに、覚えているものを使うか
      */
-    private fun publicKeyOf(
+    private suspend fun publicKeyOf(
         keyId: String,
         requestUrl: HttpUrl,
         fetched: DocumentFetch,
+        useCache: Boolean,
     ): PublicKeyLookup {
         val document =
             when (fetched) {
@@ -116,14 +122,28 @@ class HttpRemoteActors(
         val publicKey = document.publicKey
             ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵が無い"))
 
-        val keyOwnerActorId = publicKey.owner ?: document.id
-            ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵の持ち主が無い"))
+        val keyDocumentId = keyId.substringBefore('#')
+        if (document.id != keyDocumentId) {
+            return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "文書の id が取得先と一致しない: ${document.id}"))
+        }
+
+        val keyOwnerActorId = publicKey.owner ?: keyDocumentId
         if (!isSameHost(keyOwnerActorId, requestUrl)) {
             return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵の持ち主が取得先と別のホスト: $keyOwnerActorId"))
         }
 
+        val ownerPublicKeyPem =
+            if (keyOwnerActorId == keyDocumentId) {
+                publicKey.publicKeyPem
+            } else {
+                when (val ownerLookup = ownerPublicKeyPem(keyId = keyId, ownerActorId = keyOwnerActorId, useCache = useCache)) {
+                    is OwnerPublicKey.Found -> ownerLookup.publicKeyPem
+                    is OwnerPublicKey.Rejected -> return ownerLookup.lookup
+                }
+            }
+
         val decodedPublicKey =
-            runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }
+            runCatching { RsaKeys.decodePublicKeyPem(ownerPublicKeyPem) }
                 .getOrElse { failure ->
                     return PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, "公開鍵を読めない", failure))
                 }
@@ -131,6 +151,39 @@ class HttpRemoteActors(
         return PublicKeyLookup.Found(
             SignatureKey(keyId = keyId, owner = keyOwnerActorId, publicKey = decodedPublicKey),
         )
+    }
+
+    /**
+     * 鍵の文書とは別の持ち主のアクター文書を取得し、その `publicKey.id` が [keyId] であることを確かめる。
+     *
+     * 鍵の文書が持ち主を名乗るだけでは信じない。持ち主の側が自分の鍵だと載せていることを確かめる。
+     * 使う鍵も持ち主の文書に載っているものにする
+     */
+    private suspend fun ownerPublicKeyPem(
+        keyId: String,
+        ownerActorId: String,
+        useCache: Boolean,
+    ): OwnerPublicKey {
+        fun invalid(detail: String) = OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(RemoteFetchFailure.InvalidDocument(keyId, detail)))
+
+        val ownerUrl = parseHttpsUrl(ownerActorId)
+            ?: return OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(ownerActorId)))
+        val ownerDocument =
+            when (val fetched = fetch(rawUrl = ownerActorId, requestUrl = ownerUrl, useCache = useCache)) {
+                is DocumentFetch.Found -> fetched.document
+                DocumentFetch.Gone -> return OwnerPublicKey.Rejected(PublicKeyLookup.Gone)
+                is DocumentFetch.RedirectedToOtherHost -> return OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(fetched.failure))
+                is DocumentFetch.Unavailable -> return OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(fetched.failure))
+            }
+
+        if (ownerDocument.id != ownerActorId) {
+            return invalid("公開鍵の持ち主の文書の id が持ち主と一致しない: ${ownerDocument.id}")
+        }
+        val ownerPublicKey = ownerDocument.publicKey ?: return invalid("公開鍵の持ち主の文書に公開鍵が無い")
+        if (ownerPublicKey.id != keyId) {
+            return invalid("公開鍵の持ち主の文書に keyId が載っていない: ${ownerPublicKey.id}")
+        }
+        return OwnerPublicKey.Found(ownerPublicKey.publicKeyPem)
     }
 
     /**
@@ -356,7 +409,7 @@ class HttpRemoteActors(
         // 使えると分かった文書だけを覚える。中身を見ずに入れ替えると、相手が 200 で
         // 空の JSON や他所のアクターの鍵を返した瞬間に、それまでの正しい文書を失う。
         // 再取得は通らない署名を投げ込むだけで起こせるので、外から狙える
-        if (!document.hasUsableKey(requestUrl)) {
+        if (!document.hasUsableKey(documentUrl = cacheKey, requestUrl = requestUrl)) {
             RemoteActorSpan.outcome("no_usable_key")
             return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Found(document)
         }
@@ -367,18 +420,22 @@ class HttpRemoteActors(
     }
 
     /**
-     * 覚える値打ちがあるか。検証に使える鍵が、取得先と同じホストの持ち主で入っていること。
+     * 覚える値打ちがあるか。文書の id が取得先と一致し、検証に使える鍵が、取得先と同じホストの持ち主で入っていること。
      *
-     * [publicKeyOf] と同じ条件で見る。読めない鍵の文書を覚えると、そこから先の
+     * [publicKeyOf] のうち、他の文書を取得せずに見られる条件で見る。読めない鍵の文書を覚えると、そこから先の
      * 検証は鍵が無いものとして落ち、[refresh] にも進まないまま期限まで拒み続ける。
      *
      * ここを通らない文書でも、呼び出し側は結果として受け取る。そこで落ちるのは
      * 同じ判断で、覚えるかどうかだけをここで決める
      */
-    private fun RemoteActorDocument.hasUsableKey(requestUrl: HttpUrl): Boolean {
+    private fun RemoteActorDocument.hasUsableKey(
+        documentUrl: String,
+        requestUrl: HttpUrl,
+    ): Boolean {
         val publicKey = publicKey ?: return false
+        if (id != documentUrl) return false
 
-        val keyOwnerActorId = publicKey.owner ?: id ?: return false
+        val keyOwnerActorId = publicKey.owner ?: id
         if (!isSameHost(keyOwnerActorId, requestUrl)) return false
 
         return runCatching { RsaKeys.decodePublicKeyPem(publicKey.publicKeyPem) }.isSuccess
@@ -407,6 +464,16 @@ class HttpRemoteActors(
         data class Unavailable(
             val failure: RemoteFetchFailure,
         ) : DocumentFetch
+    }
+
+    private sealed interface OwnerPublicKey {
+        data class Found(
+            val publicKeyPem: String,
+        ) : OwnerPublicKey
+
+        data class Rejected(
+            val lookup: PublicKeyLookup,
+        ) : OwnerPublicKey
     }
 
     private fun parseHttpsUrl(raw: String): HttpUrl? = HttpUrl.parseHttps(raw)
