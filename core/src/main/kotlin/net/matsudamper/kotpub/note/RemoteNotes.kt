@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.note
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.activitypub.ActivityPubContentTypes
 import net.matsudamper.kotpub.http.ActivityPubHttpClient
 import net.matsudamper.kotpub.http.HttpStatusCodes
@@ -116,7 +117,7 @@ class HttpRemoteNotes(
     }
 
     private fun verifiedDocument(noteId: String, noteUrl: HttpUrl, json: JsonObject): RemoteNoteDocumentLookup {
-        val note = ReceivedNoteJson.read(json)
+        val note = readNote(json)
         if (note == null) {
             return RemoteNoteDocumentLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿として読めない"))
         }
@@ -172,11 +173,24 @@ class HttpRemoteNotes(
         return RemoteDocumentFetch.Found(document)
     }
 
+    /**
+     * id の無い `Link` は `Create` の id を投稿の id にするので、その id から取得すると `Create` が返る。
+     * 中の `Link` は受信したときと同じく、id と投稿者を `Create` から補って読む
+     */
+    private fun readNote(json: JsonObject): ReceivedNote? {
+        val carriedLink = (json["object"] as? JsonObject)
+            ?.takeIf { (json["type"] as? JsonPrimitive)?.content == CREATE_TYPE && (it["type"] as? JsonPrimitive)?.content == LINK_TYPE }
+        if (carriedLink != null) return ReceivedNoteJson.read(carriedLink, json)
+        return ReceivedNoteJson.read(json)
+    }
+
     private fun isTemporaryFailure(status: Int): Boolean =
         status >= 500 || status == HttpStatusCodes.TOO_MANY_REQUESTS || status == HttpStatusCodes.REQUEST_TIMEOUT
 
     private companion object {
         const val MAX_BODY_BYTES = 1024 * 1024
+        const val CREATE_TYPE = "Create"
+        const val LINK_TYPE = "Link"
     }
 }
 
