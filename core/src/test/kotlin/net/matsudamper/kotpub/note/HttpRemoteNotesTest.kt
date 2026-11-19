@@ -44,7 +44,7 @@ class HttpRemoteNotesTest {
     }
 
     @Test
-    fun rejectsNoteClaimingAnotherIdOrAuthorOnAnotherHost() = runBlocking {
+    fun rejectsNoteClaimingAnotherIdOrAuthorOnAnotherHost() = runBlocking<Unit> {
         documents[noteId] = note("https://remote.example/notes/2", "https://remote.example/users/alice")
         assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
 
@@ -53,7 +53,7 @@ class HttpRemoteNotesTest {
     }
 
     @Test
-    fun distinguishesTemporaryFailureFromMissingNote() = runBlocking {
+    fun distinguishesTemporaryFailureFromMissingNote() = runBlocking<Unit> {
         assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
 
         statuses[noteId] = 503
@@ -64,7 +64,7 @@ class HttpRemoteNotesTest {
     }
 
     @Test
-    fun rejectsRedirectToAnotherHostAndPlainHttp() = runBlocking {
+    fun rejectsRedirectToAnotherHostAndPlainHttp() = runBlocking<Unit> {
         val otherUrl = "https://other.example/notes/1"
         redirects[noteId] = otherUrl
         documents[otherUrl] = note(noteId, "https://remote.example/users/alice")

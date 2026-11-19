@@ -171,7 +171,7 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `引用元の投稿を一時的に取得できなければ送り直してもらう`() = runBlocking {
+    fun `引用元の投稿を一時的に取得できなければ送り直してもらう`() = runBlocking<Unit> {
         assertFailsWith<IllegalStateException> {
             handle(
                 FakeQuoteApprovals(),
@@ -205,7 +205,7 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() = runBlocking {
+    fun `引用した相手のアクター文書を取得できない状態が続くものなら送り直させない`() = runBlocking<Unit> {
         val approvals = FakeQuoteApprovals()
 
         val handling = handle(
@@ -228,7 +228,7 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
-    fun `受け付けない相手には承認を返さない`() = runBlocking {
+    fun `受け付けない相手には承認を返さない`() = runBlocking<Unit> {
         val approvals = FakeQuoteApprovals(refusedActorIds = setOf(TestRemoteActor.ACTOR_ID))
 
         assertIs<InboxHandling.Ignored>(handle(approvals, quoteRequestJson()))

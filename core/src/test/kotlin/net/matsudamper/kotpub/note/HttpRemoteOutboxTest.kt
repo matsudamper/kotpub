@@ -300,7 +300,7 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
-    fun recentReturnsNotesReadBeforeNextPageBecameUnavailable() = runBlocking {
+    fun recentReturnsNotesReadBeforeNextPageBecameUnavailable() = runBlocking<Unit> {
         documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
         documents[outboxUrl] = """{"id":"$outboxUrl","orderedItems":[${note("newest", actorId, true)}],"next":"$outboxUrl?page=2"}"""
         val result = assertIs<RemoteOutboxResult.Found>(outbox.recent(actorId, 20))
@@ -327,7 +327,7 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
-    fun recentPageIsUnavailableWhenNextPageCannotBeRead() = runBlocking {
+    fun recentPageIsUnavailableWhenNextPageCannotBeRead() = runBlocking<Unit> {
         documents["$outboxUrl?page=1"] = """{"id":"$outboxUrl?page=1","orderedItems":[],"next":"$outboxUrl?page=2"}"""
         assertIs<RemoteFetchFailure.UnsuccessfulStatus>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, RemoteOutboxCursor("$outboxUrl?page=1", 0))).failure)
     }
@@ -349,7 +349,7 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
-    fun collectionsOfIsUnavailableWhenActorIdDiffers() = runBlocking {
+    fun collectionsOfIsUnavailableWhenActorIdDiffers() = runBlocking<Unit> {
         documents[actorId] = """{"id":"https://remote.example/users/mallory","outbox":"$outboxUrl"}"""
         assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteActorCollectionsLookup.Unavailable>(outbox.collectionsOf(actorId)).failure)
         assertIs<RemoteFetchFailure.InvalidDocument>(assertIs<RemoteOutboxPageResult.Unavailable>(outbox.recentPage(actorId, null)).failure)

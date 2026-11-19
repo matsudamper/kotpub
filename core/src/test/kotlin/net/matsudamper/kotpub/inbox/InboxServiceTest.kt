@@ -214,7 +214,7 @@ class InboxServiceTest {
 
     @Test
     fun `ハンドラが投げたら送り直してもらう`() =
-        runBlocking {
+        runBlocking<Unit> {
             val handler = object : InboxActivityHandler {
                 override val type: String = "Follow"
 

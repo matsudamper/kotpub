@@ -53,7 +53,7 @@ class HttpRemoteActorsTest {
     }
 
     @Test
-    fun findActorDoesNotFollowOtherHostRedirect() = runBlocking {
+    fun findActorDoesNotFollowOtherHostRedirect() = runBlocking<Unit> {
         val lookup = HttpRemoteActors(RedirectingClient(), null).use { it.findActor(RedirectingClient.PROFILE_URL) }
         assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteActorLookup.Unavailable>(lookup).failure)
     }

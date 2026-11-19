@@ -107,7 +107,7 @@ class RecordedFallbackPublicKeysTest {
 
     @Test
     fun `一時的に取得できなかっただけなら記録の鍵は使わない`() =
-        runBlocking {
+        runBlocking<Unit> {
             // 相手が鍵を替えた後にこの経路を通すと、失効した鍵で署名が通ってしまう
             val lookup =
                 RecordedFallbackPublicKeys(remote = TestRemoteActors(), followers = followers(), favourites = FakeFavouriteStore(), stamps = FakeStampStore(), boosts = FakeBoostStore())

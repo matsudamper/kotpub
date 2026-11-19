@@ -66,7 +66,7 @@ class HttpSignatureVerifierTest {
 
     @Test
     fun `Signature ヘッダが無ければ通らない`() =
-        runBlocking {
+        runBlocking<Unit> {
             val headers = signedHeaders().filterKeys { it != "Signature" }
 
             val result = verifier().verify(request(headers))
@@ -86,7 +86,7 @@ class HttpSignatureVerifierTest {
 
     @Test
     fun `パスを差し替えたら通らない`() =
-        runBlocking {
+        runBlocking<Unit> {
             val result = verifier().verify(request(signedHeaders(), requestTarget = "/users/other/inbox"))
 
             assertIs<HttpSignatureResult.Rejected>(result)
@@ -106,7 +106,7 @@ class HttpSignatureVerifierTest {
 
     @Test
     fun `相手の時計が少し進んでいても通る`() =
-        runBlocking {
+        runBlocking<Unit> {
             // 数分のずれで弾くと、NTP のずれだけでフォローが成立しなくなる
             val result = verifier().verify(request(signedHeaders(date = now.plus(Duration.ofMinutes(1)))))
 
@@ -127,7 +127,7 @@ class HttpSignatureVerifierTest {
 
     @Test
     fun `request-target が署名対象に入っていなければ通らない`() =
-        runBlocking {
+        runBlocking<Unit> {
             val headerNames = listOf("host", "date", "digest")
 
             val result = verifier().verify(request(signedHeaders(headerNames = headerNames)))
