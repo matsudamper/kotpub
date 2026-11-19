@@ -35,6 +35,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   publish:
@@ -53,6 +54,9 @@ jobs:
 
       - name: setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - uses: matsudamper/actions/gradle-remote-cache-credentials@b23e18acbc459f662854bf84ec879d3e63793193 # v1.3.0
+        continue-on-error: true
 
       - name: バージョンを決める
         env:
