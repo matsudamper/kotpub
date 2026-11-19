@@ -34,6 +34,16 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun `同じホストの別のアクターが保存済みの投稿 id で送った Create は保存しない`() = runBlocking {
+        val store = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+        val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+
+        receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = ""))
+
+        assertTrue(store.saved.isEmpty())
+    }
+
+    @Test
     fun visibilityUsesToBeforeCcAndKeepsPrivateRecipients() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
@@ -342,8 +352,12 @@ class CreateNoteHandlerTest {
     private fun note(author: String, id: String, to: String, cc: String, attachment: String): String =
         """{"type":"Note","id":"$id","attributedTo":"$author","content":"<p>hello</p>","to":["$to"],"cc":["$cc"],"attachment":$attachment}"""
 
-    private class RecordingNotes : RemoteNoteStore {
+    private class RecordingNotes(
+        private val savedAuthors: Map<String, String> = mapOf(),
+    ) : RemoteNoteStore {
         val saved = mutableListOf<ReceivedNote>()
+
+        override suspend fun findAttributedTo(noteId: String): String? = savedAuthors[noteId]
 
         override suspend fun save(note: ReceivedNote) {
             saved.add(note)

@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.inbox
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -19,6 +20,7 @@ class DeleteHandlerTest {
     fun deleteRoutesActorsAndOnlyAcceptsNotesFromTheSameHost() = runBlocking {
         val deleted = mutableListOf<String>()
         val notes = object : RemoteNoteStore {
+            override suspend fun findAttributedTo(noteId: String): String? = null
             override suspend fun save(note: ReceivedNote) = Unit
             override suspend fun update(note: ReceivedNote) = Unit
             override suspend fun delete(actorId: String, objectId: String) {
@@ -43,6 +45,30 @@ class DeleteHandlerTest {
             ),
             deleted,
         )
+    }
+
+    @Test
+    fun `同じホストの別のアクターの投稿を消す Delete は渡さない`() = runBlocking {
+        val deleted = mutableListOf<String>()
+        val notes = object : RemoteNoteStore {
+            override suspend fun findAttributedTo(noteId: String): String? = "https://remote.example/other"
+            override suspend fun save(note: ReceivedNote) = Unit
+            override suspend fun update(note: ReceivedNote) = Unit
+            override suspend fun delete(actorId: String, objectId: String) {
+                deleted.add(objectId)
+            }
+        }
+        val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes)
+
+        val handling = handler.handle(
+            InboxRecipient.Shared,
+            ACTOR,
+            InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link("https://remote.example/notes/1")),
+            JsonObject(mapOf()),
+        )
+
+        assertTrue(handling is InboxHandling.Ignored)
+        assertTrue(deleted.isEmpty())
     }
 
     private companion object {

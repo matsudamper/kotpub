@@ -5,6 +5,15 @@ import java.util.Locale
 import net.matsudamper.kotpub.emoji.CustomEmoji
 
 interface RemoteNoteStore {
+    /**
+     * 保存済みの投稿の [ReceivedNote.attributedTo]。保存していなければ null。
+     *
+     * 受け取った側は、届いた投稿の投稿者が署名者と一致することまでしか確かめられない。
+     * 同じホストの別のアクターが他人の投稿 id で Create・Update・Delete を送ると、それも通ってしまう。
+     * 保存済みの投稿者と突き合わせて、他人の投稿の上書きと削除を防ぐ
+     */
+    suspend fun findAttributedTo(noteId: String): String?
+
     suspend fun save(note: ReceivedNote)
 
     /**

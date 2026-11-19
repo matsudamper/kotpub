@@ -32,6 +32,17 @@ class UpdateHandlerTest {
     }
 
     @Test
+    fun `同じホストの別のアクターの投稿を書き換える Update は渡さない`() = runBlocking {
+        val notes = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> })
+
+        val handling = receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
+
+        assertTrue(handling is InboxHandling.Ignored)
+        assertTrue(notes.updated.isEmpty())
+    }
+
+    @Test
     fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() = runBlocking {
         val notes = RecordingNotes()
         val recorded = mutableListOf<Pair<List<String>, String>>()
@@ -86,8 +97,12 @@ class UpdateHandlerTest {
     private fun note(author: String, id: String): String =
         """{"type":"Note","id":"$id","attributedTo":"$author","content":"<p>edited</p>","to":["$PUBLIC"],"updated":"2026-08-10T01:00:00Z"}"""
 
-    private class RecordingNotes : RemoteNoteStore {
+    private class RecordingNotes(
+        private val savedAuthors: Map<String, String> = mapOf(),
+    ) : RemoteNoteStore {
         val updated = mutableListOf<ReceivedNote>()
+
+        override suspend fun findAttributedTo(noteId: String): String? = savedAuthors[noteId]
 
         override suspend fun save(note: ReceivedNote) = Unit
 

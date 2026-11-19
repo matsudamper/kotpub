@@ -40,6 +40,8 @@ class CreateNoteHandler(
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Create の actor を URL として読めない: $actor")
         val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
         if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
+        val savedAuthor = notes.findAttributedTo(note.id)
+        if (savedAuthor != null && savedAuthor != actor) return InboxHandling.Ignored("保存済みの投稿の投稿者が署名者と違う: ${note.id} 投稿者=$savedAuthor 署名者=$actor")
         notes.save(note)
         if (note.unknownTypes.isNotEmpty()) unknownTypes.record(note.unknownTypes, note.id)
         return InboxHandling.Handled
