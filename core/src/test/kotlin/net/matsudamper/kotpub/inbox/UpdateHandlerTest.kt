@@ -19,93 +19,107 @@ import net.matsudamper.kotpub.note.UnknownTypeStore
 
 class UpdateHandlerTest {
     @Test
-    fun `編集された投稿は署名者と同じホストの署名者の投稿だけを渡す`() = runBlocking {
-        val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
-        receive(handler, """"https://remote.example/notes/1"""")
-        receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
-        receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
-        receive(handler, """{"id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>no type</p>"}""")
-        assertTrue(notes.updated.isEmpty())
+    fun `編集された投稿は署名者と同じホストの署名者の投稿だけを渡す`() {
+        runBlocking {
+            val notes = RecordingNotes()
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+            receive(handler, """"https://remote.example/notes/1"""")
+            receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1"))
+            receive(handler, note(author = ACTOR, id = "https://other.example/notes/1"))
+            receive(handler, """{"id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>no type</p>"}""")
+            assertTrue(notes.updated.isEmpty())
 
-        receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
+            receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1"))
 
-        val updated = notes.updated.single()
-        assertEquals("<p>edited</p>", updated.content)
-        assertEquals(Instant.parse("2026-08-10T01:00:00Z"), updated.updated)
+            val updated = notes.updated.single()
+            assertEquals("<p>edited</p>", updated.content)
+            assertEquals(Instant.parse("2026-08-10T01:00:00Z"), updated.updated)
+        }
     }
 
     @Test
-    fun `保存済みの投稿者と違う Update は投稿のあるサーバーの投稿者で判断する`() = runBlocking {
-        val notes = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
-        val edited = note(author = ACTOR, id = "https://remote.example/notes/1")
+    fun `保存済みの投稿者と違う Update は投稿のあるサーバーの投稿者で判断する`() {
+        runBlocking {
+            val notes = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+            val edited = note(author = ACTOR, id = "https://remote.example/notes/1")
 
-        receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy("https://remote.example/other")), edited)
-        assertTrue(notes.updated.isEmpty())
+            receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy("https://remote.example/other")), edited)
+            assertTrue(notes.updated.isEmpty())
 
-        receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy(ACTOR)), edited)
-        assertEquals(ACTOR, notes.updated.single().attributedTo)
+            receive(UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, originAuthoredBy(ACTOR)), edited)
+            assertEquals(ACTOR, notes.updated.single().attributedTo)
+        }
     }
 
     @Test
-    fun `判断した後に保存済みの投稿者が書き換わったら編集を渡さず送り直させる`() = runBlocking {
-        val notes = RecordingNotes(
-            savedAuthors = mapOf("https://remote.example/notes/1" to ACTOR),
-            authorsAtWrite = mapOf("https://remote.example/notes/1" to "https://remote.example/other"),
-        )
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+    fun `判断した後に保存済みの投稿者が書き換わったら編集を渡さず送り直させる`() {
+        runBlocking {
+            val notes = RecordingNotes(
+                savedAuthors = mapOf("https://remote.example/notes/1" to ACTOR),
+                authorsAtWrite = mapOf("https://remote.example/notes/1" to "https://remote.example/other"),
+            )
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
 
-        val received = runCatching { receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1")) }
+            val received = runCatching { receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1")) }
 
-        assertTrue(received.isFailure)
-        assertTrue(notes.updated.isEmpty())
+            assertTrue(received.isFailure)
+            assertTrue(notes.updated.isEmpty())
+        }
     }
 
     @Test
-    fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() = runBlocking {
-        val notes = RecordingNotes()
-        val recorded = mutableListOf<Pair<List<String>, String>>()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { types, sourceUrl -> recorded.add(types to sourceUrl) }, NOT_FOUND_ORIGIN)
+    fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() {
+        runBlocking {
+            val notes = RecordingNotes()
+            val recorded = mutableListOf<Pair<List<String>, String>>()
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { types, sourceUrl -> recorded.add(types to sourceUrl) }, NOT_FOUND_ORIGIN)
 
-        receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
+            receive(handler, """{"type":"Article","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>article</p>"}""")
 
-        assertTrue(notes.updated.isEmpty())
-        assertEquals(listOf(listOf("Article") to "https://remote.example/notes/1"), recorded)
+            assertTrue(notes.updated.isEmpty())
+            assertEquals(listOf(listOf("Article") to "https://remote.example/notes/1"), recorded)
+        }
     }
 
     @Test
-    fun `id の無い Link の Update は Update の id を投稿の id にしない`() = runBlocking {
-        val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
-        val raw = AppJson.parseToJsonElement(
-            """{"id":"https://remote.example/activities/2","type":"Update","actor":"$ACTOR","object":{"type":"Link","href":"https://example.com/"}}""",
-        ).jsonObject
+    fun `id の無い Link の Update は Update の id を投稿の id にしない`() {
+        runBlocking {
+            val notes = RecordingNotes()
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+            val raw = AppJson.parseToJsonElement(
+                """{"id":"https://remote.example/activities/2","type":"Update","actor":"$ACTOR","object":{"type":"Link","href":"https://example.com/"}}""",
+            ).jsonObject
 
-        handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
+            handler.handle(InboxRecipient.Shared, ACTOR, AppJson.decodeFromJsonElement(InboxActivity.serializer(), raw), raw)
 
-        assertTrue(notes.updated.isEmpty())
+            assertTrue(notes.updated.isEmpty())
+        }
     }
 
     @Test
-    fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() = runBlocking {
-        val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
-        val options = """[{"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":2}}]"""
+    fun `投票の票数が変わった Question の Update も投稿の編集として渡す`() {
+        runBlocking {
+            val notes = RecordingNotes()
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+            val options = """[{"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":2}}]"""
 
-        receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>","oneOf":$options}""")
+            receive(handler, """{"type":"Question","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>poll</p>","oneOf":$options}""")
 
-        assertEquals(listOf(2), notes.updated.single().poll?.options?.map { it.votesCount })
+            assertEquals(listOf(2), notes.updated.single().poll?.options?.map { it.votesCount })
+        }
     }
 
     @Test
-    fun `送り主自身の Update はプロフィールの編集として扱う`() = runBlocking {
-        val notes = RecordingNotes()
-        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+    fun `送り主自身の Update はプロフィールの編集として扱う`() {
+        runBlocking {
+            val notes = RecordingNotes()
+            val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
 
-        val handling = receive(handler, """{"id":"$ACTOR","type":"Person","preferredUsername":"alice","name":"アリス（改名）"}""")
+            val handling = receive(handler, """{"id":"$ACTOR","type":"Person","preferredUsername":"alice","name":"アリス（改名）"}""")
 
-        assertEquals(InboxHandling.Handled, handling)
-        assertTrue(notes.updated.isEmpty())
+            assertEquals(InboxHandling.Handled, handling)
+            assertTrue(notes.updated.isEmpty())
+        }
     }
 
     private suspend fun receive(handler: UpdateHandler, target: String): InboxHandling {
