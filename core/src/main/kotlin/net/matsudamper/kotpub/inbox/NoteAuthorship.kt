@@ -22,8 +22,11 @@ internal class NoteAuthorship(
         actorId: String,
     ): Boolean {
         if (isSavedBy(noteId, actorId)) return true
-        val lookup = remoteNotes.find(noteId)
-        return lookup is RemoteNoteLookup.Found && lookup.note.attributedTo == actorId
+        return when (val lookup = remoteNotes.find(noteId)) {
+            is RemoteNoteLookup.Found -> lookup.note.attributedTo == actorId
+            is RemoteNoteLookup.NotFound -> false
+            is RemoteNoteLookup.Unavailable -> throw temporarilyUnavailable(noteId, lookup)
+        }
     }
 
     /**
@@ -38,9 +41,17 @@ internal class NoteAuthorship(
         return when (val lookup = remoteNotes.find(noteId)) {
             is RemoteNoteLookup.Found -> lookup.note.attributedTo == actorId
             is RemoteNoteLookup.NotFound -> true
-            is RemoteNoteLookup.Unavailable -> false
+            is RemoteNoteLookup.Unavailable -> throw temporarilyUnavailable(noteId, lookup)
         }
     }
+
+    /**
+     * 捨てると相手は送り直さず、偽の投稿が残る。投げて inbox から送り直してもらう
+     */
+    private fun temporarilyUnavailable(
+        noteId: String,
+        lookup: RemoteNoteLookup.Unavailable,
+    ): IllegalStateException = IllegalStateException("投稿者を確かめる投稿を今は取得できない: $noteId 理由=${lookup.failure}")
 
     private suspend fun isSavedBy(
         noteId: String,

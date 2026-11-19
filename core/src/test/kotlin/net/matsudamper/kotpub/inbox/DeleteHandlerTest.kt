@@ -51,7 +51,7 @@ class DeleteHandlerTest {
     }
 
     @Test
-    fun `保存済みの投稿者と違う Delete は投稿のあるサーバーが投稿者を示すか投稿を返さないときだけ渡す`() = runBlocking {
+    fun `保存済みの投稿者と違う Delete は投稿のあるサーバーが投稿者を示すか投稿を返さないときだけ渡し、取得できなければ送り直させる`() = runBlocking {
         val noteId = "https://remote.example/notes/1"
         val otherAuthor = "https://remote.example/other"
         val authoredByOther = RemoteNotes { RemoteNoteLookup.Found(receivedNote(id = it, author = otherAuthor)) }
@@ -69,16 +69,21 @@ class DeleteHandlerTest {
                 }
             }
             val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes, origin)
-            handler.handle(
-                InboxRecipient.Shared,
-                ACTOR,
-                InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(noteId)),
-                JsonObject(mapOf()),
-            )
-            deleted.toList()
+            val handled = runCatching {
+                handler.handle(
+                    InboxRecipient.Shared,
+                    ACTOR,
+                    InboxActivity(type = "Delete", actor = LinkOrObject.Link(ACTOR), target = LinkOrObject.Link(noteId)),
+                    JsonObject(mapOf()),
+                )
+            }
+            handled.isFailure to deleted.toList()
         }
 
-        assertEquals(listOf(listOf(), listOf(), listOf(noteId), listOf(noteId)), deletedByOrigin)
+        assertEquals(
+            listOf(false to listOf(), true to listOf(), false to listOf(noteId), false to listOf(noteId)),
+            deletedByOrigin,
+        )
     }
 
     private fun receivedNote(id: String, author: String): ReceivedNote =
