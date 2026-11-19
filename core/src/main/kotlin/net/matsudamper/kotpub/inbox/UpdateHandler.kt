@@ -7,6 +7,7 @@ import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.http.HttpUrl
 import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.UnknownTypeStore
 
 /**
  * `Update` はプロフィールの編集にも投稿の編集にも使われるので、`object` が何なのかで
@@ -16,10 +17,12 @@ import net.matsudamper.kotpub.note.RemoteNoteStore
  * 投稿は取得せずに `object` の中身を読む。相手のサーバーのキャッシュが残っていると
  * 編集前のものが返ってくるため。ここに届くのは署名を検証できたものだけなので、
  * 署名者と同じホストにある署名者の投稿は、その相手が書いたものとして扱える。
+ * 読み方を知らない型は投稿として受け取らず、[unknownTypes] に記録する
  */
 class UpdateHandler(
     private val actors: UpdateActorHandler,
     private val notes: RemoteNoteStore,
+    private val unknownTypes: UnknownTypeStore,
 ) : InboxActivityHandler {
     override val type: String = "Update"
 
@@ -35,9 +38,9 @@ class UpdateHandler(
         }
         val json = (target as? LinkOrObject.Embedded)?.json
             ?: return InboxHandling.Ignored("Update に中身が埋め込まれていない: $verifiedSignerActorId")
-        val note = ReceivedNoteJson.read(json, rawActivityJson)
-            ?: return InboxHandling.Ignored("Update の object を投稿として読めない: $verifiedSignerActorId")
         val actor = activity.actorId ?: return InboxHandling.Ignored("Update に actor が無い: $verifiedSignerActorId")
+        val note = ReceivedNoteJson.read(json, rawActivityJson)
+            ?: return unknownTypes.recordIfUnknownObject(json, rawActivityJson, actor, verifiedSignerActorId, activityType = type)
         if (actor != verifiedSignerActorId || note.attributedTo != actor) {
             return InboxHandling.Ignored("Update の actor か投稿者が署名者と違う: actor=$actor 投稿者=${note.attributedTo} 署名者=$verifiedSignerActorId")
         }
@@ -45,6 +48,7 @@ class UpdateHandler(
         val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
         if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
         notes.update(note)
+        if (note.unknownTypes.isNotEmpty()) unknownTypes.record(note.unknownTypes, note.id)
         return InboxHandling.Handled
     }
 }

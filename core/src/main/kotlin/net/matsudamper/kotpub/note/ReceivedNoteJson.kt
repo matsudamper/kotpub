@@ -19,11 +19,8 @@ import net.matsudamper.kotpub.http.HttpUrl
  */
 internal object ReceivedNoteJson {
     fun read(note: JsonObject): ReceivedNote? {
-        val linkHref = when (note["type"].string()) {
-            in NOTE_TYPES -> null
-            LINK_TYPE -> note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null
-            else -> return null
-        }
+        val type = note["type"].string()?.takeIf { it in KNOWN_OBJECT_TYPES } ?: return null
+        val linkHref = if (type == LINK_TYPE) note["href"].string()?.takeIf { it.isHttpUrl() } ?: return null else null
         val id = note["id"].string() ?: return null
         val attributedTo = note["attributedTo"].string() ?: return null
         val to = note["to"].strings()
@@ -32,7 +29,7 @@ internal object ReceivedNoteJson {
         return ReceivedNote(
             id = id,
             attributedTo = attributedTo,
-            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: if (linkHref == null) return null else "",
+            content = note["content"].string() ?: contentMap?.values?.firstOrNull().string() ?: if (type in NOTE_TYPES) return null else "",
             language = contentMap?.keys?.firstOrNull()?.let { languageOrNull(it) },
             published = note["published"].instant(),
             updated = note["updated"].instant(),
@@ -48,6 +45,7 @@ internal object ReceivedNoteJson {
             mentions = note["tag"].mentions(),
             poll = note.poll(),
             linkHref = linkHref,
+            unknownTypes = note.unknownAttachmentAndTagTypes(),
         )
     }
 
@@ -67,13 +65,23 @@ internal object ReceivedNoteJson {
     }
 
     /**
+     * 投稿として読まない、知らない型の object。知っている型か、出どころの URL が無ければ null
+     */
+    fun readUnknownObject(obj: JsonObject, activity: JsonObject): UnknownObject? {
+        val types = obj["type"].strings().filterNot { it in KNOWN_OBJECT_TYPES }.distinct()
+        if (types.isEmpty()) return null
+        val sourceUrl = obj["id"].string() ?: activity["id"].string() ?: return null
+        return UnknownObject(types = types, sourceUrl = sourceUrl)
+    }
+
+    /**
      * `Link` は投稿者や宛先を持たない型なので、無いものは包んでいるアクティビティから補う。
-     * `Note` はアクティビティを見ずに [read] と同じに読む。
+     * `Note` と `Question` はアクティビティを見ずに [read] と同じに読む。
      *
      * id は `Create` のときだけ補う。`Update` の id は作ったときの `Create` の id と違い、保存した投稿を指せない
      */
     fun read(note: JsonObject, activity: JsonObject): ReceivedNote? {
-        if (note["type"].string() != LINK_TYPE) return read(note)
+        if (note["type"].string() in NOTE_TYPES) return read(note)
         val inherited = buildMap {
             ACTIVITY_KEYS_FOR_LINK.forEach { (activityKey, noteKey) ->
                 activity[activityKey]?.let { put(noteKey, it) }
@@ -154,6 +162,19 @@ internal object ReceivedNoteJson {
 
     private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
 
+    private fun JsonObject.unknownAttachmentAndTagTypes(): List<String> = buildList {
+        addAll(this@unknownAttachmentAndTagTypes["attachment"].types().filterNot { it in KNOWN_ATTACHMENT_TYPES })
+        addAll(this@unknownAttachmentAndTagTypes["tag"].types().filterNot { it in KNOWN_TAG_TYPES })
+    }.distinct()
+
+    private fun JsonElement?.types(): List<String> {
+        val elements = when (this) {
+            is JsonArray -> this
+            else -> listOfNotNull(this)
+        }
+        return elements.filterIsInstance<JsonObject>().flatMap { it["type"].strings() }
+    }
+
     private fun JsonElement?.mentions(): List<String> {
         val tags = when (this) {
             is JsonArray -> this
@@ -214,6 +235,12 @@ internal object ReceivedNoteJson {
 
     private const val CREATE_TYPE = "Create"
 
+    private val KNOWN_OBJECT_TYPES = NOTE_TYPES + LINK_TYPE
+
+    private val KNOWN_ATTACHMENT_TYPES = setOf("Document", "Image", "Video", "Audio")
+
+    private val KNOWN_TAG_TYPES = setOf(MENTION_TYPE, "Emoji", "Hashtag")
+
     private val ACTIVITY_KEYS_FOR_LINK = listOf(
         "to" to "to",
         "cc" to "cc",
@@ -224,3 +251,12 @@ internal object ReceivedNoteJson {
 
     private const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 }
+
+/**
+ * @param types 読み方を知らない `type` の名前。重複は除いてある
+ * @param sourceUrl object の id。無ければ包んでいるアクティビティの id
+ */
+internal class UnknownObject(
+    val types: List<String>,
+    val sourceUrl: String,
+)

@@ -53,6 +53,10 @@ data class ReceivedNote(
      * `type` が `Link` で届いた投稿のリンク先。`Note` と `Question` なら null
      */
     val linkHref: String?,
+    /**
+     * 添付・タグのうち、このライブラリが読み方を知らない `type` の名前。重複は除く
+     */
+    val unknownTypes: List<String>,
 )
 
 /**
