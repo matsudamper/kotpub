@@ -134,7 +134,7 @@ class SignedFetchActivityPubHttpClientTest {
         val sent = URI(request.url)
         val requestTarget = if (sent.rawQuery == null) sent.rawPath else "${sent.rawPath}?${sent.rawQuery}"
         val verification = runBlocking {
-            HttpSignatureVerifier(remoteActors).verify(
+            HttpSignatureVerifier(remoteActors, sent.rawAuthority).verify(
                 SignedRequest(
                     method = "GET",
                     requestTarget = requestTarget,

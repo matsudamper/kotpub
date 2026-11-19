@@ -64,7 +64,7 @@ class KtorActivityPubHttpClientTest {
                     post("/users/alice/inbox") {
                         val body = call.receive<ByteArray>()
                         received =
-                            HttpSignatureVerifier(remoteActors).verify(
+                            HttpSignatureVerifier(remoteActors, "127.0.0.1:${call.request.local.localPort}").verify(
                                 SignedRequest(
                                     method = call.request.httpMethod.value,
                                     requestTarget = call.request.uri,

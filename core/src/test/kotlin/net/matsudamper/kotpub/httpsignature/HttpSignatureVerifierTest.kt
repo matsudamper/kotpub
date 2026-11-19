@@ -26,7 +26,8 @@ class HttpSignatureVerifierTest {
     private fun verifier(
         publicKeys: PublicKeys = TestRemoteActor.remoteActors(),
         at: Instant = now,
-    ) = HttpSignatureVerifier(publicKeys, Clock.fixed(at, ZoneOffset.UTC))
+        domain: String = host,
+    ) = HttpSignatureVerifier(publicKeys, domain, Clock.fixed(at, ZoneOffset.UTC))
 
     private fun request(
         headers: Map<String, String>,
@@ -93,6 +94,26 @@ class HttpSignatureVerifierTest {
             val result = verifier().verify(request(signedHeaders(), requestTarget = "/users/other/inbox"))
 
             assertIs<HttpSignatureResult.Rejected>(result)
+        }
+    }
+
+    @Test
+    fun `他のサーバー宛てに署名されたリクエストは通らない`() {
+        runBlocking {
+            // 署名自体は正しいので、Host を見ないと他のサーバー宛てのものを投げ直されて通る
+            val result = verifier(domain = "other.example").verify(request(signedHeaders()))
+
+            val rejected = assertIs<HttpSignatureResult.Rejected>(result)
+            assertTrue(rejected.reason.contains("Host"))
+        }
+    }
+
+    @Test
+    fun `Host の大文字小文字が違っても自サーバー宛てなら通る`() {
+        runBlocking {
+            val result = verifier(domain = host.uppercase()).verify(request(signedHeaders()))
+
+            assertIs<HttpSignatureResult.Verified>(result)
         }
     }
 
