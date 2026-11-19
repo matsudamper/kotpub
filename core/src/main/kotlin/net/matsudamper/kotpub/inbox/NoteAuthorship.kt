@@ -1,5 +1,7 @@
 package net.matsudamper.kotpub.inbox
 
+import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNoteStore
 import net.matsudamper.kotpub.note.RemoteNotes
@@ -30,8 +32,10 @@ internal class NoteAuthorship(
     }
 
     /**
-     * 投稿のあるサーバーが投稿を返さないなら、保存してあるものは消えた投稿の写しなので、誰の Delete でも消してよい。
-     * 消さないと、偽の Create が先に届いた投稿を本来の投稿者が消せない
+     * 投稿のあるサーバーが投稿は無いと答えたなら、保存してあるものは消えた投稿の写しなので、誰の Delete でも消してよい。
+     * 消さないと、偽の Create が先に届いた投稿を本来の投稿者が消せない。
+     *
+     * 無いと言えるのは 404・410 だけ。401・403 や読めない文書は、投稿が残っていても返ってくるので消す根拠にならない
      */
     suspend fun canDelete(
         noteId: String,
@@ -40,10 +44,13 @@ internal class NoteAuthorship(
         if (isSavedBy(noteId, actorId)) return true
         return when (val lookup = remoteNotes.find(noteId)) {
             is RemoteNoteLookup.Found -> lookup.note.attributedTo == actorId
-            is RemoteNoteLookup.NotFound -> true
+            is RemoteNoteLookup.NotFound -> lookup.failure.isAbsent()
             is RemoteNoteLookup.Unavailable -> throw temporarilyUnavailable(noteId, lookup)
         }
     }
+
+    private fun RemoteFetchFailure.isAbsent(): Boolean =
+        this is RemoteFetchFailure.UnsuccessfulStatus && (status == HttpStatusCodes.NOT_FOUND || status == HttpStatusCodes.GONE)
 
     /**
      * 捨てると相手は送り直さず、偽の投稿が残る。投げて inbox から送り直してもらう

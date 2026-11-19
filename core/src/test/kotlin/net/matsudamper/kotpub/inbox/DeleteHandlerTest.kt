@@ -51,14 +51,16 @@ class DeleteHandlerTest {
     }
 
     @Test
-    fun `保存済みの投稿者と違う Delete は投稿のあるサーバーが投稿者を示すか投稿を返さないときだけ渡し、取得できなければ送り直させる`() = runBlocking {
+    fun `保存済みの投稿者と違う Delete は投稿のあるサーバーが投稿者を示すか投稿は無いと答えたときだけ渡し、取得できなければ送り直させる`() = runBlocking {
         val noteId = "https://remote.example/notes/1"
         val otherAuthor = "https://remote.example/other"
         val authoredByOther = RemoteNotes { RemoteNoteLookup.Found(receivedNote(id = it, author = otherAuthor)) }
         val authoredBySigner = RemoteNotes { RemoteNoteLookup.Found(receivedNote(id = it, author = ACTOR)) }
         val unavailable = RemoteNotes { RemoteNoteLookup.Unavailable(RemoteFetchFailure.Throttled(it)) }
+        val unauthorized = RemoteNotes { RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(it, 401)) }
+        val gone = RemoteNotes { RemoteNoteLookup.NotFound(RemoteFetchFailure.UnsuccessfulStatus(it, 410)) }
 
-        val deletedByOrigin = listOf(authoredByOther, unavailable, authoredBySigner, NOT_FOUND_ORIGIN).map { origin ->
+        val deletedByOrigin = listOf(authoredByOther, unavailable, unauthorized, NOT_FOUND_ORIGIN, authoredBySigner, gone).map { origin ->
             val deleted = mutableListOf<String>()
             val notes = object : RemoteNoteStore {
                 override suspend fun findAttributedTo(noteId: String): String? = otherAuthor
@@ -81,7 +83,14 @@ class DeleteHandlerTest {
         }
 
         assertEquals(
-            listOf(false to listOf(), true to listOf(), false to listOf(noteId), false to listOf(noteId)),
+            listOf(
+                false to listOf(),
+                true to listOf(),
+                false to listOf(),
+                false to listOf(),
+                false to listOf(noteId),
+                false to listOf(noteId),
+            ),
             deletedByOrigin,
         )
     }
