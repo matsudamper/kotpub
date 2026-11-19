@@ -83,6 +83,31 @@ class HttpRemoteNotesTest {
     }
 
     @Test
+    fun `別のホストへ移った先の 404 は投稿の不存在として返さない`() {
+        runBlocking {
+            redirects[noteId] = "https://other.example/notes/1"
+
+            assertIs<RemoteFetchFailure.RedirectedToDisallowedUrl>(assertIs<RemoteNoteLookup.NotFound>(notes.find(noteId)).failure)
+        }
+    }
+
+    @Test
+    fun `id の無い Link は Create の id から取得した Create から読む`() {
+        runBlocking {
+            val createId = "https://remote.example/activities/1"
+            documents[createId] =
+                """{"id":"$createId","type":"Create","actor":"https://remote.example/users/alice","to":["https://www.w3.org/ns/activitystreams#Public"],""" +
+                """"object":{"type":"Link","href":"https://example.com/"}}"""
+
+            val note = assertIs<RemoteNoteLookup.Found>(notes.find(createId)).note
+
+            assertEquals(createId, note.id)
+            assertEquals("https://remote.example/users/alice", note.attributedTo)
+            assertEquals("https://example.com/", note.linkHref)
+        }
+    }
+
+    @Test
     fun findByUrlRefetchesNoteFromItsIdWhenPageUrlDiffers() {
         runBlocking {
             val pageUrl = "https://remote.example/@alice/1"

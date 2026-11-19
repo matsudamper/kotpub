@@ -8,15 +8,19 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.emoji.CustomEmoji
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.json.AppJson
 import net.matsudamper.kotpub.note.NoteVisibility
 import net.matsudamper.kotpub.note.PollVoteStore
 import net.matsudamper.kotpub.note.ReceivedNote
 import net.matsudamper.kotpub.note.ReceivedNoteAttachment
+import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.ReceivedPoll
 import net.matsudamper.kotpub.note.ReceivedPollOption
 import net.matsudamper.kotpub.note.ReceivedPollVote
+import net.matsudamper.kotpub.note.RemoteNoteLookup
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.RemoteNotes
 import net.matsudamper.kotpub.note.UnknownTypeStore
 
 class CreateNoteHandlerTest {
@@ -24,7 +28,7 @@ class CreateNoteHandlerTest {
     fun embeddedNotesRequireMatchingAuthorAndHost() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             receive(handler, """"https://remote.example/notes/1"""")
             receive(handler, note(author = "https://other.example/actor", id = "https://remote.example/notes/1", to = PUBLIC, cc = ""))
             receive(handler, note(author = ACTOR, id = "https://other.example/notes/1", to = PUBLIC, cc = ""))
@@ -36,10 +40,37 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun `保存済みの投稿者と違う Create は投稿のあるサーバーの投稿者で判断する`() {
+        runBlocking {
+            val store = RecordingNotes(savedAuthors = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+            val created = note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "")
+
+            receive(CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, originAuthoredBy("https://remote.example/other")), created)
+            assertTrue(store.saved.isEmpty())
+
+            receive(CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, originAuthoredBy(ACTOR)), created)
+            assertEquals(ACTOR, store.saved.single().attributedTo)
+        }
+    }
+
+    @Test
+    fun `判断した後に保存済みの投稿者が書き換わったら保存せず送り直させる`() {
+        runBlocking {
+            val store = RecordingNotes(authorsAtWrite = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+
+            val received = runCatching { receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "")) }
+
+            assertTrue(received.isFailure)
+            assertTrue(store.saved.isEmpty())
+        }
+    }
+
+    @Test
     fun visibilityUsesToBeforeCcAndKeepsPrivateRecipients() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             listOf(PUBLIC to "", "local" to PUBLIC, "$ACTOR/followers" to "", "local" to "").forEach { (to, cc) ->
                 receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = to, cc = cc))
             }
@@ -52,7 +83,7 @@ class CreateNoteHandlerTest {
     fun attachmentsAcceptStringOrLinkUrlsAndSkipNonHttp() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val attachments = """[
             {"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png","name":"説明"},
             {"type":"Image","url":{"type":"Link","href":"https://remote.example/b.jpg","mediaType":"image/jpeg"}},
@@ -76,7 +107,7 @@ class CreateNoteHandlerTest {
     fun singleAttachmentObjectIsAccepted() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val attachment = """{"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"}"""
             receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "", attachment = attachment))
             assertEquals(listOf("https://remote.example/a.png"), store.saved.single().attachments.map { it.url })
@@ -87,7 +118,7 @@ class CreateNoteHandlerTest {
     fun customEmojisAreReadFromTagAndSkipNonHttpIcons() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val tag = """[
             {"type":"Emoji","name":":blob:","icon":{"type":"Image","url":"https://remote.example/blob.png"}},
             {"type":"Hashtag","name":"#kotlin"},
@@ -107,7 +138,7 @@ class CreateNoteHandlerTest {
     fun mentionsAreReadFromTag() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val tag = """[
             {"type":"Mention","href":"https://local.example/users/alice","name":"@alice@local.example"},
             {"type":"Hashtag","name":"#kotlin"},
@@ -124,7 +155,7 @@ class CreateNoteHandlerTest {
     fun singleMentionTagObjectIsRead() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val tag = """{"type":"Mention","href":"https://local.example/users/alice"}"""
             val target =
                 """{"type":"Note","id":"https://remote.example/notes/1","attributedTo":"$ACTOR","content":"<p>@alice</p>","to":["$PUBLIC"],"tag":$tag}"""
@@ -137,7 +168,7 @@ class CreateNoteHandlerTest {
     fun quoteIsReadFromEachImplementationsKey() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             listOf(
                 """"quote":"https://other.example/notes/fep"""",
                 """"quoteUrl":"https://other.example/notes/url"""",
@@ -171,7 +202,7 @@ class CreateNoteHandlerTest {
     fun languageIsReadFromFirstContentMapKey() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             listOf(
                 """"content":"<p>q</p>","contentMap":{"ja":"<p>q</p>"}""",
                 """"content":"<p>q</p>","contentMap":{"zh-tw":"<p>q</p>","en":"<p>q</p>"}""",
@@ -194,7 +225,7 @@ class CreateNoteHandlerTest {
     fun contentPrefersContentOverContentMap() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             listOf(
                 """"content":"<p>content</p>","contentMap":{"ja":"<p>map</p>"}""",
                 """"contentMap":{"ja":"<p>first</p>","en":"<p>second</p>"}""",
@@ -212,7 +243,7 @@ class CreateNoteHandlerTest {
     fun linkTakesAuthorAndAddressingFromCreate() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val raw = AppJson.parseToJsonElement(
                 """{"id":"https://remote.example/activities/1","type":"Create","actor":"$ACTOR","to":["$PUBLIC"],"cc":[],
                 "object":{"type":"Link","href":"https://example.com/"}}""",
@@ -231,7 +262,7 @@ class CreateNoteHandlerTest {
     fun linkTakesAuthorFromEmbeddedActor() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val raw = AppJson.parseToJsonElement(
                 """{"id":"https://remote.example/activities/1","type":"Create","actor":{"id":"$ACTOR","type":"Person"},
                 "object":{"type":"Link","href":"https://example.com/"}}""",
@@ -245,7 +276,7 @@ class CreateNoteHandlerTest {
     fun linkWithoutHttpHrefIsIgnored() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             receive(handler, """{"type":"Link","id":"https://remote.example/links/1","attributedTo":"$ACTOR","href":"javascript:alert(1)"}""")
             assertTrue(store.saved.isEmpty())
         }
@@ -256,7 +287,7 @@ class CreateNoteHandlerTest {
         runBlocking {
             val store = RecordingNotes()
             val unknownTypes = RecordingUnknownTypes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), unknownTypes)
+            val handler = CreateNoteHandler(store, RecordingVotes(), unknownTypes, NOT_FOUND_ORIGIN)
             val raw = AppJson.parseToJsonElement(
                 """{"id":"https://remote.example/activities/1","type":"Create","actor":"$ACTOR","to":["$PUBLIC"],
                 "object":{"type":"Article","name":"題名","content":"<p>本文</p>"}}""",
@@ -272,7 +303,7 @@ class CreateNoteHandlerTest {
         runBlocking {
             val store = RecordingNotes()
             val unknownTypes = RecordingUnknownTypes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), unknownTypes)
+            val handler = CreateNoteHandler(store, RecordingVotes(), unknownTypes, NOT_FOUND_ORIGIN)
             val attachments = """[
             {"type":"Document","mediaType":"image/png","url":"https://remote.example/a.png"},
             {"type":"PropertyValue","name":"a","value":"b"},
@@ -290,7 +321,7 @@ class CreateNoteHandlerTest {
     fun actorObjectIsNotSavedAsPost() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             receive(handler, """{"type":"Person","id":"https://remote.example/people/1","attributedTo":"$ACTOR","content":"<p>hi</p>"}""")
             assertTrue(store.saved.isEmpty())
         }
@@ -300,7 +331,7 @@ class CreateNoteHandlerTest {
     fun questionIsSavedWithPoll() {
         runBlocking {
             val store = RecordingNotes()
-            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             val options = """[
             {"type":"Note","name":"犬","replies":{"type":"Collection","totalItems":3}},
             {"type":"Note","name":"猫"},
@@ -341,7 +372,7 @@ class CreateNoteHandlerTest {
         runBlocking {
             val store = RecordingNotes()
             val votes = RecordingVotes()
-            val handler = CreateNoteHandler(store, votes, UnknownTypeStore { _, _ -> })
+            val handler = CreateNoteHandler(store, votes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
             receive(handler, vote(author = ACTOR, id = "https://remote.example/votes/1"))
             receive(handler, vote(author = "https://other.example/actor", id = "https://remote.example/votes/2"))
             receive(handler, vote(author = ACTOR, id = "https://other.example/votes/3"))
@@ -378,16 +409,33 @@ class CreateNoteHandlerTest {
     private fun note(author: String, id: String, to: String, cc: String, attachment: String): String =
         """{"type":"Note","id":"$id","attributedTo":"$author","content":"<p>hello</p>","to":["$to"],"cc":["$cc"],"attachment":$attachment}"""
 
-    private class RecordingNotes : RemoteNoteStore {
+    private fun originAuthoredBy(author: String): RemoteNotes = RemoteNotes { noteId ->
+        RemoteNoteLookup.Found(
+            ReceivedNoteJson.read(AppJson.parseToJsonElement(note(author = author, id = noteId, to = PUBLIC, cc = "")).jsonObject)
+                ?: error("テストの投稿を読めない"),
+        )
+    }
+
+    /**
+     * @param authorsAtWrite 書き込む時点の保存済みの投稿者。判断した後に別の書き込みが割り込んだ状態を作る
+     */
+    private class RecordingNotes(
+        private val savedAuthors: Map<String, String> = mapOf(),
+        private val authorsAtWrite: Map<String, String> = savedAuthors,
+    ) : RemoteNoteStore {
         val saved = mutableListOf<ReceivedNote>()
 
-        override suspend fun save(note: ReceivedNote) {
+        override suspend fun findAttributedTo(noteId: String): String? = savedAuthors[noteId]
+
+        override suspend fun save(note: ReceivedNote, expectedAttributedTo: String?): Boolean {
+            if (authorsAtWrite[note.id] != expectedAttributedTo) return false
             saved.add(note)
+            return true
         }
 
-        override suspend fun update(note: ReceivedNote) = Unit
+        override suspend fun update(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
 
-        override suspend fun delete(actorId: String, objectId: String) = Unit
+        override suspend fun delete(actorId: String, objectId: String, expectedAttributedTo: String?): Boolean = true
     }
 
     private class RecordingVotes : PollVoteStore {
@@ -409,5 +457,6 @@ class CreateNoteHandlerTest {
     private companion object {
         const val ACTOR = "https://remote.example/actor"
         const val PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
+        val NOT_FOUND_ORIGIN = RemoteNotes { noteId -> RemoteNoteLookup.NotFound(RemoteFetchFailure.InvalidDocument(noteId, "投稿のあるサーバーに無い")) }
     }
 }

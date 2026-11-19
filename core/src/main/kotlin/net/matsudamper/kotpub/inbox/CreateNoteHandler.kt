@@ -8,6 +8,7 @@ import net.matsudamper.kotpub.note.PollVoteStore
 import net.matsudamper.kotpub.note.ReceivedNoteJson
 import net.matsudamper.kotpub.note.ReceivedPollVote
 import net.matsudamper.kotpub.note.RemoteNoteStore
+import net.matsudamper.kotpub.note.RemoteNotes
 import net.matsudamper.kotpub.note.UnknownTypeStore
 
 /**
@@ -18,7 +19,10 @@ class CreateNoteHandler(
     private val notes: RemoteNoteStore,
     private val pollVotes: PollVoteStore,
     private val unknownTypes: UnknownTypeStore,
+    remoteNotes: RemoteNotes,
 ) : InboxActivityHandler {
+    private val authorship = NoteAuthorship(notes = notes, remoteNotes = remoteNotes)
+
     override val type: String = "Create"
 
     override suspend fun handle(
@@ -40,7 +44,9 @@ class CreateNoteHandler(
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Create の actor を URL として読めない: $actor")
         val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
         if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
-        notes.save(note)
+        val decision = authorship.decideWrite(noteId = note.id, actorId = actor)
+        if (decision !is NoteWriteDecision.Allowed) return InboxHandling.Ignored("署名者の投稿だと確かめられない: ${note.id} 署名者=$actor")
+        if (!notes.save(note, expectedAttributedTo = decision.savedAttributedTo)) throw writeConflict(note.id)
         if (note.unknownTypes.isNotEmpty()) unknownTypes.record(note.unknownTypes, note.id)
         return InboxHandling.Handled
     }
