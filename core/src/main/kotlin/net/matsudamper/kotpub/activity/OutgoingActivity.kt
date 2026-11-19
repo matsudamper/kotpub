@@ -48,5 +48,6 @@ data class OutgoingActivity(
 ) {
     companion object {
         const val TYPE_ACCEPT: String = "Accept"
+        const val TYPE_REJECT: String = "Reject"
     }
 }
