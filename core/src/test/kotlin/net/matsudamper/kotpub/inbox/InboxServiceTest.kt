@@ -125,7 +125,7 @@ class InboxServiceTest {
         publicKeys: PublicKeys = remoteActors,
         domainBlocks: FakeInboxDomainBlocks = FakeInboxDomainBlocks(blockedUrls = setOf()),
     ): InboxService = InboxService(
-        verifier = HttpSignatureVerifier(publicKeys),
+        verifier = HttpSignatureVerifier(publicKeys, host),
         domainBlocks = domainBlocks,
         handlers = handlers,
     )
@@ -205,7 +205,7 @@ class InboxServiceTest {
             }
 
             val result = InboxService(
-                verifier = HttpSignatureVerifier(TestRemoteActor.remoteActors()),
+                verifier = HttpSignatureVerifier(TestRemoteActor.remoteActors(), host),
                 domainBlocks = domainBlocks,
                 handlers = listOf(handler),
             ).receive(recipient, signedRequest(follow()))

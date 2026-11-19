@@ -240,6 +240,7 @@ class InboxService(
                         stamps = stamps,
                         boosts = boosts,
                     ),
+                    domain = domain,
                 ),
                 domainBlocks = domainBlocks,
                 handlers = listOf(

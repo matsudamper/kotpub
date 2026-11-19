@@ -20,6 +20,7 @@ class HttpSignatureSignerTest {
     private val verifier =
         HttpSignatureVerifier(
             TestRemoteActors.of(keyId = keyId, owner = actorId, publicKey = TestActorPrivateKey.value.publicKey),
+            "remote.example",
         )
 
     private fun sign(
