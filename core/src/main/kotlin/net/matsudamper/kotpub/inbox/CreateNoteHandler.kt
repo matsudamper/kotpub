@@ -44,8 +44,9 @@ class CreateNoteHandler(
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Create の actor を URL として読めない: $actor")
         val noteUrl = HttpUrl.parse(note.id) ?: return InboxHandling.Ignored("投稿の id を URL として読めない: ${note.id}")
         if (!actorUrl.isSameHost(noteUrl)) return InboxHandling.Ignored("投稿が actor と別のホスト: ${note.id} actor=$actor")
-        if (!authorship.canWrite(noteId = note.id, actorId = actor)) return InboxHandling.Ignored("署名者の投稿だと確かめられない: ${note.id} 署名者=$actor")
-        notes.save(note)
+        val decision = authorship.decideWrite(noteId = note.id, actorId = actor)
+        if (decision !is NoteWriteDecision.Allowed) return InboxHandling.Ignored("署名者の投稿だと確かめられない: ${note.id} 署名者=$actor")
+        if (!notes.save(note, expectedAttributedTo = decision.savedAttributedTo)) throw writeConflict(note.id)
         if (note.unknownTypes.isNotEmpty()) unknownTypes.record(note.unknownTypes, note.id)
         return InboxHandling.Handled
     }

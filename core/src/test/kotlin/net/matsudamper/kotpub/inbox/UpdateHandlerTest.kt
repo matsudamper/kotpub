@@ -48,6 +48,20 @@ class UpdateHandlerTest {
     }
 
     @Test
+    fun `判断した後に保存済みの投稿者が書き換わったら編集を渡さず送り直させる`() = runBlocking {
+        val notes = RecordingNotes(
+            savedAuthors = mapOf("https://remote.example/notes/1" to ACTOR),
+            authorsAtWrite = mapOf("https://remote.example/notes/1" to "https://remote.example/other"),
+        )
+        val handler = UpdateHandler(UpdateActorHandler(FakeFollowerStore()), notes, UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+
+        val received = runCatching { receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1")) }
+
+        assertTrue(received.isFailure)
+        assertTrue(notes.updated.isEmpty())
+    }
+
+    @Test
     fun `知らない型の Update は投稿の編集にせず型と出どころを記録する`() = runBlocking {
         val notes = RecordingNotes()
         val recorded = mutableListOf<Pair<List<String>, String>>()
@@ -106,20 +120,26 @@ class UpdateHandlerTest {
         RemoteNoteLookup.Found(ReceivedNoteJson.read(AppJson.parseToJsonElement(note(author = author, id = noteId)).jsonObject) ?: error("テストの投稿を読めない"))
     }
 
+    /**
+     * @param authorsAtWrite 書き込む時点の保存済みの投稿者。判断した後に別の書き込みが割り込んだ状態を作る
+     */
     private class RecordingNotes(
         private val savedAuthors: Map<String, String> = mapOf(),
+        private val authorsAtWrite: Map<String, String> = savedAuthors,
     ) : RemoteNoteStore {
         val updated = mutableListOf<ReceivedNote>()
 
         override suspend fun findAttributedTo(noteId: String): String? = savedAuthors[noteId]
 
-        override suspend fun save(note: ReceivedNote) = Unit
+        override suspend fun save(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
 
-        override suspend fun update(note: ReceivedNote) {
+        override suspend fun update(note: ReceivedNote, expectedAttributedTo: String?): Boolean {
+            if (authorsAtWrite[note.id] != expectedAttributedTo) return false
             updated.add(note)
+            return true
         }
 
-        override suspend fun delete(actorId: String, objectId: String) = Unit
+        override suspend fun delete(actorId: String, objectId: String, expectedAttributedTo: String?): Boolean = true
     }
 
     private companion object {

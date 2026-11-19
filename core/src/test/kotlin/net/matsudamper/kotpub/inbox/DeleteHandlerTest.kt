@@ -24,10 +24,11 @@ class DeleteHandlerTest {
         val deleted = mutableListOf<String>()
         val notes = object : RemoteNoteStore {
             override suspend fun findAttributedTo(noteId: String): String? = null
-            override suspend fun save(note: ReceivedNote) = Unit
-            override suspend fun update(note: ReceivedNote) = Unit
-            override suspend fun delete(actorId: String, objectId: String) {
+            override suspend fun save(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
+            override suspend fun update(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
+            override suspend fun delete(actorId: String, objectId: String, expectedAttributedTo: String?): Boolean {
                 deleted.add(objectId)
+                return true
             }
         }
         val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes, NOT_FOUND_ORIGIN)
@@ -64,10 +65,12 @@ class DeleteHandlerTest {
             val deleted = mutableListOf<String>()
             val notes = object : RemoteNoteStore {
                 override suspend fun findAttributedTo(noteId: String): String? = otherAuthor
-                override suspend fun save(note: ReceivedNote) = Unit
-                override suspend fun update(note: ReceivedNote) = Unit
-                override suspend fun delete(actorId: String, objectId: String) {
+                override suspend fun save(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
+                override suspend fun update(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
+                override suspend fun delete(actorId: String, objectId: String, expectedAttributedTo: String?): Boolean {
+                    if (expectedAttributedTo != otherAuthor) return false
                     deleted.add(objectId)
+                    return true
                 }
             }
             val handler = DeleteHandler(DeleteActorHandler(FakeFollowerStore(), FakeFavouriteStore(), FakeStampStore(), FakeBoostStore()), notes, origin)

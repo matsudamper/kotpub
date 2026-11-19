@@ -38,8 +38,9 @@ class DeleteHandler(
         val actorUrl = HttpUrl.parse(actor) ?: return InboxHandling.Ignored("Delete の actor を URL として読めない: $actor")
         val objectUrl = HttpUrl.parse(objectId) ?: return InboxHandling.Ignored("Delete の object を URL として読めない: $objectId")
         if (!actorUrl.isSameHost(objectUrl)) return InboxHandling.Ignored("Delete の対象が actor と別のホスト: $objectId actor=$actor")
-        if (!authorship.canDelete(noteId = objectId, actorId = actor)) return InboxHandling.Ignored("署名者の投稿だと確かめられない: $objectId 署名者=$actor")
-        notes.delete(actor, objectId)
+        val decision = authorship.decideDelete(noteId = objectId, actorId = actor)
+        if (decision !is NoteWriteDecision.Allowed) return InboxHandling.Ignored("署名者の投稿だと確かめられない: $objectId 署名者=$actor")
+        if (!notes.delete(actor, objectId, expectedAttributedTo = decision.savedAttributedTo)) throw writeConflict(objectId)
         return InboxHandling.Handled
     }
 }

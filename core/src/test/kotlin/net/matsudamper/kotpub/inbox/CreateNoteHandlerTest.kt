@@ -50,6 +50,17 @@ class CreateNoteHandlerTest {
     }
 
     @Test
+    fun `判断した後に保存済みの投稿者が書き換わったら保存せず送り直させる`() = runBlocking {
+        val store = RecordingNotes(authorsAtWrite = mapOf("https://remote.example/notes/1" to "https://remote.example/other"))
+        val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
+
+        val received = runCatching { receive(handler, note(author = ACTOR, id = "https://remote.example/notes/1", to = PUBLIC, cc = "")) }
+
+        assertTrue(received.isFailure)
+        assertTrue(store.saved.isEmpty())
+    }
+
+    @Test
     fun visibilityUsesToBeforeCcAndKeepsPrivateRecipients() = runBlocking {
         val store = RecordingNotes()
         val handler = CreateNoteHandler(store, RecordingVotes(), UnknownTypeStore { _, _ -> }, NOT_FOUND_ORIGIN)
@@ -365,20 +376,26 @@ class CreateNoteHandlerTest {
         )
     }
 
+    /**
+     * @param authorsAtWrite 書き込む時点の保存済みの投稿者。判断した後に別の書き込みが割り込んだ状態を作る
+     */
     private class RecordingNotes(
         private val savedAuthors: Map<String, String> = mapOf(),
+        private val authorsAtWrite: Map<String, String> = savedAuthors,
     ) : RemoteNoteStore {
         val saved = mutableListOf<ReceivedNote>()
 
         override suspend fun findAttributedTo(noteId: String): String? = savedAuthors[noteId]
 
-        override suspend fun save(note: ReceivedNote) {
+        override suspend fun save(note: ReceivedNote, expectedAttributedTo: String?): Boolean {
+            if (authorsAtWrite[note.id] != expectedAttributedTo) return false
             saved.add(note)
+            return true
         }
 
-        override suspend fun update(note: ReceivedNote) = Unit
+        override suspend fun update(note: ReceivedNote, expectedAttributedTo: String?): Boolean = true
 
-        override suspend fun delete(actorId: String, objectId: String) = Unit
+        override suspend fun delete(actorId: String, objectId: String, expectedAttributedTo: String?): Boolean = true
     }
 
     private class RecordingVotes : PollVoteStore {
