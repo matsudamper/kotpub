@@ -197,40 +197,44 @@ class FollowHandlerTest {
     }
 
     @Test
-    fun `受け付けない相手の Follow は記録せず Reject を配信キューに登録する`() = runBlocking {
-        val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
+    fun `受け付けない相手の Follow は記録せず Reject を配信キューに登録する`() {
+        runBlocking {
+            val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
 
-        handle(followHandler(followers), followJson())
+            handle(followHandler(followers), followJson())
 
-        assertTrue(followers.rows.isEmpty())
-        val reject = followers.rejects.single()
-        assertEquals(TestLocalActor.USERNAME, reject.username)
-        assertEquals(TestRemoteActor.INBOX, reject.inbox)
-        val body = AppJson.decodeFromString(OutgoingActivity.serializer(), reject.body)
-        assertEquals(OutgoingActivity.TYPE_REJECT, body.type)
-        assertEquals(recipient.actorId, body.actor)
-        val embedded = (body.target as LinkOrObject.Embedded).json
-        assertEquals("https://remote.example/activities/1", embedded.getValue("id").jsonPrimitive.content)
+            assertTrue(followers.rows.isEmpty())
+            val reject = followers.rejects.single()
+            assertEquals(TestLocalActor.USERNAME, reject.username)
+            assertEquals(TestRemoteActor.INBOX, reject.inbox)
+            val body = AppJson.decodeFromString(OutgoingActivity.serializer(), reject.body)
+            assertEquals(OutgoingActivity.TYPE_REJECT, body.type)
+            assertEquals(recipient.actorId, body.actor)
+            val embedded = (body.target as LinkOrObject.Embedded).json
+            assertEquals("https://remote.example/activities/1", embedded.getValue("id").jsonPrimitive.content)
+        }
     }
 
     @Test
-    fun `受け付けない相手からのフォローの記録が残っていれば消す`() = runBlocking {
-        val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
-        followers.rows += FakeFollowerStore.Row(
-            username = TestLocalActor.USERNAME,
-            followerActorUri = TestRemoteActor.ACTOR_ID,
-            inbox = TestRemoteActor.INBOX,
-            sharedInbox = null,
-            publicKeyPem = "",
-            profile = TestRemoteActor.noProfile,
-            followActivityUri = "https://remote.example/activities/0",
-            acceptBody = "",
-            accepted = true,
-        )
+    fun `受け付けない相手からのフォローの記録が残っていれば消す`() {
+        runBlocking {
+            val followers = FakeFollowerStore(refusedFollowers = setOf(TestRemoteActor.ACTOR_ID))
+            followers.rows += FakeFollowerStore.Row(
+                username = TestLocalActor.USERNAME,
+                followerActorUri = TestRemoteActor.ACTOR_ID,
+                inbox = TestRemoteActor.INBOX,
+                sharedInbox = null,
+                publicKeyPem = "",
+                profile = TestRemoteActor.noProfile,
+                followActivityUri = "https://remote.example/activities/0",
+                acceptBody = "",
+                accepted = true,
+            )
 
-        handle(followHandler(followers), followJson())
+            handle(followHandler(followers), followJson())
 
-        assertTrue(followers.rows.isEmpty())
-        assertEquals(1, followers.rejects.size)
+            assertTrue(followers.rows.isEmpty())
+            assertEquals(1, followers.rejects.size)
+        }
     }
 }
