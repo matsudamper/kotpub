@@ -46,14 +46,17 @@ interface FollowerStore {
     ): Boolean
 
     /**
-     * [username] へのフォローを [followerActorUri] から受け付けないなら true。
+     * [username] へのフォローを [follower] から受け付けないなら true。
      *
      * true なら `Follow` を記録せず、[reject] で `Reject` を返す。
-     * 何も返さないと、相手の画面ではフォローが保留のまま残る
+     * 何も返さないと、相手の画面ではフォローが保留のまま残る。
+     *
+     * [follower] はこの `Follow` を受けて読み直したアクター。受け付けると [record] が
+     * inbox と `sharedInbox` をこれで置き換えるので、配る先が増えるかはこれを見て決める
      */
     fun refuses(
         username: String,
-        followerActorUri: String,
+        follower: RemoteActor,
     ): Boolean
 
     /**

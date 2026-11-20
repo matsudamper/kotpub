@@ -73,7 +73,7 @@ class FollowHandler(
             }
         }
 
-        if (followers.refuses(followee.username, follower.actorId)) {
+        if (followers.refuses(followee.username, follower)) {
             val reject =
                 OutgoingActivity(
                     id = rejectId(followee),
