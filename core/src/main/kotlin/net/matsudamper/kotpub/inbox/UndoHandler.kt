@@ -43,8 +43,9 @@ class UndoHandler(
         // Mastodon の handle_reference と同じく、object が id だけの Undo が何にも
         // 当たらなければ、まだ届いていない Like / EmojiReact の取り消しとみなしてその id を覚える
         val undoObject = activity.target
-        if (undoObject is LinkOrObject.Link) {
+        if (undoObject is LinkOrObject.Link &&
             reactions.rememberEarlyUndone(actorUri = verifiedSignerActorId, activityUri = undoObject.href)
+        ) {
             return InboxHandling.Ignored("Undo の対象が記録に無いので、後から届く Like / EmojiReact の取り消しとして覚えた: ${undoObject.href}")
         }
         return InboxHandling.Ignored("Undo の対象を取り消せなかった: ${recipient.logLabel} ← $verifiedSignerActorId")

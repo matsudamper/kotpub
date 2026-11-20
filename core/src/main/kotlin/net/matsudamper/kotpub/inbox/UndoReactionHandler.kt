@@ -100,15 +100,21 @@ class UndoReactionHandler(
     /**
      * @param activityUri `Undo` の `object` が指していた `Like` / `EmojiReact` アクティビティの `id`。
      *   後から同じ `id` のものが届いても記録しない
+     * @return 覚えたら true。[EarlyUndoneActivityUri.isRememberable] を満たさない値は覚えない
      */
     fun rememberEarlyUndone(
         actorUri: String,
         activityUri: String,
-    ) {
+    ): Boolean {
+        if (!EarlyUndoneActivityUri.isRememberable(actorUri = actorUri, activityUri = activityUri)) {
+            InboxSpan.outcome("undo_reaction.unrememberable_id")
+            return false
+        }
         earlyUndoneLikes.remember(
             actorUri = actorUri,
             activityUri = activityUri,
             expiresAt = Instant.now() + EarlyUndoneLikes.TTL.toJavaDuration(),
         )
+        return true
     }
 }

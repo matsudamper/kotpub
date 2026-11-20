@@ -413,4 +413,65 @@ class UndoHandlerTest {
             assertTrue(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = announceUri, now = Instant.now()))
         }
     }
+
+    @Test
+    fun `id だけの Undo でも、長すぎる id は後から届く Like に備えて覚えない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
+            val tooLongUri = "https://remote.example/likes/" + "a".repeat(4096)
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$tooLongUri"}
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
+
+            assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = tooLongUri, now = Instant.now()))
+        }
+    }
+
+    @Test
+    fun `id だけの Undo でも、署名者と別のホストの id は覚えない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
+            val otherHostUri = "https://other.example/likes/1"
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$otherHostUri"}
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
+
+            assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = otherHostUri, now = Instant.now()))
+        }
+    }
+
+    @Test
+    fun `記録に無い Announce の取り消しでも、URL として読めない id は覚えない`() {
+        runBlocking {
+            val earlyUndoneLikes = FakeEarlyUndoneLikes()
+            val notUrl = "not a url"
+
+            handle(
+                """
+            {"id":"https://remote.example/undo/1","type":"Undo","actor":"${TestRemoteActor.ACTOR_ID}",
+             "object":{"id":"$notUrl","type":"Announce","actor":"${TestRemoteActor.ACTOR_ID}",
+                       "object":"$noteUrl"}}
+                """.trimIndent(),
+                followers = followers(),
+                favourites = favourites(),
+                earlyUndoneLikes = earlyUndoneLikes,
+            )
+
+            assertFalse(earlyUndoneLikes.isRemembered(actorUri = TestRemoteActor.ACTOR_ID, activityUri = notUrl, now = Instant.now()))
+        }
+    }
 }
