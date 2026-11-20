@@ -30,6 +30,10 @@ interface QuoteApprovals {
     /**
      * `Accept` を配信キューに登録する。登録できなければ投げる。inbox が 503 を返して送り直してもらう
      *
+     * 同じ引用への `QuoteRequest` は相手が何度でも送れる。積むたびに相手の inbox への配信が増えるので、
+     * 同じ [quoter] の inbox へ同じ引用（`acceptBody` の `object.instrument`）の `Accept` がまだ送られずに
+     * 残っていれば、積まずに済ませる
+     *
      * @param username 引用された投稿の持ち主。`Accept` の送り主になる
      * @param quoter 引用した相手。`Accept` はこの inbox に送る
      * @param acceptBody 送る `Accept` の JSON

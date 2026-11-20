@@ -138,6 +138,37 @@ class QuoteRequestHandlerTest {
     }
 
     @Test
+    fun `Accept には受け取った QuoteRequest の余計な項目を載せない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
+            val padding = "x".repeat(10_000)
+            val json =
+                """{"id":"$QUOTING_NOTE#quote_request","type":"QuoteRequest","actor":"${TestRemoteActor.ACTOR_ID}","object":"${noteUrls.noteUrl}","instrument":{"id":"$QUOTING_NOTE","type":"Note","content":"$padding"},"padding":"$padding"}"""
+
+            assertEquals(InboxHandling.Handled, handle(approvals, json))
+
+            val acceptJson = AppJson.parseToJsonElement(approvals.enqueued.single().acceptBody).jsonObject
+            val embedded = acceptJson.getValue("object").jsonObject
+            assertEquals(setOf("id", "type", "actor", "object", "instrument"), embedded.keys)
+            assertEquals("$QUOTING_NOTE#quote_request", embedded.getValue("id").jsonPrimitive.content)
+            assertEquals(QUOTING_NOTE, embedded.getValue("instrument").jsonPrimitive.content)
+            assertTrue(padding !in approvals.enqueued.single().acceptBody)
+        }
+    }
+
+    @Test
+    fun `id の無い QuoteRequest は承認しない`() {
+        runBlocking {
+            val approvals = FakeQuoteApprovals()
+            val json =
+                """{"type":"QuoteRequest","actor":"${TestRemoteActor.ACTOR_ID}","object":"${noteUrls.noteUrl}","instrument":"$QUOTING_NOTE"}"""
+
+            assertIs<InboxHandling.Ignored>(handle(approvals, json))
+            assertTrue(approvals.enqueued.isEmpty())
+        }
+    }
+
+    @Test
     fun `引用した投稿の id だけが入っていても承認する`() {
         runBlocking {
             val approvals = FakeQuoteApprovals()

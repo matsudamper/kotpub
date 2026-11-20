@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.quote
 
 import java.util.UUID
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.activity.OutgoingActivity
 import net.matsudamper.kotpub.activitypub.LinkOrObject
@@ -44,6 +45,11 @@ class QuoteRequestHandler(
         activity: InboxActivity,
         rawActivityJson: JsonObject,
     ): InboxHandling {
+        val quoteRequestId = activity.id
+        if (quoteRequestId == null) {
+            InboxSpan.outcome("quote_request.no_id")
+            return InboxHandling.Ignored("QuoteRequest に id が無いので、承認しても相手が照合できない: ${recipient.logLabel} ← $verifiedSignerActorId")
+        }
         val targetUrl = activity.target?.id
         val notePublicId = targetUrl?.let { NoteUrls.publicIdOf(domain = domain, url = it) }
         if (notePublicId == null) {
@@ -111,7 +117,14 @@ class QuoteRequestHandler(
             id = "${author.urls.actorId}#accepts/quote_requests/${UUID.randomUUID()}",
             type = OutgoingActivity.TYPE_ACCEPT,
             actor = author.urls.actorId,
-            target = LinkOrObject.Embedded(rawActivityJson),
+            target = LinkOrObject.Embedded(
+                quoteRequestForAccept(
+                    quoteRequestId = quoteRequestId,
+                    quoterActorId = verifiedSignerActorId,
+                    quotedNoteUrl = noteUrls.noteUrl,
+                    quotingNoteId = quotingNoteId,
+                ),
+            ),
             result = noteUrls.quoteAuthorizationUrl(token),
         )
         approvals.enqueueAccept(
@@ -123,6 +136,28 @@ class QuoteRequestHandler(
         InboxSpan.outcome("quote_request.accepted")
         return InboxHandling.Handled
     }
+
+    /**
+     * `Accept` に埋める `QuoteRequest`。
+     *
+     * 受け取った JSON をそのまま埋めると、相手が書いた中身が配信キューの行と送る本文に載り、
+     * 相手は自分宛ての `Accept` を好きなだけ大きくできる。
+     * Mastodon は `Accept` の `object` の id で保留中の引用を探すので、照合に要る項目だけを入れる
+     */
+    private fun quoteRequestForAccept(
+        quoteRequestId: String,
+        quoterActorId: String,
+        quotedNoteUrl: String,
+        quotingNoteId: String,
+    ): JsonObject = JsonObject(
+        mapOf(
+            "id" to JsonPrimitive(quoteRequestId),
+            "type" to JsonPrimitive(TYPE),
+            "actor" to JsonPrimitive(quoterActorId),
+            "object" to JsonPrimitive(quotedNoteUrl),
+            "instrument" to JsonPrimitive(quotingNoteId),
+        ),
+    )
 
     private fun RemoteFetchFailure.isTemporary(): Boolean =
         when (this) {
