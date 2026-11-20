@@ -45,6 +45,10 @@ class UndoBoostHandler(
             return InboxHandling.Ignored("取り消す Announce に id が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
         if (!remove(recipient, verifiedSignerActorId, activityUri)) {
+            if (!EarlyUndoneActivityUri.isRememberable(actorUri = verifiedSignerActorId, activityUri = activityUri)) {
+                InboxSpan.outcome("undo_boost.unrememberable_id")
+                return InboxHandling.Ignored("取り消す Announce が記録に無く、id も覚えられる形ではない: ${recipient.logLabel} ← $verifiedSignerActorId")
+            }
             // 配送の順番は保証されないので、後から届く同じ id の Announce に備える
             earlyUndone.remember(
                 actorUri = verifiedSignerActorId,
