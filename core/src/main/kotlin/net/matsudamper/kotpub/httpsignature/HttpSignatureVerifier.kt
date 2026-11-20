@@ -65,7 +65,7 @@ class HttpSignatureVerifier(
 
         // 署名は宛先のサーバーに縛られていないと、他のサーバー宛てのものを Date の窓の間こちらへ投げ直せる
         val host = request.headers[HOST_HEADER]
-        if (host == null || !host.equals(domain, ignoreCase = true)) {
+        if (host == null || !host.removeSuffix(HTTPS_DEFAULT_PORT_SUFFIX).equals(domain, ignoreCase = true)) {
             return HttpSignatureResult.Rejected("Host が自サーバーのドメインではない: $host")
         }
 
@@ -138,6 +138,12 @@ class HttpSignatureVerifier(
         const val DIGEST_HEADER = "Digest"
         const val DATE_HEADER = "Date"
         const val HOST_HEADER = "Host"
+
+        /**
+         * ActivityPub の配送は https なので、送る側によっては Host に既定のポートを書いてくる。
+         * 書いていなくても同じ宛先なので、比べる前に落とす
+         */
+        const val HTTPS_DEFAULT_PORT_SUFFIX = ":443"
 
         /**
          * `hs2019` は新しい draft での呼び名で、RSA 鍵に対しては中身が rsa-sha256 になる。

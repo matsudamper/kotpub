@@ -46,6 +46,7 @@ class HttpSignatureVerifierTest {
         headerNames: List<String> = TestSigning.DEFAULT_HEADER_NAMES,
         keyId: String = TestRemoteActor.KEY_ID,
         body: ByteArray = this.body,
+        host: String = this.host,
     ) = TestSigning.headers(
         requestTarget = requestTarget,
         host = host,
@@ -114,6 +115,25 @@ class HttpSignatureVerifierTest {
             val result = verifier(domain = host.uppercase()).verify(request(signedHeaders()))
 
             assertIs<HttpSignatureResult.Verified>(result)
+        }
+    }
+
+    @Test
+    fun `Host に https の既定ポートが付いていても自サーバー宛てなら通る`() {
+        runBlocking {
+            val result = verifier().verify(request(signedHeaders(host = "$host:443")))
+
+            assertIs<HttpSignatureResult.Verified>(result)
+        }
+    }
+
+    @Test
+    fun `Host に既定以外のポートが付いていたら通らない`() {
+        runBlocking {
+            val result = verifier().verify(request(signedHeaders(host = "$host:8443")))
+
+            val rejected = assertIs<HttpSignatureResult.Rejected>(result)
+            assertTrue(rejected.reason.contains("Host"))
         }
     }
 
