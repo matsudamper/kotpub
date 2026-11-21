@@ -33,6 +33,7 @@ class RecordedFallbackPublicKeysTest {
                     sharedInbox = null,
                     publicKeyPem = publicKeyPem,
                     profile = TestRemoteActor.noProfile,
+                    alsoKnownAs = listOf(),
                 ),
                 followActivityUri = "https://remote.example/activities/1",
                 receivedAt = now,

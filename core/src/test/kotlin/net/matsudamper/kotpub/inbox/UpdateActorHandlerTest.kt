@@ -34,6 +34,7 @@ class UpdateActorHandlerTest {
                     headerUrl = null,
                     emojis = listOf(),
                 ),
+                alsoKnownAs = listOf(),
             ),
             followActivityUri = "https://remote.example/activities/1",
             receivedAt = now,

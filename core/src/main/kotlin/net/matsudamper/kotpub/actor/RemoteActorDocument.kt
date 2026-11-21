@@ -70,7 +70,22 @@ internal data class RemoteActorDocument(
      */
     @SerialName("attachment")
     val attachment: JsonElement? = null,
+    /**
+     * 別名のアクター。文字列 1 つのことも、配列のこともある
+     */
+    @SerialName("alsoKnownAs")
+    val alsoKnownAs: JsonElement? = null,
 ) {
+    /**
+     * [alsoKnownAs] のうち、https のアクター id として読めるもの
+     */
+    fun alsoKnownAsActorIds(): List<String> =
+        when (val element = alsoKnownAs) {
+            null, JsonNull -> listOf()
+            is JsonArray -> element.mapNotNull { it.actorIdOrNull() }
+            is JsonPrimitive, is JsonObject -> listOfNotNull(element.actorIdOrNull())
+        }
+
     /**
      * 一覧に出すためだけの部分。
      *
@@ -168,5 +183,15 @@ private fun JsonObject.profileField(): RemoteActorProfileField? {
     val htmlValue = this["value"].firstText() ?: return null
     return RemoteActorProfileField(name = name, htmlValue = htmlValue)
 }
+
+/**
+ * 文字列か、`id` を持つオブジェクトから、https のアクター id を読む
+ */
+private fun JsonElement.actorIdOrNull(): String? =
+    when (this) {
+        JsonNull, is JsonArray -> null
+        is JsonPrimitive -> content.takeIf { isString && it.isHttpsUrl() }
+        is JsonObject -> (this["id"] as? JsonPrimitive)?.actorIdOrNull()
+    }
 
 private fun String.isHttpsUrl(): Boolean = HttpUrl.parseHttps(this) != null

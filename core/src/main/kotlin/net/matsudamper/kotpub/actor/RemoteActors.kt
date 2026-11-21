@@ -62,6 +62,8 @@ sealed interface RemoteActorLookup {
  *   [inbox] と同じ制限がかかる
  * @param publicKeyPem 署名の検証に使う公開鍵の PEM
  * @param profile 一覧に出すためだけの部分。配信にも検証にも関わらない
+ * @param alsoKnownAs 相手が別名として挙げたアクター id。`Move` を受けたとき、移り先が移り元を
+ *   別名に入れているかで、本人の引っ越しかを確かめる
  */
 data class RemoteActor(
     val actorId: String,
@@ -69,6 +71,7 @@ data class RemoteActor(
     val sharedInbox: String?,
     val publicKeyPem: String,
     val profile: RemoteActorProfile,
+    val alsoKnownAs: List<String>,
 )
 
 /**

@@ -37,6 +37,7 @@ class DeleteActorHandlerTest {
                     sharedInbox = null,
                     publicKeyPem = "pem",
                     profile = TestRemoteActor.noProfile,
+                    alsoKnownAs = listOf(),
                 ),
                 followActivityUri = "https://remote.example/activities/$index",
                 receivedAt = now,

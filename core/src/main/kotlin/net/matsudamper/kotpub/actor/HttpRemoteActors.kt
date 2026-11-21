@@ -249,6 +249,7 @@ class HttpRemoteActors(
                 sharedInbox = document.endpoints?.sharedInbox?.takeIf { isDeliverable(it, url) },
                 publicKeyPem = publicKeyPem,
                 profile = document.profile(),
+                alsoKnownAs = document.alsoKnownAsActorIds(),
             ),
         )
     }

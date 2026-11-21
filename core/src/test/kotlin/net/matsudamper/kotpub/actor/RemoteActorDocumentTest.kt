@@ -131,4 +131,19 @@ class RemoteActorDocumentTest {
 
         assertEquals(listOf(CustomEmoji(name = ":blob:", imageUrl = "https://files.remote.example/blob.png")), profile.emojis)
     }
+
+    @Test
+    fun `alsoKnownAs を文字列でも配列でも https のアクター id だけ読む`() {
+        fun alsoKnownAs(json: String): List<String> =
+            AppJson.decodeFromString(RemoteActorDocument.serializer(), json).alsoKnownAsActorIds()
+
+        assertEquals(listOf("https://old.example/users/alice"), alsoKnownAs("""{"alsoKnownAs":"https://old.example/users/alice"}"""))
+        assertEquals(
+            listOf("https://old.example/users/alice", "https://older.example/users/alice"),
+            alsoKnownAs(
+                """{"alsoKnownAs":["https://old.example/users/alice","http://plain.example/users/alice",{"id":"https://older.example/users/alice"}]}""",
+            ),
+        )
+        assertEquals(listOf(), alsoKnownAs("""{"preferredUsername":"alice"}"""))
+    }
 }
