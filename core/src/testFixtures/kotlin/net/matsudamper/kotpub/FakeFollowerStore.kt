@@ -68,8 +68,8 @@ class FakeFollowerStore(
 
     override fun refuses(
         username: String,
-        followerActorUri: String,
-    ): Boolean = followerActorUri in refusedFollowers
+        follower: RemoteActor,
+    ): Boolean = follower.actorId in refusedFollowers
 
     override fun reject(
         username: String,
