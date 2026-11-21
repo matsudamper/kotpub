@@ -6,6 +6,8 @@ import net.matsudamper.kotpub.activitypub.id
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.follower.MovedActorFollowings
+import net.matsudamper.kotpub.http.HttpStatusCodes
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 
 /**
  * `Move` を受けたときの処理。引っ越したアカウントのフォローを移り先へ付け替える。
@@ -46,6 +48,10 @@ class MoveHandler(
             is RemoteActorLookup.Found -> lookup.actor
 
             RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {
+                // 落とすと付け替えが失われるので、一時的な失敗なら送り直してもらう
+                if (lookup is RemoteActorLookup.Unavailable && lookup.failure.isTemporary()) {
+                    throw IllegalStateException("Move の移り先のアクターを一時的に取得できない: $verifiedSignerActorId → $movedToActorId 理由=$lookup")
+                }
                 return InboxHandling.Ignored("Move の移り先のアクターを取得できない: $verifiedSignerActorId → $movedToActorId 理由=$lookup")
             }
         }
@@ -68,4 +74,10 @@ class MoveHandler(
         return InboxHandling.Handled
     }
 
+    private fun RemoteFetchFailure.isTemporary(): Boolean =
+        when (this) {
+            is RemoteFetchFailure.Throttled, is RemoteFetchFailure.RequestFailed -> true
+            is RemoteFetchFailure.UnsuccessfulStatus -> status == HttpStatusCodes.TOO_MANY_REQUESTS || status >= HttpStatusCodes.INTERNAL_SERVER_ERROR
+            else -> false
+        }
 }

@@ -2,6 +2,7 @@ package net.matsudamper.kotpub.inbox
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -124,6 +125,23 @@ class MoveHandlerTest {
             )
 
             assertIs<InboxHandling.Ignored>(handling)
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り先を一時的に取得できなければ送り直してもらう`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+
+            // TestRemoteActors は取得できない相手に 503 を返す
+            assertFailsWith<IllegalStateException> {
+                handle(
+                    followings,
+                    TestRemoteActors(),
+                    move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+                )
+            }
             assertEquals(listOf(), followings.moves)
         }
     }
