@@ -14,6 +14,11 @@ import kotlinx.serialization.json.JsonPrimitive
 internal object CustomEmojiTags {
     private const val EMOJI_TYPE = "Emoji"
 
+    // 名前も画像 URL も仕様上の長さの上限が無く、受け取った文書の大きさまで入れられる。
+    // 保存して公開画面にそのまま出すので、絵文字 1 つとして扱えない長さのものは返さない
+    const val MAX_NAME_LENGTH: Int = 100
+    const val MAX_IMAGE_URL_LENGTH: Int = 2048
+
     /**
      * 相手のサーバーが書いた URL をそのまま画面が読みに行くので、
      * http と https 以外の画像しか無い絵文字は返さない。同じ名前が並んだら先のものを使う
@@ -22,7 +27,7 @@ internal object CustomEmojiTags {
         .filterIsInstance<JsonObject>()
         .filter { it.string("type") == EMOJI_TYPE }
         .mapNotNull { emoji ->
-            val name = emoji.string("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val name = emoji.string("name")?.takeIf { it.isNotBlank() && it.length <= MAX_NAME_LENGTH } ?: return@mapNotNull null
             val imageUrl = elements(emoji["icon"]).firstNotNullOfOrNull { iconUrl(it) } ?: return@mapNotNull null
             CustomEmoji(name = name, imageUrl = imageUrl)
         }
@@ -41,6 +46,7 @@ internal object CustomEmojiTags {
             else -> null
         } ?: return null
 
+        if (url.length > MAX_IMAGE_URL_LENGTH) return null
         return url.takeIf { it.startsWith("https://") || it.startsWith("http://") }
     }
 
