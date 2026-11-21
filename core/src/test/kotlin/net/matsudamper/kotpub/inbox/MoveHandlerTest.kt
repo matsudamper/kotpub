@@ -1,0 +1,131 @@
+package net.matsudamper.kotpub.inbox
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import net.matsudamper.kotpub.TestLocalActor
+import net.matsudamper.kotpub.TestRemoteActor
+import net.matsudamper.kotpub.TestRemoteActors
+import net.matsudamper.kotpub.activity.InboxActivity
+import net.matsudamper.kotpub.actor.RemoteActor
+import net.matsudamper.kotpub.follower.MovedActorFollowings
+import net.matsudamper.kotpub.json.AppJson
+
+// 引っ越したアカウントのフォローを移り先へ付け替える。
+// 移り先が移り元を alsoKnownAs に入れていなければ、他人のアカウントを名乗った Move として扱う。
+class MoveHandlerTest {
+    private class RecordingMovedActorFollowings : MovedActorFollowings {
+        val moves = mutableListOf<Pair<String, String>>()
+
+        override suspend fun move(
+            movedFromActorId: String,
+            movedTo: RemoteActor,
+        ) {
+            moves += movedFromActorId to movedTo.actorId
+        }
+    }
+
+    private fun movedTo(alsoKnownAs: List<String>): RemoteActor =
+        RemoteActor(
+            actorId = MOVED_TO,
+            inbox = "$MOVED_TO/inbox",
+            sharedInbox = null,
+            publicKeyPem = "pem",
+            profile = TestRemoteActor.noProfile,
+            alsoKnownAs = alsoKnownAs,
+        )
+
+    private suspend fun handle(
+        followings: RecordingMovedActorFollowings,
+        actors: Map<String, RemoteActor>,
+        json: String,
+    ): InboxHandling {
+        val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
+        return MoveHandler(remoteActors = TestRemoteActors(actors = actors), followings = followings).handle(
+            recipient = InboxRecipient.Account(TestLocalActor.urls),
+            verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
+            activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),
+            rawActivityJson = rawActivityJson,
+        )
+    }
+
+    private fun move(
+        movedFrom: String,
+        target: String,
+    ): String =
+        """
+        {"id":"https://remote.example/activities/move","type":"Move",
+         "actor":"${TestRemoteActor.ACTOR_ID}","object":"$movedFrom","target":"$target"}
+        """.trimIndent()
+
+    @Test
+    fun `移り先が移り元を alsoKnownAs に入れていれば付け替える`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+
+            val handling = handle(
+                followings,
+                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(TestRemoteActor.ACTOR_ID))),
+                move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+            )
+
+            assertEquals(InboxHandling.Handled, handling)
+            assertEquals(listOf(TestRemoteActor.ACTOR_ID to MOVED_TO), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り先が移り元を alsoKnownAs に入れていなければ何もしない`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+
+            val handling = handle(
+                followings,
+                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf())),
+                move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り元が送り主自身でなければ何もしない`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+            val otherActor = "https://remote.example/users/bob"
+
+            val handling = handle(
+                followings,
+                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(otherActor))),
+                move(movedFrom = otherActor, target = MOVED_TO),
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り先を取得できなければ何もしない`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+
+            val handling = handle(
+                followings,
+                mapOf(),
+                move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    private companion object {
+        const val MOVED_TO = "https://new.example/users/alice"
+    }
+}
