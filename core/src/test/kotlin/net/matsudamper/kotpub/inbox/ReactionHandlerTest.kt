@@ -14,6 +14,7 @@ import net.matsudamper.kotpub.TestLocalActor
 import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.activity.InboxActivity
+import net.matsudamper.kotpub.emoji.CustomEmojiTags
 import net.matsudamper.kotpub.entity.PublicNoteId
 import net.matsudamper.kotpub.json.AppJson
 
@@ -128,6 +129,38 @@ class ReactionHandlerTest {
             assertNull(recorded.stamps.rows.single().emojiImageUrl)
         }
     }
+
+    @Test
+    fun `上限ちょうどの長さの画像 URL は記録する`() {
+        runBlocking {
+            val url = imageUrlOfLength(CustomEmojiTags.MAX_IMAGE_URL_LENGTH)
+            val recorded = handleLike(likeWithEmojiImage(url))
+
+            assertEquals(url, recorded.stamps.rows.single().emojiImageUrl)
+        }
+    }
+
+    @Test
+    fun `上限を超える長さの画像 URL は記録しない`() {
+        runBlocking {
+            val recorded = handleLike(likeWithEmojiImage(imageUrlOfLength(CustomEmojiTags.MAX_IMAGE_URL_LENGTH + 1)))
+
+            val stamp = recorded.stamps.rows.single()
+            assertEquals(":kawaii:", stamp.emoji)
+            assertNull(stamp.emojiImageUrl)
+        }
+    }
+
+    private fun imageUrlOfLength(length: Int): String {
+        val prefix = "https://remote.example/"
+        return prefix + "a".repeat(length - prefix.length)
+    }
+
+    private fun likeWithEmojiImage(url: String): String = """
+            {"id":"https://remote.example/likes/1","type":"Like",
+             "actor":"${TestRemoteActor.ACTOR_ID}","object":"$noteUrl","content":":kawaii:",
+             "tag":[{"type":"Emoji","name":":kawaii:","icon":{"type":"Image","url":"$url"}}]}
+    """.trimIndent()
 
     @Test
     fun `EmojiReact をスタンプとして記録する`() {
