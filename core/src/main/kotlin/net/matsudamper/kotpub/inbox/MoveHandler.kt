@@ -50,6 +50,12 @@ class MoveHandler(
             }
         }
 
+        // 取得先と同じホストなら、文書は別のアクターの id を名乗れる。名乗られたアクター自身が
+        // 移り元を別名に入れているとは限らないので、取得した URL そのもののアクターだけを信じる
+        if (movedTo.actorId != movedToActorId) {
+            return InboxHandling.Ignored("Move の移り先の文書が別のアクターを名乗っている: target=$movedToActorId id=${movedTo.actorId}")
+        }
+
         if (movedTo.actorId == movedFromActorId) {
             return InboxHandling.Ignored("Move の移り先が移り元と同じ: $verifiedSignerActorId")
         }
@@ -61,4 +67,5 @@ class MoveHandler(
         followings.move(movedFromActorId = movedFromActorId, movedTo = movedTo)
         return InboxHandling.Handled
     }
+
 }

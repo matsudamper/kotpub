@@ -10,6 +10,8 @@ import net.matsudamper.kotpub.TestRemoteActor
 import net.matsudamper.kotpub.TestRemoteActors
 import net.matsudamper.kotpub.activity.InboxActivity
 import net.matsudamper.kotpub.actor.RemoteActor
+import net.matsudamper.kotpub.actor.RemoteActorLookup
+import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.follower.MovedActorFollowings
 import net.matsudamper.kotpub.json.AppJson
 
@@ -39,11 +41,11 @@ class MoveHandlerTest {
 
     private suspend fun handle(
         followings: RecordingMovedActorFollowings,
-        actors: Map<String, RemoteActor>,
+        remoteActors: RemoteActors,
         json: String,
     ): InboxHandling {
         val rawActivityJson = AppJson.parseToJsonElement(json) as JsonObject
-        return MoveHandler(remoteActors = TestRemoteActors(actors = actors), followings = followings).handle(
+        return MoveHandler(remoteActors = remoteActors, followings = followings).handle(
             recipient = InboxRecipient.Account(TestLocalActor.urls),
             verifiedSignerActorId = TestRemoteActor.ACTOR_ID,
             activity = AppJson.decodeFromJsonElement(InboxActivity.serializer(), rawActivityJson),
@@ -67,7 +69,7 @@ class MoveHandlerTest {
 
             val handling = handle(
                 followings,
-                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(TestRemoteActor.ACTOR_ID))),
+                TestRemoteActors(actors = mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(TestRemoteActor.ACTOR_ID)))),
                 move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
             )
 
@@ -83,7 +85,7 @@ class MoveHandlerTest {
 
             val handling = handle(
                 followings,
-                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf())),
+                TestRemoteActors(actors = mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf()))),
                 move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
             )
 
@@ -100,7 +102,7 @@ class MoveHandlerTest {
 
             val handling = handle(
                 followings,
-                mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(otherActor))),
+                TestRemoteActors(actors = mapOf(MOVED_TO to movedTo(alsoKnownAs = listOf(otherActor)))),
                 move(movedFrom = otherActor, target = MOVED_TO),
             )
 
@@ -110,13 +112,34 @@ class MoveHandlerTest {
     }
 
     @Test
-    fun `移り先を取得できなければ何もしない`() {
+    fun `移り先の文書が別のアクターを名乗っていれば何もしない`() {
         runBlocking {
             val followings = RecordingMovedActorFollowings()
+            val forgedDocumentUrl = "https://new.example/uploads/actor.json"
 
             val handling = handle(
                 followings,
-                mapOf(),
+                TestRemoteActors(actors = mapOf(forgedDocumentUrl to movedTo(alsoKnownAs = listOf(TestRemoteActor.ACTOR_ID)))),
+                move(movedFrom = TestRemoteActor.ACTOR_ID, target = forgedDocumentUrl),
+            )
+
+            assertIs<InboxHandling.Ignored>(handling)
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り先がもう無ければ何もしない`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+
+            val goneActors = object : RemoteActors by TestRemoteActors() {
+                override suspend fun findActor(actorId: String): RemoteActorLookup = RemoteActorLookup.Gone
+            }
+
+            val handling = handle(
+                followings,
+                goneActors,
                 move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
             )
 
