@@ -14,6 +14,7 @@ import net.matsudamper.kotpub.actor.RemoteActor
 import net.matsudamper.kotpub.actor.RemoteActorLookup
 import net.matsudamper.kotpub.actor.RemoteActors
 import net.matsudamper.kotpub.follower.MovedActorFollowings
+import net.matsudamper.kotpub.http.RemoteFetchFailure
 import net.matsudamper.kotpub.json.AppJson
 
 // 引っ越したアカウントのフォローを移り先へ付け替える。
@@ -139,6 +140,26 @@ class MoveHandlerTest {
                 handle(
                     followings,
                     TestRemoteActors(),
+                    move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+                )
+            }
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
+    fun `移り先の本文を途中で読めなければ送り直してもらう`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+            val bodyUnreadableActors = object : RemoteActors by TestRemoteActors() {
+                override suspend fun findActor(actorId: String): RemoteActorLookup =
+                    RemoteActorLookup.Unavailable(RemoteFetchFailure.BodyUnreadable(actorId, IllegalStateException("切断")))
+            }
+
+            assertFailsWith<IllegalStateException> {
+                handle(
+                    followings,
+                    bodyUnreadableActors,
                     move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
                 )
             }

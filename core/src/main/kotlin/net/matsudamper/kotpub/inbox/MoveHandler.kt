@@ -74,9 +74,13 @@ class MoveHandler(
         return InboxHandling.Handled
     }
 
+    /**
+     * [RemoteFetchFailure.BodyUnreadable] は本文を読む途中の切断やタイムアウト。本文が大きすぎるものは
+     * [RemoteFetchFailure.BodyTooLarge] で別に来るので、送り直されても同じ結果にはならない
+     */
     private fun RemoteFetchFailure.isTemporary(): Boolean =
         when (this) {
-            is RemoteFetchFailure.Throttled, is RemoteFetchFailure.RequestFailed -> true
+            is RemoteFetchFailure.Throttled, is RemoteFetchFailure.RequestFailed, is RemoteFetchFailure.BodyUnreadable -> true
             is RemoteFetchFailure.UnsuccessfulStatus -> status == HttpStatusCodes.TOO_MANY_REQUESTS || status >= HttpStatusCodes.INTERNAL_SERVER_ERROR
             else -> false
         }
