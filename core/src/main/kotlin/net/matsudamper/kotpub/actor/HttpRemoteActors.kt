@@ -77,7 +77,7 @@ class HttpRemoteActors(
     override suspend fun find(keyId: String): PublicKeyLookup {
         val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
-        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = true), useCache = true)
+        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = true, fallsBackToRemembered = true), useCache = true)
     }
 
     /**
@@ -91,7 +91,7 @@ class HttpRemoteActors(
     override suspend fun refresh(keyId: String): PublicKeyLookup {
         val url = parseHttpsUrl(keyId) ?: return PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(keyId))
 
-        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = false), useCache = false)
+        return publicKeyOf(keyId, url, fetch(rawUrl = keyId, requestUrl = url, useCache = false, fallsBackToRemembered = true), useCache = false)
     }
 
     /**
@@ -169,7 +169,7 @@ class HttpRemoteActors(
         val ownerUrl = parseHttpsUrl(ownerActorId)
             ?: return OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(RemoteFetchFailure.NotHttps(ownerActorId)))
         val ownerDocument =
-            when (val fetched = fetch(rawUrl = ownerActorId, requestUrl = ownerUrl, useCache = useCache)) {
+            when (val fetched = fetch(rawUrl = ownerActorId, requestUrl = ownerUrl, useCache = useCache, fallsBackToRemembered = true)) {
                 is DocumentFetch.Found -> fetched.document
                 DocumentFetch.Gone -> return OwnerPublicKey.Rejected(PublicKeyLookup.Gone)
                 is DocumentFetch.RedirectedToOtherHost -> return OwnerPublicKey.Rejected(PublicKeyLookup.Unavailable(fetched.failure))
@@ -196,9 +196,20 @@ class HttpRemoteActors(
      * 実際には署名の検証が直前に同じ文書を取得しているので、取得する回数は増えない。
      * その場合に使うのはそのとき読んだ文書で、古くても再取得の間隔のぶんだけ
      */
-    override suspend fun findActor(actorId: String): RemoteActorLookup {
+    override suspend fun findActor(actorId: String): RemoteActorLookup = findActor(actorId = actorId, fallsBackToRemembered = true)
+
+    /**
+     * 取得し直す間隔は [findActor] と共有する。間隔を飛ばして取得させられると、
+     * `Move` を投げ込むだけで相手のサーバーへの GET を何度でも起こせる
+     */
+    override suspend fun findFreshActor(actorId: String): RemoteActorLookup = findActor(actorId = actorId, fallsBackToRemembered = false)
+
+    private suspend fun findActor(
+        actorId: String,
+        fallsBackToRemembered: Boolean,
+    ): RemoteActorLookup {
         val url = parseHttpsUrl(actorId) ?: return RemoteActorLookup.Unavailable(RemoteFetchFailure.NotHttps(actorId))
-        return when (val fetched = fetch(rawUrl = actorId, requestUrl = url, useCache = false)) {
+        return when (val fetched = fetch(rawUrl = actorId, requestUrl = url, useCache = false, fallsBackToRemembered = fallsBackToRemembered)) {
             is DocumentFetch.Found -> toRemoteActor(document = fetched.document, rawUrl = actorId, url = url)
             DocumentFetch.Gone -> RemoteActorLookup.Gone
             is DocumentFetch.RedirectedToOtherHost -> RemoteActorLookup.Unavailable(fetched.failure)
@@ -212,7 +223,7 @@ class HttpRemoteActors(
     override suspend fun findActorByUrl(url: String): RemoteActorLookup {
         val requestUrl = parseHttpsUrl(url) ?: return RemoteActorLookup.Unavailable(RemoteFetchFailure.NotHttps(url))
         recentOtherHostRedirects.get(url.substringBefore('#'))?.let { return findActor(it) }
-        return when (val fetched = fetch(rawUrl = url, requestUrl = requestUrl, useCache = false)) {
+        return when (val fetched = fetch(rawUrl = url, requestUrl = requestUrl, useCache = false, fallsBackToRemembered = true)) {
             is DocumentFetch.Found -> toRemoteActor(document = fetched.document, rawUrl = url, url = requestUrl)
             is DocumentFetch.RedirectedToOtherHost -> findActor(fetched.finalUrl)
             DocumentFetch.Gone -> RemoteActorLookup.Gone
@@ -249,6 +260,7 @@ class HttpRemoteActors(
                 sharedInbox = document.endpoints?.sharedInbox?.takeIf { isDeliverable(it, url) },
                 publicKeyPem = publicKeyPem,
                 profile = document.profile(),
+                alsoKnownAs = document.alsoKnownAsActorIds(),
             ),
         )
     }
@@ -273,6 +285,7 @@ class HttpRemoteActors(
         rawUrl: String,
         requestUrl: HttpUrl,
         useCache: Boolean,
+        fallsBackToRemembered: Boolean,
     ): DocumentFetch {
         val span =
             tracer.spanBuilder("HttpRemoteActors.fetch")
@@ -281,7 +294,7 @@ class HttpRemoteActors(
                 .startSpan()
         return try {
             withContext(Context.current().with(span).asContextElement()) {
-                fetchDocument(rawUrl = rawUrl, requestUrl = requestUrl, useCache = useCache)
+                fetchDocument(rawUrl = rawUrl, requestUrl = requestUrl, useCache = useCache, fallsBackToRemembered = fallsBackToRemembered)
             }.also { fetched ->
                 span.setAttribute(
                     RemoteActorSpan.RESULT,
@@ -301,11 +314,14 @@ class HttpRemoteActors(
     /**
      * アクター文書を取得する。取得先の URL を [requestUrl] として渡すのは、
      * 取得できた文書の中身を突き合わせる基準がその URL のホストだから。
+     *
+     * @param fallsBackToRemembered 取得し直す間隔の中や、取得した文書の鍵が使えないときに、以前に読んだ文書を返すか
      */
     private suspend fun fetchDocument(
         rawUrl: String,
         requestUrl: HttpUrl,
         useCache: Boolean,
+        fallsBackToRemembered: Boolean,
     ): DocumentFetch {
         // `keyId` はアクター id にフラグメントを付けたもので、フラグメントはサーバーに
         // 送られない。落としてからキャッシュを探すと、署名の検証で取得した文書を
@@ -327,7 +343,8 @@ class HttpRemoteActors(
             // 直前に取得したばかりなら、覚えているものはそのとき読んだ文書で、
             // 取得し直しても同じものにしかならない
             RemoteActorSpan.outcome("throttled")
-            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) }
+            val remembered = if (fallsBackToRemembered) documents.get(cacheKey) else null
+            return remembered?.let { DocumentFetch.Found(it) }
                 ?: DocumentFetch.Unavailable(RemoteFetchFailure.Throttled(rawUrl))
         }
 
@@ -411,7 +428,8 @@ class HttpRemoteActors(
         // 再取得は通らない署名を投げ込むだけで起こせるので、外から狙える
         if (!document.hasUsableKey(requestUrl)) {
             RemoteActorSpan.outcome("no_usable_key")
-            return documents.get(cacheKey)?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Found(document)
+            val remembered = if (fallsBackToRemembered) documents.get(cacheKey) else null
+            return remembered?.let { DocumentFetch.Found(it) } ?: DocumentFetch.Found(document)
         }
 
         documents.put(key = cacheKey, value = document, ttlMillis = CACHE_TTL_MILLIS)

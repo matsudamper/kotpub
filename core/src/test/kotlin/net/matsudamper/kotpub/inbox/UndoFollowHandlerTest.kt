@@ -32,6 +32,7 @@ class UndoFollowHandlerTest {
                 sharedInbox = null,
                 publicKeyPem = "pem",
                 profile = TestRemoteActor.noProfile,
+                alsoKnownAs = listOf(),
             ),
             followActivityUri = followUri,
             receivedAt = now,

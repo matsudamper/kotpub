@@ -82,6 +82,27 @@ class HttpRemoteActorsTest {
     }
 
     @Test
+    fun findFreshActorDoesNotReturnRememberedDocumentWithinRefreshInterval() {
+        runBlocking {
+            HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use {
+                assertIs<RemoteActorLookup.Found>(it.findActor(VICTIM_ID))
+
+                assertIs<RemoteActorLookup.Found>(it.findActor(VICTIM_ID))
+                assertIs<RemoteFetchFailure.Throttled>(assertIs<RemoteActorLookup.Unavailable>(it.findFreshActor(VICTIM_ID)).failure)
+            }
+        }
+    }
+
+    @Test
+    fun findFreshActorFetchesWhenNotFetchedRecently() {
+        runBlocking {
+            HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = UPLOADED_KEY_ID), null).use {
+                assertEquals(VICTIM_ID, assertIs<RemoteActorLookup.Found>(it.findFreshActor(VICTIM_ID)).actor.actorId)
+            }
+        }
+    }
+
+    @Test
     fun rejectsKeyDocumentClaimingOwnerThatDoesNotListKeyId() {
         runBlocking {
             val lookup = HttpRemoteActors(KeyDocumentClient(ownerListedKeyId = "$VICTIM_ID#main-key"), null).use { it.find(UPLOADED_KEY_ID) }

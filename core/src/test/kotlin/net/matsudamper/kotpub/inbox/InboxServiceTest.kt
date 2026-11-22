@@ -143,6 +143,7 @@ class InboxServiceTest {
                     sharedInbox = null,
                     publicKeyPem = RsaKeys.encodeToPem(TestRemoteActor.keyPair.public),
                     profile = TestRemoteActor.noProfile,
+                    alsoKnownAs = listOf(),
                 ),
                 followActivityUri = "https://remote.example/activities/1",
                 receivedAt = Instant.now(),

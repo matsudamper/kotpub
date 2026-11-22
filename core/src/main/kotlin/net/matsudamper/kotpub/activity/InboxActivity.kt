@@ -26,6 +26,12 @@ data class InboxActivity(
     /** `object` は Kotlin の予約語なので名前を変えて受ける */
     @SerialName("object")
     val target: LinkOrObject? = null,
+    /**
+     * ActivityStreams の `target`。[target] が `object` を受けているので名前を変えて受ける。
+     * `Move` では移り先のアクター
+     */
+    @SerialName("target")
+    val destination: LinkOrObject? = null,
     @SerialName("content")
     val content: String? = null,
     /** `QuoteRequest` で、引用した側の投稿 */

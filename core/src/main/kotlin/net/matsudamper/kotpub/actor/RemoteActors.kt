@@ -36,6 +36,17 @@ interface RemoteActors :
      * 移った先の文書は移った先のホストを基準に確かめるので、リダイレクトしたホストが他所のアクターを名乗ることはできない
      */
     suspend fun findActorByUrl(url: String): RemoteActorLookup = findActor(url)
+
+    /**
+     * [findActor] と違い、今回相手のサーバーから読んだ文書だけで答える。
+     *
+     * [findActor] は取得し直す間隔の中や、取得し直した文書の鍵が使えないときに、以前に読んだ文書を返す。
+     * 以前の文書で判定すると、その後に相手が書き足した内容を見落とす。
+     * 間隔の中で取得できないときは [RemoteFetchFailure.Throttled] で返すので、呼び出し側は後で送り直してもらう
+     *
+     * [findActor] に任せる既定の実装を置かないのは、以前の文書を返す実装でも黙って通ってしまうため
+     */
+    suspend fun findFreshActor(actorId: String): RemoteActorLookup
 }
 
 /**
@@ -62,6 +73,8 @@ sealed interface RemoteActorLookup {
  *   [inbox] と同じ制限がかかる
  * @param publicKeyPem 署名の検証に使う公開鍵の PEM
  * @param profile 一覧に出すためだけの部分。配信にも検証にも関わらない
+ * @param alsoKnownAs 相手が別名として挙げたアクター id。`Move` を受けたとき、移り先が移り元を
+ *   別名に入れているかで、本人の引っ越しかを確かめる
  */
 data class RemoteActor(
     val actorId: String,
@@ -69,6 +82,7 @@ data class RemoteActor(
     val sharedInbox: String?,
     val publicKeyPem: String,
     val profile: RemoteActorProfile,
+    val alsoKnownAs: List<String>,
 )
 
 /**

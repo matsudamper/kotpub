@@ -38,6 +38,7 @@ object TestRemoteActor {
             sharedInbox = null,
             publicKeyPem = RsaKeys.encodeToPem(keyPair.public),
             profile = noProfile,
+            alsoKnownAs = listOf(),
         )
     }
 
