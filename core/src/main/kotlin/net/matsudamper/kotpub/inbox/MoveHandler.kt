@@ -44,7 +44,9 @@ class MoveHandler(
             return InboxHandling.Ignored("Move に target が無い: ${recipient.logLabel} ← $verifiedSignerActorId")
         }
 
-        val movedTo = when (val lookup = remoteActors.findActor(movedToActorId)) {
+        // 以前に読んだ文書は、移り先が移り元を alsoKnownAs に足す前のものかもしれない。
+        // それで判定して捨てると相手は送り直さず、こちらのフォロワーが黙って消える
+        val movedTo = when (val lookup = remoteActors.findFreshActor(movedToActorId)) {
             is RemoteActorLookup.Found -> lookup.actor
 
             RemoteActorLookup.Gone, is RemoteActorLookup.Unavailable -> {

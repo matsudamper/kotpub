@@ -148,11 +148,32 @@ class MoveHandlerTest {
     }
 
     @Test
+    fun `移り先を取得し直す間隔の中なら以前の文書で判定せず送り直してもらう`() {
+        runBlocking {
+            val followings = RecordingMovedActorFollowings()
+            val staleMovedTo = movedTo(alsoKnownAs = listOf())
+            val throttledActors = object : RemoteActors by TestRemoteActors(actors = mapOf(MOVED_TO to staleMovedTo)) {
+                override suspend fun findFreshActor(actorId: String): RemoteActorLookup =
+                    RemoteActorLookup.Unavailable(RemoteFetchFailure.Throttled(actorId))
+            }
+
+            assertFailsWith<IllegalStateException> {
+                handle(
+                    followings,
+                    throttledActors,
+                    move(movedFrom = TestRemoteActor.ACTOR_ID, target = MOVED_TO),
+                )
+            }
+            assertEquals(listOf(), followings.moves)
+        }
+    }
+
+    @Test
     fun `移り先の本文を途中で読めなければ送り直してもらう`() {
         runBlocking {
             val followings = RecordingMovedActorFollowings()
             val bodyUnreadableActors = object : RemoteActors by TestRemoteActors() {
-                override suspend fun findActor(actorId: String): RemoteActorLookup =
+                override suspend fun findFreshActor(actorId: String): RemoteActorLookup =
                     RemoteActorLookup.Unavailable(RemoteFetchFailure.BodyUnreadable(actorId, IllegalStateException("切断")))
             }
 
@@ -173,7 +194,7 @@ class MoveHandlerTest {
             val followings = RecordingMovedActorFollowings()
 
             val goneActors = object : RemoteActors by TestRemoteActors() {
-                override suspend fun findActor(actorId: String): RemoteActorLookup = RemoteActorLookup.Gone
+                override suspend fun findFreshActor(actorId: String): RemoteActorLookup = RemoteActorLookup.Gone
             }
 
             val handling = handle(
