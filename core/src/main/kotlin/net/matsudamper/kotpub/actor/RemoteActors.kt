@@ -43,8 +43,10 @@ interface RemoteActors :
      * [findActor] は取得し直す間隔の中や、取得し直した文書の鍵が使えないときに、以前に読んだ文書を返す。
      * 以前の文書で判定すると、その後に相手が書き足した内容を見落とす。
      * 間隔の中で取得できないときは [RemoteFetchFailure.Throttled] で返すので、呼び出し側は後で送り直してもらう
+     *
+     * [findActor] に任せる既定の実装を置かないのは、以前の文書を返す実装でも黙って通ってしまうため
      */
-    suspend fun findFreshActor(actorId: String): RemoteActorLookup = findActor(actorId)
+    suspend fun findFreshActor(actorId: String): RemoteActorLookup
 }
 
 /**

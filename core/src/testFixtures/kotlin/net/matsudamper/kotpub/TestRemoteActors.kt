@@ -52,6 +52,9 @@ class TestRemoteActors(
         actors[actorId]?.let { RemoteActorLookup.Found(it) }
             ?: RemoteActorLookup.Unavailable(RemoteFetchFailure.UnsuccessfulStatus(actorId, HttpStatusCodes.SERVICE_UNAVAILABLE))
 
+    /** 覚えている文書を持たないので、[findActor] と同じものを返す */
+    override suspend fun findFreshActor(actorId: String): RemoteActorLookup = findActor(actorId)
+
     override fun close() {
     }
 
