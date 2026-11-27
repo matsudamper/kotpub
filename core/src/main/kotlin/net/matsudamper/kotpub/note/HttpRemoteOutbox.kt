@@ -40,7 +40,15 @@ class HttpRemoteOutbox(
             return RemoteActorCollectionsLookup.Unavailable(RemoteFetchFailure.InvalidDocument(actorId, "アクターの id が取得先と違う: ${actor.text("id")}"))
         }
         return RemoteActorCollectionsLookup.Found(
-            RemoteActorCollections(actorId = actorId, actorUrl = actorUrl, outbox = actor["outbox"], featured = actor["featured"], liked = actor["liked"]),
+            RemoteActorCollections(
+                actorId = actorId,
+                actorUrl = actorUrl,
+                outbox = actor["outbox"],
+                featured = actor["featured"],
+                liked = actor["liked"],
+                following = actor["following"],
+                followers = actor["followers"],
+            ),
         )
     }
 
@@ -146,6 +154,29 @@ class HttpRemoteOutbox(
             is RemoteActorCollectionsLookup.Found -> likedPage(lookup.collections, from, limit)
             is RemoteActorCollectionsLookup.Unavailable -> RemoteLikedPageResult.Unavailable(lookup.failure)
         }
+
+    /**
+     * 相手のフォローとフォロワーの数。コレクションの `totalItems` だけを読み、中身のページは取りに行かない。
+     * 数を隠す実装は、コレクションを出さないか `totalItems` を載せないので、その数は null
+     */
+    suspend fun followCounts(actor: RemoteActorCollections): RemoteFollowCounts =
+        RemoteFollowCounts(
+            following = totalItemsOf(actor, actor.following),
+            followers = totalItemsOf(actor, actor.followers),
+        )
+
+    private suspend fun totalItemsOf(actor: RemoteActorCollections, collectionRef: JsonElement?): Long? {
+        if (collectionRef == null) return null
+        val collection = when (val fetched = reference(collectionRef, referrer = actor.actorId, actorUrl = actor.actorUrl)) {
+            is DocumentFetch.Found -> fetched.document
+
+            is DocumentFetch.Failed -> {
+                logger.warn("フォローの数を読むコレクションを取得できない: ${fetched.failure}")
+                return null
+            }
+        }
+        return (collection["totalItems"] as? JsonPrimitive)?.content?.toLongOrNull()?.takeIf { it >= 0 }
+    }
 
     private tailrec suspend fun readLikedPage(
         actor: RemoteActorCollections,
@@ -549,12 +580,25 @@ class RemoteActorCollections internal constructor(
     internal val outbox: JsonElement?,
     internal val featured: JsonElement?,
     internal val liked: JsonElement?,
+    internal val following: JsonElement?,
+    internal val followers: JsonElement?,
 ) {
     /**
      * いいねした投稿の一覧を出しているか。出していても、取りに行くと読めないことはある
      */
     val likedAvailable: Boolean get() = liked != null
 }
+
+/**
+ * [HttpRemoteOutbox.followCounts] の結果
+ *
+ * @param following 数を出していないか、読めなければ null
+ * @param followers 数を出していないか、読めなければ null
+ */
+data class RemoteFollowCounts(
+    val following: Long?,
+    val followers: Long?,
+)
 
 /**
  * [HttpRemoteOutbox.collectionsOf] の結果

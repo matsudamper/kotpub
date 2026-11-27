@@ -407,6 +407,43 @@ class HttpRemoteOutboxTest {
     }
 
     @Test
+    fun followCountsReadsTotalItemsWithoutFetchingPages() {
+        runBlocking {
+            val followingUrl = "$actorId/following"
+            documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","following":"$followingUrl","followers":{"id":"$actorId/followers","totalItems":42}}"""
+            documents[followingUrl] = """{"id":"$followingUrl","type":"OrderedCollection","totalItems":7,"first":"$followingUrl?page=1"}"""
+            val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
+
+            assertEquals(RemoteFollowCounts(following = 7, followers = 42), outbox.followCounts(actor))
+            assertEquals(listOf(actorId, followingUrl), requests)
+        }
+    }
+
+    @Test
+    fun followCountsIsNullWhenCountIsHiddenOrUnreadable() {
+        runBlocking {
+            val followingUrl = "$actorId/following"
+            documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl","following":"$followingUrl","followers":"https://other.example/followers"}"""
+            documents[followingUrl] = """{"id":"$followingUrl","type":"OrderedCollection","first":"$followingUrl?page=1"}"""
+            val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
+
+            assertEquals(RemoteFollowCounts(following = null, followers = null), outbox.followCounts(actor))
+            assertEquals(listOf(actorId, followingUrl), requests)
+        }
+    }
+
+    @Test
+    fun followCountsIsNullWhenActorHasNoCollections() {
+        runBlocking {
+            documents[actorId] = """{"id":"$actorId","outbox":"$outboxUrl"}"""
+            val actor = assertIs<RemoteActorCollectionsLookup.Found>(outbox.collectionsOf(actorId)).collections
+
+            assertEquals(RemoteFollowCounts(following = null, followers = null), outbox.followCounts(actor))
+            assertEquals(listOf(actorId), requests)
+        }
+    }
+
+    @Test
     fun collectionsOfIsUnavailableWhenActorIdDiffers() {
         runBlocking {
             documents[actorId] = """{"id":"https://remote.example/users/mallory","outbox":"$outboxUrl"}"""
